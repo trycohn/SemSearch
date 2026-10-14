@@ -139,6 +139,8 @@ impl Subscriber {
 
 pub struct Engine {
     pub root: PathBuf,
+    /// папка данных (docs/API.md §1): config.json ищется сначала здесь, потом в root
+    pub data: PathBuf,
     pub elevated: bool,
     pub force_walk: bool,
     pub vols: RwLock<Vec<Arc<VolSlot>>>,
@@ -148,9 +150,10 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(root: PathBuf, elevated: bool, force_walk: bool) -> Arc<Engine> {
+    pub fn new(root: PathBuf, data: PathBuf, elevated: bool, force_walk: bool) -> Arc<Engine> {
         Arc::new(Engine {
             root,
+            data,
             elevated,
             force_walk,
             vols: RwLock::new(Vec::new()),
@@ -308,7 +311,8 @@ impl Engine {
     }
 }
 
-/// Поток тома: MFT/USN, если можно, иначе обход + ReadDirectoryChangesW.
+/// Поток тома: MFT/USN, если можно (NTFS и права администратора), иначе обход + ReadDirectoryChangesW
+/// (в том числе для несъёмных дисков exFAT, FAT32, ReFS).
 fn drive_volume(eng: Arc<Engine>, slot: Arc<VolSlot>) {
     let fs = drive_fs(&slot.drive).unwrap_or_default();
     slot.set_info(|i| i.fs = fs.clone());
@@ -319,10 +323,10 @@ fn drive_volume(eng: Arc<Engine>, slot: Arc<VolSlot>) {
     }
     let reason = if eng.force_walk {
         "walk mode forced (--walk)".to_string()
-    } else if !eng.elevated {
-        "not elevated".to_string()
     } else if fs != "NTFS" {
         format!("file system {fs} is not NTFS")
+    } else if !eng.elevated {
+        "not elevated".to_string()
     } else {
         match crate::mft::run(&eng, &slot) {
             Ok(()) => return,

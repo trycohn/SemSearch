@@ -2,6 +2,8 @@
 name = "semsearch-shell"
 version = "0.1.0"
 edition = "2021"
+# tauri 2.12 (Cargo.lock) needs 1.90
+rust-version = "1.90"
 description = "SemSearch desktop shell (Tauri v2): frameless windows, tray, hotkey, autostart, backend supervisor"
 publish = false
 
@@ -27,10 +29,13 @@ windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
   "Win32_Security",
+  "Win32_Security_Cryptography",
+  "Win32_System_Com",
   "Win32_System_JobObjects",
   "Win32_System_Registry",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
+  "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Input_KeyboardAndMouse",
 ] }

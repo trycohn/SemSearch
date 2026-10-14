@@ -253,7 +253,7 @@ pub fn exists_op(eng: &Engine, req: &Value) -> Result<String, String> {
 }
 
 pub fn reload_config(eng: &Arc<Engine>) -> Result<String, String> {
-    let drives = config_drives(&eng.root);
+    let drives = config_drives(&eng.data, &eng.root);
     info!("reload_config: drives {:?}", drives);
     eng.apply_drives(&drives);
     Ok(json!({"drives": drives}).to_string())

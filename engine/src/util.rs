@@ -88,7 +88,7 @@ fn file_sink(dir: &Path, name: &str) -> Box<dyn Write + Send> {
 }
 
 /// Лог: в консоль и/или в файл `<dir>\<file>` (ротация при > 8 МБ).
-/// dir — `<root>\data` без повышенных прав, `<папка exe>\logs` с ними.
+/// dir — папка данных без повышенных прав, `<папка exe>\logs` с ними.
 pub fn log_init(dir: &Path, console: bool, file: Option<&str>) {
     let sink: Box<dyn Write + Send> = match (console, file) {
         (true, Some(f)) => Box::new(Tee(console_sink(), file_sink(dir, f))),
@@ -450,7 +450,7 @@ pub fn set_background(on: bool) -> bool {
     unsafe { SetPriorityClass(GetCurrentProcess(), if on { PROCESS_MODE_BACKGROUND_BEGIN } else { PROCESS_MODE_BACKGROUND_END }) != 0 }
 }
 
-// ---------------------------------------------------------------- config / root
+// ---------------------------------------------------------------- config / root / data folder
 
 pub fn exe_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
@@ -477,11 +477,11 @@ pub fn check_root(r: &str) -> Result<PathBuf, String> {
     Ok(p)
 }
 
-/// Корень проекта: ближайший предок папки exe, где лежит config.json.
+/// Корень проекта: ближайший предок папки exe, где лежит server.py или config.json (старое размещение).
 pub fn find_root() -> PathBuf {
     let dir = exe_dir();
     for a in dir.ancestors() {
-        if a.join("config.json").is_file() {
+        if a.join("server.py").is_file() || a.join("config.json").is_file() {
             return a.to_path_buf();
         }
     }
@@ -493,11 +493,62 @@ pub fn find_root() -> PathBuf {
     dir
 }
 
-/// config.json — недоверенный ввод (папка проекта доступна пользователю на запись):
-/// читаем не больше 1 МБ, используем только "name_drives".
-pub fn read_config(root: &Path) -> serde_json::Value {
+/// Путь известной папки (SHGetKnownFolderPath), например FOLDERID_LocalAppData.
+pub fn known_folder(id: &windows_sys::core::GUID) -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    use windows_sys::Win32::UI::Shell::SHGetKnownFolderPath;
+    let mut p: *mut u16 = std::ptr::null_mut();
+    unsafe {
+        let hr = SHGetKnownFolderPath(id, 0, std::ptr::null_mut(), &mut p);
+        let mut out = None;
+        if hr >= 0 && !p.is_null() {
+            let mut len = 0;
+            while *p.add(len) != 0 {
+                len += 1;
+            }
+            out = Some(PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(p, len))));
+        }
+        CoTaskMemFree(p as *const _); // освобождается и при ошибке
+        out.filter(|d| d.is_absolute())
+    }
+}
+
+/// Папка данных (docs/API.md §1): %SEMSEARCH_DATA_DIR% (абсолютный путь), иначе `<LocalAppData>\SemSearch`
+/// (известная папка FOLDERID_LocalAppData, запасные — %LOCALAPPDATA%, %USERPROFILE%\AppData\Local).
+/// Второе значение — почему SEMSEARCH_DATA_DIR не принят (для журнала). Папка создаётся при первой записи.
+pub fn data_dir() -> (PathBuf, Option<String>) {
+    let mut note = None;
+    if let Ok(v) = std::env::var("SEMSEARCH_DATA_DIR") {
+        let v = v.trim();
+        if Path::new(v).is_absolute() {
+            return (PathBuf::from(v), None);
+        }
+        if !v.is_empty() {
+            note = Some(format!("SEMSEARCH_DATA_DIR ignored (not an absolute path): {v:?}"));
+        }
+    }
+    let env_dir = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|d| d.is_absolute());
+    let local = known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_LocalAppData)
+        .or_else(|| env_dir("LOCALAPPDATA"))
+        .or_else(|| env_dir("USERPROFILE").map(|d| d.join("AppData").join("Local")))
+        .unwrap_or_else(std::env::temp_dir);
+    (local.join("SemSearch"), note)
+}
+
+/// Какой config.json читать: `<data>\config.json`, а если его нет — `<root>\config.json` (старое размещение,
+/// только чтение; перенос в папку данных делает backend). None — нет ни того, ни другого (умолчания).
+pub fn config_path(data: &Path, root: &Path) -> Option<PathBuf> {
+    [data, root].iter().map(|d| d.join("config.json")).find(|p| p.is_file())
+}
+
+/// config.json — недоверенный ввод (папки данных и проекта доступны пользователю на запись):
+/// читаем не больше 1 МБ, используем только "name_drives". Нет файла — Null (умолчания).
+pub fn read_config(data: &Path, root: &Path) -> serde_json::Value {
     use std::io::Read;
-    let p = root.join("config.json");
+    let Some(p) = config_path(data, root) else {
+        return serde_json::Value::Null;
+    };
     let mut b = Vec::new();
     let ok = File::open(&p).and_then(|f| f.take(1 << 20).read_to_end(&mut b)).is_ok();
     if !ok || b.len() >= 1 << 20 {
@@ -507,11 +558,12 @@ pub fn read_config(root: &Path) -> serde_json::Value {
     serde_json::from_slice(b).unwrap_or(serde_json::Value::Null)
 }
 
-/// Диски для индекса имён: config.json "name_drives", иначе все несъёмные NTFS.
-/// Принимаются только буквы реальных несъёмных NTFS-томов.
-pub fn config_drives(root: &Path) -> Vec<String> {
-    let cfg = read_config(root);
-    let valid = fixed_ntfs_drives();
+/// Диски для индекса имён: config.json "name_drives"; нет ключа (или null) — все несъёмные диски.
+/// Принимаются только буквы несъёмных дисков с файловой системой: NTFS (MFT/USN с правами
+/// администратора, иначе обход) или другой (exFAT, FAT32, ReFS — всегда обход).
+pub fn config_drives(data: &Path, root: &Path) -> Vec<String> {
+    let cfg = read_config(data, root);
+    let valid = fixed_drives();
     let mut out: Vec<String> = Vec::new();
     if let Some(arr) = cfg.get("name_drives").and_then(|v| v.as_array()) {
         for v in arr.iter().take(26) {
@@ -522,7 +574,7 @@ pub fn config_drives(root: &Path) -> Vec<String> {
                         out.push(d);
                     }
                 }
-                None => warn!("config.json name_drives: ignoring {:?} (not a fixed NTFS volume)", s.chars().take(16).collect::<String>()),
+                None => warn!("config.json name_drives: ignoring {:?} (not a fixed drive with a file system)", s.chars().take(16).collect::<String>()),
             }
         }
         return out;
@@ -530,7 +582,8 @@ pub fn config_drives(root: &Path) -> Vec<String> {
     valid
 }
 
-pub fn fixed_ntfs_drives() -> Vec<String> {
+/// Несъёмные диски (DRIVE_FIXED) с подключённой файловой системой (GetVolumeInformation отвечает).
+pub fn fixed_drives() -> Vec<String> {
     let mut out = Vec::new();
     let mask = unsafe { GetLogicalDrives() };
     for i in 0..26u32 {
@@ -542,7 +595,7 @@ pub fn fixed_ntfs_drives() -> Vec<String> {
         if unsafe { GetDriveTypeW(w.as_ptr()) } != 3 {
             continue; // DRIVE_FIXED
         }
-        if drive_fs(&d).as_deref() == Some("NTFS") {
+        if drive_fs(&d).is_some_and(|fs| !fs.is_empty()) {
             out.push(d);
         }
     }

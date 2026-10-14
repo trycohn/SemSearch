@@ -1,8 +1,9 @@
-//! Backend process management: readiness probe, spawn (inside a kill-on-close job object), restart policy, shutdown.
+//! Backend process management: attach or port choice, readiness probe, spawn (inside a kill-on-close job object),
+//! restart policy, shutdown. Contract: docs/API.md §3.
 
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
@@ -11,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use tauri::Url;
 
-use crate::util::{log, Config};
+use crate::util::{local_url, log, Config};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// At most this many spawns per rolling minute.
@@ -19,9 +20,9 @@ const MAX_SPAWNS_PER_MIN: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
-    /// GET /api/status with the token answered 200.
+    /// GET /api/ping says "semsearch" and GET /api/status with the token answered 200.
     Ready,
-    /// The server answers HTTP, but not 200 (e.g. 403 before data\token is written).
+    /// The port answers HTTP, but not as our backend (another program, another user's SemSearch, a wrong token).
     Http(u16),
     /// Nothing listening / no answer.
     Down,
@@ -29,6 +30,19 @@ pub enum Probe {
 
 /// Minimal HTTP/1.1 request to the backend; returns the status code.
 pub fn http(base: &Url, method: &str, path: &str, token: Option<&str>, body: Option<&str>, timeout: Duration) -> io::Result<u16> {
+    request(base, method, path, token, body, timeout, false).map(|(code, _)| code)
+}
+
+/// The same request; with `want_body` it also reads the body (up to 64 KB, until the server closes the connection).
+fn request(
+    base: &Url,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    body: Option<&str>,
+    timeout: Duration,
+    want_body: bool,
+) -> io::Result<(u16, String)> {
     let host = base.host_str().unwrap_or("127.0.0.1").to_string();
     let port = base.port_or_known_default().unwrap_or(80);
     let addrs: Vec<SocketAddr> = (host.as_str(), port).to_socket_addrs()?.collect();
@@ -56,30 +70,62 @@ pub fn http(base: &Url, method: &str, path: &str, token: Option<&str>, body: Opt
         req.push_str("\r\n");
         req.push_str(body);
         s.write_all(req.as_bytes())?;
-        let mut buf = Vec::with_capacity(64);
-        let mut chunk = [0u8; 64];
-        while buf.len() < 12 {
-            let n = s.read(&mut chunk)?;
-            if n == 0 {
-                break;
+        let limit = if want_body { 64 << 10 } else { 12 };
+        let mut buf = Vec::with_capacity(256);
+        let mut chunk = [0u8; 1024];
+        while buf.len() < limit {
+            match s.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                Err(e) if buf.is_empty() => return Err(e),
+                Err(_) => break, // keeps the connection open: use what has arrived
             }
-            buf.extend_from_slice(&chunk[..n]);
         }
-        let line = String::from_utf8_lossy(&buf);
-        return line
+        let text = String::from_utf8_lossy(&buf);
+        let code = text
             .strip_prefix("HTTP/1.")
             .and_then(|r| r.get(2..5))
             .and_then(|c| c.parse::<u16>().ok())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, format!("bad HTTP answer: {line:?}")));
+            .ok_or_else(|| {
+                let head: String = text.chars().take(64).collect();
+                io::Error::new(io::ErrorKind::InvalidData, format!("bad HTTP answer: {head:?}"))
+            })?;
+        let body = text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default();
+        return Ok((code, body));
     }
     Err(last)
+}
+
+/// GET /api/ping (no token): the pid a SemSearch backend reports, or what answered instead (Http / Down).
+fn ping(base: &Url, timeout: Duration) -> Result<u64, Probe> {
+    match request(base, "GET", "/api/ping", None, None, timeout, true) {
+        Ok((200, body)) => ping_pid(&body).ok_or(Probe::Http(200)),
+        Ok((code, _)) => Err(Probe::Http(code)),
+        Err(_) => Err(Probe::Down),
+    }
+}
+
+/// `{"app": "semsearch", "pid": 123}` -> 123 (0 without "pid"); None for anything else.
+fn ping_pid(body: &str) -> Option<u64> {
+    let json = body.get(body.find('{')?..=body.rfind('}')?)?;
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    (v.get("app")?.as_str()? == "semsearch").then(|| v.get("pid").and_then(|p| p.as_u64()).unwrap_or(0))
+}
+
+fn status(base: &Url, token: Option<&str>, timeout: Duration) -> Probe {
+    match http(base, "GET", "/api/status", token, None, timeout) {
+        Ok(200) => Probe::Ready,
+        Ok(code) => Probe::Http(code),
+        Err(_) => Probe::Down,
+    }
 }
 
 /// Cheap liveness check for the steady state: something accepts TCP connections on the backend port
 /// (no HTTP request, so nothing shows up in the backend's access log).
 pub fn listening(cfg: &Config) -> bool {
-    let host = cfg.base.host_str().unwrap_or("127.0.0.1");
-    let port = cfg.base.port_or_known_default().unwrap_or(80);
+    let base = cfg.base();
+    let host = base.host_str().unwrap_or("127.0.0.1");
+    let port = base.port_or_known_default().unwrap_or(80);
     match (host, port).to_socket_addrs() {
         Ok(addrs) => addrs.into_iter().any(|a| {
             let ct = Duration::from_millis(if a.ip().is_loopback() { 250 } else { 1500 });
@@ -89,13 +135,73 @@ pub fn listening(cfg: &Config) -> bool {
     }
 }
 
+/// Readiness of the backend in use: /api/ping says "semsearch" and GET /api/status with its token answers 200.
+/// With SEMSEARCH_DEV_URL only GET /api/status is asked (the supervisor takes any HTTP answer there).
 pub fn probe(cfg: &Config, timeout: Duration) -> Probe {
-    let token = cfg.token();
-    match http(&cfg.base, "GET", "/api/status", token.as_deref(), None, timeout) {
-        Ok(200) => Probe::Ready,
-        Ok(code) => Probe::Http(code),
-        Err(_) => Probe::Down,
+    let base = cfg.base();
+    if !cfg.dev {
+        if let Err(p) = ping(&base, timeout) {
+            return p;
+        }
     }
+    status(&base, cfg.token().as_deref(), timeout)
+}
+
+/// No backend of ours: use the one on the preferred port if /api/ping says "semsearch" and GET /api/status
+/// with the token from `<data>\token` answers 200. Ready = it is now the backend in use.
+pub fn attach(cfg: &Config, timeout: Duration) -> Probe {
+    let base = local_url(cfg.port);
+    let pid = match ping(&base, timeout) {
+        Ok(pid) => pid,
+        Err(p) => return p,
+    };
+    let token = cfg.file_token();
+    let res = status(&base, token.as_deref(), timeout);
+    if res == Probe::Ready {
+        log(&format!("attached to the backend on port {} (pid {pid})", cfg.port));
+        cfg.set_backend(cfg.port, token);
+    }
+    res
+}
+
+/// Port for a backend we start: the preferred one if it is free, else the first free one of
+/// preferred+1 … preferred+20, else one the OS assigns.
+fn choose_port(preferred: u16) -> u16 {
+    let near = (1..=20).filter_map(|k| preferred.checked_add(k));
+    if let Some(p) = std::iter::once(preferred).chain(near).find(|&p| port_free(p)) {
+        if p != preferred {
+            log(&format!("port {preferred} is busy, using {p}"));
+        }
+        return p;
+    }
+    let os = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).and_then(|l| l.local_addr()).map(|a| a.port());
+    log(&format!("ports {preferred}..+20 are busy, OS-assigned port: {os:?}"));
+    os.unwrap_or(preferred)
+}
+
+/// Nothing answers on 127.0.0.1:`port` and the port can be bound there.
+fn port_free(port: u16) -> bool {
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    // fails at once for a port in use or in a range Windows reserves (Hyper-V, WSL) ...
+    match TcpListener::bind(addr) {
+        Ok(l) => drop(l),
+        Err(_) => return false,
+    }
+    // ... but a program listening on 0.0.0.0:port does not stop a 127.0.0.1 bind: it would still answer here.
+    // A connection to itself (possible for a port in the dynamic range) means that nobody listens.
+    match TcpStream::connect_timeout(&addr, Duration::from_millis(250)) {
+        Ok(s) => matches!((s.local_addr(), s.peer_addr()), (Ok(a), Ok(b)) if a == b),
+        Err(_) => true,
+    }
+}
+
+/// Session token for a backend we start (passed in SEMSEARCH_TOKEN): 32 random bytes as hex.
+/// None if the system RNG fails: the backend then makes its own and we read `<data>\token`.
+fn new_token() -> Option<String> {
+    use windows_sys::Win32::Security::Cryptography::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
+    let mut b = [0u8; 32];
+    let st = unsafe { BCryptGenRandom(std::ptr::null_mut(), b.as_mut_ptr(), b.len() as u32, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+    (st == 0).then(|| b.iter().map(|x| format!("{x:02x}")).collect())
 }
 
 // ---------------------------------------------------------------- job object
@@ -207,7 +313,9 @@ impl Backend {
         wait.as_secs() + u64::from(wait.subsec_millis() > 0)
     }
 
-    /// `<root>\.venv\Scripts\pythonw.exe <root>\server.py --no-browser`, cwd root, SEMSEARCH_SHELL=1, no window.
+    /// `<root>\.venv\Scripts\pythonw.exe <root>\server.py --no-browser`, cwd root, no window, env SEMSEARCH_SHELL=1,
+    /// SEMSEARCH_PORT (preferred port or a free one), SEMSEARCH_TOKEN (new session token) and SEMSEARCH_DATA_DIR
+    /// (the data folder the shell uses).
     pub fn spawn(&self, cfg: &Config) -> Result<(), String> {
         let py = cfg.root.join(".venv").join("Scripts").join("pythonw.exe");
         let server = cfg.root.join("server.py");
@@ -223,20 +331,27 @@ impl Backend {
             return Err(e);
         }
         self.spawns.lock().unwrap().push_back(Instant::now());
-        let res = Command::new(&py)
-            .arg(&server)
+        let port = choose_port(cfg.port);
+        let token = new_token();
+        let mut cmd = Command::new(&py);
+        cmd.arg(&server)
             .arg("--no-browser")
             .current_dir(&cfg.root)
             .env("SEMSEARCH_SHELL", "1")
+            .env("SEMSEARCH_PORT", port.to_string())
+            .env("SEMSEARCH_DATA_DIR", &cfg.data)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-        match res {
+            .creation_flags(CREATE_NO_WINDOW);
+        if let Some(t) = &token {
+            cmd.env("SEMSEARCH_TOKEN", t);
+        }
+        match cmd.spawn() {
             Ok(child) => {
                 let in_job = self.job.as_ref().map(|j| j.assign(&child)).unwrap_or(false);
-                log(&format!("backend started: pid {} (job: {in_job})", child.id()));
+                log(&format!("backend started: pid {}, port {port} (job: {in_job})", child.id()));
+                cfg.set_backend(port, token);
                 *self.child.lock().unwrap() = Some(child);
                 Ok(())
             }
@@ -255,8 +370,9 @@ impl Backend {
     /// POST /api/shutdown with the token, wait <= `wait`, kill only a backend we spawned.
     pub fn shutdown(&self, cfg: &Config, wait: Duration) {
         let t0 = Instant::now();
+        let base = cfg.base();
         let token = cfg.token();
-        let res = http(&cfg.base, "POST", "/api/shutdown", token.as_deref(), Some("{}"), Duration::from_secs(2));
+        let res = http(&base, "POST", "/api/shutdown", token.as_deref(), Some("{}"), Duration::from_secs(2));
         log(&format!("POST /api/shutdown -> {res:?}"));
         let ours = self.has_child();
         // our backend is not even listening yet (still starting): nothing to wait for
@@ -266,7 +382,7 @@ impl Backend {
             let gone = if ours {
                 matches!(self.child_state(), ChildState::Exited(_) | ChildState::None)
             } else {
-                http(&cfg.base, "GET", "/", None, None, Duration::from_millis(300)).is_err()
+                http(&base, "GET", "/", None, None, Duration::from_millis(300)).is_err()
             };
             if gone {
                 log(&format!("backend stopped in {} ms", t0.elapsed().as_millis()));

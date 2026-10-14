@@ -10,13 +10,17 @@ use tauri::Url;
 pub const DEFAULT_PORT: u16 = 8765;
 pub const DEFAULT_HOTKEY: &str = "ctrl+alt+s";
 
-/// Startup configuration (environment + `<root>\config.json`).
+/// Startup configuration (environment + `config.json`) and the backend in use (docs/API.md §1, §3).
 pub struct Config {
     /// Folder with server.py (env SEMSEARCH_ROOT overrides the upward search from the exe).
     pub root: PathBuf,
-    /// Base URL of the pages, always ending with "/" (http://127.0.0.1:<port>/ or SEMSEARCH_DEV_URL).
-    pub base: Url,
-    /// SEMSEARCH_DEV_URL is set: any HTTP answer counts as "ready".
+    /// Data folder: SEMSEARCH_DATA_DIR or %LOCALAPPDATA%\SemSearch (config.json, token, logs).
+    pub data: PathBuf,
+    /// Why SEMSEARCH_DATA_DIR was ignored (logged once the log is open).
+    pub data_note: Option<String>,
+    /// Preferred backend port: config.json "port", else 8765.
+    pub port: u16,
+    /// SEMSEARCH_DEV_URL is set: pages come from there and any HTTP answer counts as "ready".
     pub dev: bool,
     /// SEMSEARCH_NO_BACKEND=1: never spawn or shut down the backend.
     pub no_backend: bool,
@@ -24,12 +28,17 @@ pub struct Config {
     pub hotkey: String,
     /// `--hidden` on the command line (autostart): start in the tray.
     pub hidden: bool,
+    /// SEMSEARCH_DEV_URL, always ending with "/".
+    dev_url: Option<Url>,
+    /// Backend in use: port and session token. Set when the shell attaches to a running backend or spawns one.
+    backend: Mutex<(u16, Option<String>)>,
 }
 
 impl Config {
     pub fn load() -> Config {
         let root = find_root();
-        let json = read_config_json(&root);
+        let (data, data_note) = data_dir();
+        let json = read_config_json(&data, &root);
         let port = json
             .as_ref()
             .and_then(|v| v.get("port"))
@@ -43,41 +52,68 @@ impl Config {
             .and_then(|v| v.as_str())
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| DEFAULT_HOTKEY.to_string());
-        let dev_url = std::env::var("SEMSEARCH_DEV_URL").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-        let mut base = None;
-        if let Some(d) = &dev_url {
+        let dev_env = std::env::var("SEMSEARCH_DEV_URL").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let mut dev_url = None;
+        if let Some(d) = &dev_env {
             let d = if d.ends_with('/') { d.clone() } else { format!("{d}/") };
             match Url::parse(&d) {
-                Ok(u) => base = Some(u),
+                Ok(u) => dev_url = Some(u),
                 Err(e) => log(&format!("SEMSEARCH_DEV_URL {d:?} is invalid: {e}")),
             }
         }
-        let dev = base.is_some();
-        let base = base.unwrap_or_else(|| Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap());
+        let dev = dev_url.is_some();
         let no_backend = matches!(
             std::env::var("SEMSEARCH_NO_BACKEND").ok().as_deref().map(str::trim),
             Some("1") | Some("true") | Some("yes")
         );
         let hidden = std::env::args().skip(1).any(|a| a == "--hidden");
-        Config { root, base, dev, no_backend, hotkey, hidden }
+        let backend = Mutex::new((port, None));
+        Config { root, data, data_note, port, dev, no_backend, hotkey, hidden, dev_url, backend }
+    }
+
+    /// Base URL of the pages, always ending with "/": SEMSEARCH_DEV_URL or http://127.0.0.1:<port of the backend in use>/.
+    pub fn base(&self) -> Url {
+        match &self.dev_url {
+            Some(u) => u.clone(),
+            None => local_url(self.backend.lock().unwrap().0),
+        }
     }
 
     pub fn page_url(&self, route: &str) -> Url {
-        self.base.join(route.trim_start_matches('/')).unwrap_or_else(|_| self.base.clone())
+        let base = self.base();
+        base.join(route.trim_start_matches('/')).unwrap_or(base)
     }
 
+    /// Token of the backend in use: the one the shell gave it, else `<data>\token` (always so with SEMSEARCH_DEV_URL).
     pub fn token(&self) -> Option<String> {
-        fs::read_to_string(self.root.join("data").join("token"))
+        let given = if self.dev { None } else { self.backend.lock().unwrap().1.clone() };
+        given.or_else(|| self.file_token())
+    }
+
+    /// `<data>\token`, written by the backend at startup.
+    pub fn file_token(&self) -> Option<String> {
+        fs::read_to_string(self.data.join("token"))
             .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     }
 
-    pub fn is_backend_url(&self, url: &Url) -> bool {
-        url.scheme() == self.base.scheme()
-            && url.host_str() == self.base.host_str()
-            && url.port_or_known_default() == self.base.port_or_known_default()
+    /// The backend in use is now the one on `port` (attached or spawned with `token`).
+    pub fn set_backend(&self, port: u16, token: Option<String>) {
+        *self.backend.lock().unwrap() = (port, token);
     }
+
+    pub fn is_backend_url(&self, url: &Url) -> bool {
+        let base = self.base();
+        url.scheme() == base.scheme()
+            && url.host_str() == base.host_str()
+            && url.port_or_known_default() == base.port_or_known_default()
+    }
+}
+
+/// http://127.0.0.1:<port>/
+pub fn local_url(port: u16) -> Url {
+    Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap()
 }
 
 fn find_root() -> PathBuf {
@@ -99,8 +135,53 @@ fn find_root() -> PathBuf {
     start
 }
 
-fn read_config_json(root: &Path) -> Option<serde_json::Value> {
-    let text = fs::read_to_string(root.join("config.json")).ok()?;
+/// Data folder (docs/API.md §1): SEMSEARCH_DATA_DIR (absolute path), else `<LocalAppData>\SemSearch` (known folder
+/// FOLDERID_LocalAppData, then %LOCALAPPDATA%, then %USERPROFILE%\AppData\Local). Also returns why
+/// SEMSEARCH_DATA_DIR was ignored. The folder is created when the log is opened.
+fn data_dir() -> (PathBuf, Option<String>) {
+    let mut note = None;
+    if let Ok(v) = std::env::var("SEMSEARCH_DATA_DIR") {
+        let v = v.trim();
+        if Path::new(v).is_absolute() {
+            return (PathBuf::from(v), None);
+        }
+        if !v.is_empty() {
+            note = Some(format!("SEMSEARCH_DATA_DIR ignored (not an absolute path): {v:?}"));
+        }
+    }
+    let env_dir = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|d| d.is_absolute());
+    let local = known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_LocalAppData)
+        .or_else(|| env_dir("LOCALAPPDATA"))
+        .or_else(|| env_dir("USERPROFILE").map(|d| d.join("AppData").join("Local")))
+        .unwrap_or_else(std::env::temp_dir);
+    (local.join("SemSearch"), note)
+}
+
+/// Path of a known folder (SHGetKnownFolderPath).
+fn known_folder(id: &windows_sys::core::GUID) -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    use windows_sys::Win32::UI::Shell::SHGetKnownFolderPath;
+    let mut p: *mut u16 = std::ptr::null_mut();
+    unsafe {
+        let hr = SHGetKnownFolderPath(id, 0, std::ptr::null_mut(), &mut p);
+        let mut out = None;
+        if hr >= 0 && !p.is_null() {
+            let mut len = 0;
+            while *p.add(len) != 0 {
+                len += 1;
+            }
+            out = Some(PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(p, len))));
+        }
+        CoTaskMemFree(p as *const _); // freed even when the call fails
+        out.filter(|d| d.is_absolute())
+    }
+}
+
+/// `<data>\config.json`; if it does not exist, `<root>\config.json` (old layout, read-only: the backend moves it).
+fn read_config_json(data: &Path, root: &Path) -> Option<serde_json::Value> {
+    let path = [data, root].iter().map(|d| d.join("config.json")).find(|p| p.is_file())?;
+    let text = fs::read_to_string(path).ok()?;
     serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()
 }
 
@@ -109,10 +190,9 @@ fn read_config_json(root: &Path) -> Option<serde_json::Value> {
 static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOG_LOCK: Mutex<()> = Mutex::new(());
 
-/// Log to `<root>\data\shell.log` (rotated at 1 MB).
-pub fn init_log(root: &Path) {
-    let dir = root.join("data");
-    let _ = fs::create_dir_all(&dir);
+/// Log to `<data>\shell.log` (rotated at 1 MB).
+pub fn init_log(dir: &Path) {
+    let _ = fs::create_dir_all(dir);
     let path = dir.join("shell.log");
     if fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(false) {
         let _ = fs::rename(&path, dir.join("shell.log.1"));
@@ -164,6 +244,55 @@ pub fn system_dark() -> bool {
         )
     };
     rc == 0 && data == 0
+}
+
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+
+/// Value `name` of HKCU\Software\Microsoft\Windows\CurrentVersion\Run (REG_SZ), if present.
+pub fn run_entry(name: &str) -> Option<String> {
+    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
+    let (key, val) = (wide(RUN_KEY), wide(name));
+    let mut buf = vec![0u16; 4096];
+    let mut size = (buf.len() * 2) as u32;
+    let rc = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            key.as_ptr(),
+            val.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            buf.as_mut_ptr() as *mut _,
+            &mut size,
+        )
+    };
+    if rc != 0 {
+        return None;
+    }
+    let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    Some(String::from_utf16_lossy(&buf[..n]))
+}
+
+/// Set the Run value `name` (HKCU) to `command` and, like tauri-plugin-autostart's enable(), mark it enabled
+/// for Task Manager (Explorer\StartupApproved\Run).
+pub fn set_run_entry(name: &str, command: &str) -> Result<(), String> {
+    use windows_sys::Win32::System::Registry::*;
+    let (key, val, data) = (wide(RUN_KEY), wide(name), wide(command));
+    let rc = unsafe {
+        RegSetKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), val.as_ptr(), REG_SZ, data.as_ptr() as *const _, (data.len() * 2) as u32)
+    };
+    if rc != 0 {
+        return Err(format!("RegSetKeyValueW failed (error {rc})"));
+    }
+    let approved = wide(r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run");
+    let mut hk: HKEY = std::ptr::null_mut();
+    if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, approved.as_ptr(), 0, KEY_SET_VALUE, &mut hk) } == 0 {
+        let enabled = [2u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        unsafe {
+            RegSetValueExW(hk, val.as_ptr(), 0, REG_BINARY, enabled.as_ptr(), enabled.len() as u32);
+            RegCloseKey(hk);
+        }
+    }
+    Ok(())
 }
 
 pub fn wide(s: &str) -> Vec<u16> {

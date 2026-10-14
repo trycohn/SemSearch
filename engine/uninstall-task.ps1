@@ -1,12 +1,15 @@
 <#
 .SYNOPSIS
-    Removes the "SemSearch Engine" scheduled task, stops the engine and deletes
-    "<Program Files>\SemSearch" (the installed engine copy and its logs).
+    Removes the "SemSearch Engine" scheduled task, stops the engine and deletes what
+    install-task created in "<Program Files>\SemSearch" (the engine copy and its logs).
 
 .DESCRIPTION
     Self-elevates via UAC when started without administrator rights.
-    The project folder (bin\, data\) is not touched; the backend may start a
-    non-elevated engine from bin\ again afterwards.
+    "<Program Files>\SemSearch" itself is removed only when nothing else is left in it.
+    The project folder and the data folder (%LOCALAPPDATA%\SemSearch) are not touched;
+    the backend may start a non-elevated engine from bin\ again afterwards.
+    Start it with uninstall-task.cmd: that also works under the default (Restricted)
+    execution policy and for a script from a downloaded ZIP.
 
 .PARAMETER NoPause
     Do not wait for Enter before closing the elevated window.
@@ -18,7 +21,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'SemSearch Engine'
-$PipeName = 'semsearch-engine'
+# One engine pipe per Windows session (docs/API.md section 4); UAC elevation keeps the session.
+$PipeName = 'semsearch-engine-' + [Diagnostics.Process]::GetCurrentProcess().SessionId
 
 function Test-Admin {
     $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -49,7 +53,7 @@ if (-not (Test-Admin)) {
         $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList -Wait -PassThru
         exit $p.ExitCode
     } catch {
-        Write-Error "Elevation was cancelled or failed: $_"
+        Write-Host "Elevation was cancelled or failed: $_" -ForegroundColor Red
         exit 1
     }
 }
@@ -79,15 +83,33 @@ try {
         Start-Sleep -Milliseconds 250
     }
 
-    # Remove only "<Program Files>\SemSearch".
+    # Remove only what install-task created there (the engine copy, logs\); the folder itself only if then empty.
     if ((Split-Path -Leaf $InstallDir) -eq 'SemSearch' -and (Split-Path -Parent $InstallDir) -ieq $PF -and (Test-Path -LiteralPath $InstallDir -PathType Container)) {
-        Remove-Item -LiteralPath $InstallDir -Recurse -Force
-        Write-Host "Removed $InstallDir"
+        if (Test-Path -LiteralPath $Exe -PathType Leaf) {
+            Remove-Item -LiteralPath $Exe -Force
+            Write-Host "Removed $Exe"
+        }
+        $Logs = Join-Path $InstallDir 'logs'
+        if (Test-Path -LiteralPath $Logs -PathType Container) {
+            if ((Get-Item -LiteralPath $Logs -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                [IO.Directory]::Delete($Logs)  # a link: remove the link, not what it points to
+            } else {
+                Remove-Item -LiteralPath $Logs -Recurse -Force
+            }
+            Write-Host "Removed $Logs"
+        }
+        if (@(Get-ChildItem -LiteralPath $InstallDir -Force).Count -eq 0) {
+            Remove-Item -LiteralPath $InstallDir -Force
+            Write-Host "Removed $InstallDir"
+        } else {
+            Write-Host "$InstallDir still contains other files; left in place."
+        }
     } else {
         Write-Host "$InstallDir does not exist."
     }
 } catch {
-    Write-Error $_
+    # Write-Host, not Write-Error: with ErrorActionPreference Stop, Write-Error would end the script before the pause below
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
     $code = 1
 }
 

@@ -513,9 +513,38 @@ async fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     if m.is_enabled().unwrap_or(!enabled) == enabled {
         return Ok(());
     }
-    let r = if enabled { m.enable() } else { m.disable() };
+    let r = if enabled { enable_autostart() } else { m.disable().map_err(|e| e.to_string()) };
     log(&format!("autostart -> {enabled}: {r:?}"));
     r.map_err(|e| format!("Не удалось изменить автозапуск: {e}"))
+}
+
+// ---------------------------------------------------------------- autostart
+
+/// Name of the HKCU\...\Run entry (also given to the autostart plugin, which reads and removes it).
+const AUTOSTART_NAME: &str = "SemSearch";
+
+/// `"<this exe>" --hidden`. The plugin's enable() writes the path without quotes, which breaks for paths with
+/// spaces, so the entry is written by util::set_run_entry instead.
+fn autostart_command() -> String {
+    format!("\"{}\" --hidden", std::env::current_exe().unwrap_or_default().display())
+}
+
+fn enable_autostart() -> Result<(), String> {
+    util::set_run_entry(AUTOSTART_NAME, &autostart_command())
+}
+
+/// Autostart is on but the entry starts another exe (the folder was moved, or an older build wrote it unquoted):
+/// point it at this exe.
+fn repair_autostart(app: &AppHandle) {
+    if !app.autolaunch().is_enabled().unwrap_or(false) {
+        return;
+    }
+    let want = autostart_command();
+    // None: only an all-users (HKLM) entry exists — not ours to change
+    if let Some(cur) = util::run_entry(AUTOSTART_NAME).filter(|cur| !cur.eq_ignore_ascii_case(&want)) {
+        let r = enable_autostart();
+        log(&format!("autostart entry {cur:?} -> {want:?}: {r:?}"));
+    }
 }
 
 #[tauri::command]
@@ -616,48 +645,52 @@ fn set_ready(app: &AppHandle, ready: bool, why: &str) {
 
 fn supervisor(app: AppHandle) {
     let s = shell(&app);
-    let mut refused = 0u32; // consecutive failed probes
-    let mut http_since: Option<Instant> = None;
+    let mut misses = 0u32; // consecutive probes without our backend answering
     let mut ever_ready = false;
     while !s.quitting.load(Ordering::SeqCst) {
         let ready = s.ready.load(Ordering::SeqCst);
-        // until ready: GET /api/status with the token (docs/API.md §3); afterwards only a TCP liveness check
-        let probe = if !ready {
+        // until ready: GET /api/ping + /api/status with the token (docs/API.md §3); afterwards only a TCP liveness
+        // check. Without a backend of ours, first look for a running one on the preferred port to attach to.
+        let probe = if ready {
+            if backend::listening(&s.cfg) {
+                Probe::Ready
+            } else {
+                Probe::Down
+            }
+        } else if s.cfg.dev || s.backend.has_child() {
             backend::probe(&s.cfg, Duration::from_secs(2))
-        } else if backend::listening(&s.cfg) {
-            Probe::Ready
         } else {
-            Probe::Down
+            backend::attach(&s.cfg, Duration::from_secs(2))
         };
         match probe {
             Probe::Ready => {
-                refused = 0;
-                http_since = None;
+                misses = 0;
                 ever_ready = true;
                 if !ready {
-                    set_ready(&app, true, "GET /api/status -> 200");
+                    set_ready(&app, true, "GET /api/ping + /api/status -> 200");
                     s.backend.mark_healthy();
                 }
             }
-            Probe::Http(code) => {
-                refused = 0;
-                let since = *http_since.get_or_insert_with(Instant::now);
-                if !ready && (s.cfg.dev || since.elapsed() > Duration::from_secs(20)) {
+            // SEMSEARCH_DEV_URL: any HTTP answer counts
+            Probe::Http(code) if s.cfg.dev => {
+                misses = 0;
+                ever_ready = true;
+                if !ready {
                     set_ready(&app, true, &format!("GET /api/status -> {code}"));
                 }
             }
-            Probe::Down => {
-                refused += 1;
-                http_since = None;
+            // nothing answers, or not our backend (the port is taken by another program): (re)start ours
+            Probe::Http(_) | Probe::Down => {
+                misses += 1;
                 let child = s.backend.child_state();
-                if ready && (matches!(child, ChildState::Exited(_)) || (child == ChildState::None && refused >= 3)) {
+                if ready && (matches!(child, ChildState::Exited(_)) || (child == ChildState::None && misses >= 3)) {
                     set_ready(&app, false, &format!("{child:?}"));
                 }
                 if s.cfg.no_backend {
                     if !ready {
-                        set_status(&app, &format!("Жду сервер поиска на {} (SEMSEARCH_NO_BACKEND=1)…", s.cfg.base));
+                        set_status(&app, &format!("Жду сервер поиска на {} (SEMSEARCH_NO_BACKEND=1)…", s.cfg.base()));
                     }
-                } else if child == ChildState::None && ever_ready && refused < 3 {
+                } else if child == ChildState::None && ever_ready && misses < 3 {
                     // a backend we did not start went away: give it a moment (it may be restarting) before we start ours
                 } else if child != ChildState::Running {
                     let wait = s.backend.spawn_wait();
@@ -672,9 +705,10 @@ fn supervisor(app: AppHandle) {
                             None => String::new(),
                         };
                         if !matches!(child, ChildState::None) || !s.status.lock().unwrap().starts_with("Не удалось") {
+                            let log_file = s.cfg.data.join("semsearch.log");
                             set_status(
                                 &app,
-                                &format!("Сервер поиска остановился{code}. Перезапуск через {wait} с… Подробности: data\\semsearch.log"),
+                                &format!("Сервер поиска остановился{code}. Перезапуск через {wait} с… Подробности: {}", log_file.display()),
                             );
                         }
                     }
@@ -692,11 +726,17 @@ fn supervisor(app: AppHandle) {
 fn setup(app: &AppHandle) {
     let s = shell(app);
     // An already running backend: open the real pages right away (no loading page flash).
-    match backend::probe(&s.cfg, Duration::from_millis(1000)) {
+    let running = if s.cfg.dev {
+        backend::probe(&s.cfg, Duration::from_millis(1000))
+    } else {
+        backend::attach(&s.cfg, Duration::from_millis(1000))
+    };
+    match running {
         Probe::Ready => set_ready(app, true, "already running"),
         Probe::Http(_) if s.cfg.dev => set_ready(app, true, "dev server answers"),
         _ => {}
     }
+    repair_autostart(app);
     if let Err(e) = build_main(app, !s.cfg.hidden) {
         log(&format!("main window: {e}"));
     }
@@ -737,16 +777,21 @@ fn setup(app: &AppHandle) {
 fn main() {
     util::allow_any_foreground();
     let cfg = Config::load();
-    util::init_log(&cfg.root);
+    util::init_log(&cfg.data);
     log(&format!(
-        "start {:?}: root={} base={} dev={} no_backend={} hidden={}",
+        "start {:?}: root={} data={} port={} base={} dev={} no_backend={} hidden={}",
         std::env::current_exe().unwrap_or_default(),
         cfg.root.display(),
-        cfg.base,
+        cfg.data.display(),
+        cfg.port,
+        cfg.base(),
         cfg.dev,
         cfg.no_backend,
         cfg.hidden
     ));
+    if let Some(note) = &cfg.data_note {
+        log(note);
+    }
 
     let state = Shell {
         cfg,
@@ -781,7 +826,8 @@ fn main() {
                 })
                 .build(),
         )
-        .plugin(tauri_plugin_autostart::Builder::new().app_name("SemSearch").args(["--hidden"]).build())
+        // is_enabled() / disable() only: the entry itself is written by enable_autostart() (quoted path)
+        .plugin(tauri_plugin_autostart::Builder::new().app_name(AUTOSTART_NAME).build())
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![

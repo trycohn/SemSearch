@@ -1,0 +1,4 @@
+# Static CRT: the exe does not need the VC++ runtime (VCRUNTIME140.dll) on the target machine.
+# Cargo reads this file only when building from this folder: cd tools\frameprobe && cargo build --release
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

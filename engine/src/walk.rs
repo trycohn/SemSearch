@@ -300,6 +300,9 @@ fn reader_loop(slot: Arc<VolSlot>, tx: Sender<WatchMsg>) {
     let root = wide_z(&format!("{}\\", slot.drive));
     let mut ext = true;
     let mut buf: Vec<u64> = vec![0u64; RDCW_BUF / 8];
+    // корень не открывался (например, диск отключили): пересборка, сделанная без него, оставила индекс
+    // пустым — после переоткрытия нужен полный обход
+    let mut lost = false;
     while !slot.stopped() {
         let h = unsafe {
             CreateFileW(
@@ -313,13 +316,19 @@ fn reader_loop(slot: Arc<VolSlot>, tx: Sender<WatchMsg>) {
             )
         };
         if h == INVALID_HANDLE_VALUE {
-            warn!("volume {}: cannot open root for change notifications (err {})", slot.drive, unsafe { GetLastError() });
+            if !lost {
+                warn!("volume {}: cannot open root for change notifications (err {}); retrying every 5 s", slot.drive, unsafe { GetLastError() });
+            }
+            lost = true;
             unsafe { WaitForSingleObject(slot.stop_ev.0, 5000) };
             continue;
         }
         let h = Handle(h);
         let ev = new_event(true);
         info!("volume {}: watching changes (ReadDirectoryChanges{}W)", slot.drive, if ext { "Ex" } else { "" });
+        if std::mem::take(&mut lost) && tx.send(WatchMsg::Overflow).is_err() {
+            return;
+        }
         loop {
             if slot.stopped() {
                 return;
