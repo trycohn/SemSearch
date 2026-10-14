@@ -97,7 +97,7 @@ def load_texts(cfg, n_files, max_chunks, seed):
             items = extract.extract_text(path, cfg)
         except Exception:
             continue
-        out += [it[3] for it in items]
+        out += [it[3] for it in items if isinstance(it[3], str)]  # страницы-сканы (JPEG) — не текст
         n_files -= 1
     return out[:max_chunks]
 

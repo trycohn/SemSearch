@@ -536,7 +536,14 @@ class Indexer(threading.Thread):
         # background=True: работа режется на кусочки по 1–5 мс и подстраивается под пользователя (throttle.py),
         # чтобы кадры игр и рабочего стола успевали между ними
         if kind in ("text", "code"):
-            return self.emb.documents(payloads, background=True)
+            scans = [i for i, p in enumerate(payloads) if isinstance(p, bytes)]  # страницы PDF-сканов (JPEG)
+            if not scans:
+                return self.emb.documents(payloads, background=True)
+            texts = [i for i, p in enumerate(payloads) if not isinstance(p, bytes)]
+            vecs = np.zeros((len(payloads), core.DIM), np.float32)
+            vecs[texts] = self.emb.documents([payloads[i] for i in texts], background=True)
+            vecs[scans] = self.emb.images([payloads[i] for i in scans], background=True)
+            return vecs
         if kind in ("image", "video"):
             return self.emb.images(payloads, background=True)
         return self.emb.audio(payloads, background=True)

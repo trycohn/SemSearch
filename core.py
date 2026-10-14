@@ -2,6 +2,7 @@
 import ctypes
 import errno
 import gc
+import io
 import json
 import logging
 import os
@@ -633,10 +634,15 @@ class Embedder:
             i += n
 
     def _item_batches(self, items, bs, background):
+        """Картинки и аудио — порции по числу. JPEG-байты (страницы PDF-сканов, extract.read_pdf) раскрываются в картинку
+        здесь, по порции: целая пачка таких страниц в виде картинок заняла бы гигабайты."""
+        from PIL import Image
+
         i = 0
         while i < len(items):
             n = self.throttle.batch_size(bs) if background else bs  # тут же выдерживается пауза после прошлой порции
-            yield list(range(i, min(i + n, len(items)))), items[i:i + n]
+            part = [Image.open(io.BytesIO(x)).convert("RGB") if isinstance(x, bytes) else x for x in items[i:i + n]]
+            yield list(range(i, min(i + n, len(items)))), part
             i += n
 
     def _forward(self, payload):

@@ -1,15 +1,19 @@
 """Извлечение содержимого из файлов. Каждая функция возвращает список
-(loc, label, snippet, payload), где payload идёт в модель."""
+(loc, label, snippet, payload), где payload идёт в модель: текст, картинка (PIL) или, у страниц PDF-сканов,
+JPEG-байты — их Embedder раскрывает в картинку по порции."""
 import hashlib
+import io
 import locale
 import os
 import re
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageStat
 
 Image.MAX_IMAGE_PIXELS = 200_000_000
 ANSI = locale.getencoding()  # кодовая страница ANSI системы (cp1251, cp1252…): так сохраняют старые редакторы
+SCAN_MIN_TEXT = 20  # меньше символов текста на странице PDF — это скан (или текст кривыми): в модель идёт картинкой
+SCAN_SIDE = 1000  # длинная сторона картинки страницы, px: модель всё равно сводит её к 2520 участкам 16×16
 
 
 class Skip(Exception):
@@ -32,7 +36,10 @@ def _chunks(text, size=1500, overlap=200):
 def _doc_items(name, pieces_with_labels, max_chunks):
     items = []
     for loc, (label, piece) in enumerate(pieces_with_labels[:max_chunks]):
-        items.append((loc, label, piece[:300], f"title: {name} | text: {piece}"))
+        if isinstance(piece, bytes):  # страница-скан (JPEG) — в модель картинкой, текста для выдачи нет
+            items.append((loc, label, "", piece))
+        else:
+            items.append((loc, label, piece[:300], f"title: {name} | text: {piece}"))
     return items
 
 
@@ -49,10 +56,23 @@ def _read_plain(path, cfg):
         return raw.decode(ANSI, errors="replace")
 
 
-def pdf_text(path, max_pages):
-    """Текст первых max_pages страниц ("" — страница не прочиталась). PDFium (pypdfium2) в ~10 раз быстрее pypdf
-    и сам открывает PDF с AES-шифрованием без пароля; нет пакета или файл ему не дался — pypdf. Зовётся только
-    в процессах разбора: PDFium нельзя вызывать из нескольких потоков сразу."""
+def _page_jpeg(page):
+    """Страница PDF картинкой (JPEG) или None, если она пустая — в поиске от пустой страницы только шум."""
+    w, h = page.get_size()
+    im = page.render(scale=SCAN_SIDE / max(w, h, 1)).to_pil().convert("RGB")
+    if ImageStat.Stat(im.convert("L")).stddev[0] < 3:
+        return None
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=90)
+    return buf.getvalue()
+
+
+def read_pdf(path, max_pages, max_scans=0):
+    """-> [(текст, JPEG | None)] первых max_pages страниц ("" — текст не прочитался). PDFium (pypdfium2) в ~10 раз
+    быстрее pypdf и сам открывает PDF с AES-шифрованием без пароля; нет пакета или файл ему не дался — pypdf.
+    Страницу почти без текста (скан, текст кривыми) PDFium рисует картинкой, не больше max_scans: модель находит
+    её по запросу почти так же, как по тексту (замер на 60 страницах: сходство с запросом 0,72 против 0,73).
+    Зовётся только в процессах разбора: PDFium нельзя вызывать из нескольких потоков сразу."""
     try:
         import pypdfium2 as pdfium
 
@@ -66,10 +86,16 @@ def pdf_text(path, max_pages):
                 page = doc[i]
                 try:
                     tp = page.get_textpage()
-                    out.append(tp.get_text_range().replace("\r\n", "\n"))
+                    text = tp.get_text_range().replace("\r\n", "\n")
                     tp.close()
+                    img = None
+                    if len(text.strip()) < SCAN_MIN_TEXT and max_scans > 0:
+                        img = _page_jpeg(page)
+                        if img is not None:
+                            max_scans -= 1
+                    out.append((text, img))
                 except Exception:
-                    out.append("")
+                    out.append(("", None))
                 finally:
                     page.close()
             return out
@@ -82,9 +108,9 @@ def pdf_text(path, max_pages):
     out = []
     for page in PdfReader(path).pages[:max_pages]:
         try:
-            out.append(page.extract_text() or "")
+            out.append((page.extract_text() or "", None))
         except Exception:
-            out.append("")
+            out.append(("", None))
     return out
 
 
@@ -93,8 +119,11 @@ def extract_text(path, cfg):
     ext = os.path.splitext(path)[1].lower()
     labeled = []
     if ext == ".pdf":
-        for i, t in enumerate(pdf_text(path, cfg["max_pdf_pages"])):
-            labeled += [(f"стр. {i + 1}", p) for p in _chunks(t)]
+        for i, (t, img) in enumerate(read_pdf(path, cfg["max_pdf_pages"], cfg["max_chunks_per_file"])):
+            if img is not None:
+                labeled.append((f"стр. {i + 1} (скан)", img))
+            else:
+                labeled += [(f"стр. {i + 1}", p) for p in _chunks(t)]
     elif ext == ".docx":
         import docx
 
