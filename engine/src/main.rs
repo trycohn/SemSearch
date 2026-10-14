@@ -8,6 +8,7 @@
 
 #[macro_use]
 mod util;
+mod classify;
 mod engine;
 mod index;
 mod mft;
@@ -22,9 +23,11 @@ use std::time::Instant;
 
 use engine::*;
 
-const USAGE: &str = "semsearch-engine [--root <dir>] [--walk] [--console] [--selftest]
+const USAGE: &str = "semsearch-engine [--root <dir>] [--pipe <name>] [--walk] [--console] [--selftest]
   --root <dir> project root (folder with config.json); default: nearest
                ancestor of the exe folder that contains config.json
+  --pipe <name> pipe name (\\\\.\\pipe\\<name>), default semsearch-engine;
+               use another name for a development instance
   --walk       force walk mode (directory enumeration + ReadDirectoryChangesW)
   --console    log to stdout instead of the log file
   --selftest   build the index, run sample searches and a live-update check,
@@ -93,6 +96,13 @@ fn main() {
     if let Some(e) = root_err {
         warn!("--root ignored ({e}); using {}", root.display());
     }
+    if let Some(p) = arg_value(&args, "--pipe") {
+        // неверное имя — выход, а не тихий откат на рабочий канал
+        if let Err(e) = server::set_pipe_name(p.trim()) {
+            warn!("{e}");
+            std::process::exit(2);
+        }
+    }
     if selftest {
         let code = run_selftest(root, elevated, force_walk);
         std::process::exit(code);
@@ -100,7 +110,7 @@ fn main() {
     let (first, sec) = match server::create_first() {
         Ok(x) => x,
         Err(server::FirstErr::Busy) => {
-            info!("another engine instance owns {} — exiting", server::PIPE_NAME);
+            info!("another engine instance owns {} — exiting", server::pipe_name());
             std::process::exit(0);
         }
         Err(server::FirstErr::Other(e)) => {

@@ -17,7 +17,23 @@ use crate::engine::*;
 use crate::ops;
 use crate::util::*;
 
-pub const PIPE_NAME: &str = r"\\.\pipe\semsearch-engine";
+pub const DEFAULT_PIPE: &str = "semsearch-engine";
+static PIPE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Имя канала (`--pipe <name>` для отладочного экземпляра; по умолчанию semsearch-engine).
+/// Допустимы только [A-Za-z0-9._-], до 100 символов.
+pub fn set_pipe_name(name: &str) -> Result<(), String> {
+    let ok = !name.is_empty() && name.len() <= 100 && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'_' || c == b'-');
+    if !ok {
+        return Err(format!("invalid pipe name {name:?} (allowed: A-Z a-z 0-9 . _ -, up to 100 chars)"));
+    }
+    let _ = PIPE.set(format!(r"\\.\pipe\{name}"));
+    Ok(())
+}
+
+pub fn pipe_name() -> &'static str {
+    PIPE.get_or_init(|| format!(r"\\.\pipe\{DEFAULT_PIPE}"))
+}
 const MAX_REQ: usize = 1 << 20;
 const PIPE_BUF: u32 = 64 * 1024;
 
@@ -58,7 +74,7 @@ pub enum FirstErr {
 
 fn create_instance(sec: &Security, first: bool) -> Result<Handle, u32> {
     let sa = SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sec.sd, bInheritHandle: 0 };
-    let name = wide_z(PIPE_NAME);
+    let name = wide_z(pipe_name());
     let mut open_mode = PIPE_ACCESS_DUPLEX;
     if first {
         open_mode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
@@ -82,7 +98,7 @@ fn create_instance(sec: &Security, first: bool) -> Result<Handle, u32> {
 }
 
 fn pipe_exists() -> bool {
-    let name = wide_z(PIPE_NAME);
+    let name = wide_z(pipe_name());
     unsafe { WaitNamedPipeW(name.as_ptr(), 1) != 0 || GetLastError() == ERROR_SEM_TIMEOUT }
 }
 
@@ -92,7 +108,7 @@ pub fn create_first() -> Result<(Handle, Security), FirstErr> {
     for sec in Security::candidates() {
         match create_instance(&sec, true) {
             Ok(h) => {
-                info!("pipe {PIPE_NAME} listening, SDDL {}", sec.sddl);
+                info!("pipe {} listening, SDDL {}", pipe_name(), sec.sddl);
                 return Ok((h, sec));
             }
             Err(e) => {

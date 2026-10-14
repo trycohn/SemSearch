@@ -133,6 +133,13 @@ class NamesProvider:
                     self.engine = None
         return self.engine or self.local
 
+    def reachable(self):
+        """Движок на связи, пусть даже ещё строит индекс, — тогда свой индекс имён не строим (он сделает это сам)."""
+        try:
+            return self._client is not None and self._client.available()
+        except Exception:
+            return False
+
     def _call(self, method, *args, **kw):
         p = self.current()
         try:

@@ -10,12 +10,13 @@ name = "semsearch-engine"
 path = "src/main.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 memchr = "2"
 regex = "1"
 hashbrown = { version = "0.15", default-features = false, features = ["inline-more"] }
 rayon = "1"
+ignore = "0.4"
 
 [dependencies.windows-sys]
 version = "0.61"

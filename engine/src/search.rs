@@ -5,6 +5,7 @@ use memchr::memmem::Finder;
 use rayon::prelude::*;
 use regex::bytes::{Regex, RegexBuilder};
 use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 
 use crate::index::*;
 use crate::util::*;
@@ -543,23 +544,45 @@ pub struct ListSpec {
     pub excl_paths: Vec<String>,
     pub skip_dot: bool,
     pub skip_cloud: bool,
+    /// пропускать папки сборки/зависимостей по контексту (classify::SmartMarks)
+    pub smart: bool,
 }
 
-/// Группа результатов `list`: каталог, число его детей в индексе, имена нужных файлов.
+/// Группа результатов `list`: каталог, число его детей в индексе, нужные файлы.
 pub struct ListGroup {
     pub dir: String,
+    pub dir_idx: u32,
     pub nchild: u32,
     pub names: Vec<String>,
+    pub files: Vec<u32>,
+    /// classify: по файлу — (тег, корень репозитория); пусто без classify
+    pub tags: Vec<(Option<&'static str>, Option<std::sync::Arc<str>>)>,
 }
 
+pub struct ListOut {
+    pub groups: Vec<ListGroup>,
+    /// индексы корней списка на этом томе
+    pub roots: Vec<u32>,
+    /// smart_excludes: каталогов-«корней» пропуска и файлов, которые иначе попали бы в список
+    pub smart_dirs: u64,
+    pub smart_files: u64,
+}
+
+const ST_BLOCK: u8 = 1;
+const ST_OK: u8 = 2;
+const ST_SMART: u8 = 3;
+const ST_SMART_ROOT: u8 = 4;
+
 /// Файлы под корнями с нужными расширениями (без исключённых папок/путей, без точечных
-/// папок, без облачных заглушек и точек повторной обработки), сгруппированные по каталогам.
-pub fn list_volume(v: &Volume, spec: &ListSpec) -> Vec<ListGroup> {
+/// папок, без облачных заглушек и точек повторной обработки; со smart — без папок
+/// сборки/зависимостей), сгруппированные по каталогам.
+pub fn list_volume(v: &Volume, spec: &ListSpec) -> ListOut {
+    let empty = || ListOut { groups: Vec::new(), roots: Vec::new(), smart_dirs: 0, smart_files: 0 };
     let Some(roots) = resolve_roots(v, &spec.roots) else {
-        return Vec::new();
+        return empty();
     };
     if roots.is_empty() {
-        return Vec::new();
+        return empty();
     }
     let excl_idx: Vec<u32> = spec
         .excl_paths
@@ -569,8 +592,14 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> Vec<ListGroup> {
         .filter_map(|p| v.resolve(&p))
         .collect();
     let n = v.ents.len();
-    let memo = Memo::new(n);
-    let excluded_dir = |x: u32| -> bool {
+    // состояние каталога: 0 — неизвестно, BLOCK, OK, SMART (внутри пропущенной папки), SMART_ROOT
+    let memo: Vec<AtomicU8> = {
+        let mut z = std::mem::ManuallyDrop::new(vec![0u8; n]);
+        // SAFETY: AtomicU8 имеет ту же раскладку, что и u8
+        unsafe { Vec::from_raw_parts(z.as_mut_ptr() as *mut AtomicU8, z.len(), z.capacity()) }
+    };
+    let marks = if spec.smart { Some(crate::classify::SmartMarks::build(v)) } else { None };
+    let user_excluded = |x: u32| -> bool {
         let e = v.ents[x as usize];
         if e.flags & HIDE != 0 {
             return true;
@@ -581,13 +610,55 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> Vec<ListGroup> {
         let ln = v.lname(x);
         (spec.skip_dot && ln.first() == Some(&b'.')) || spec.excl_dirs.iter().any(|d| d[..] == *ln) || excl_idx.contains(&x)
     };
+    let dir_state = |start: u32, scratch: &mut Vec<u32>| -> u8 {
+        scratch.clear();
+        let mut cur = start;
+        let mut base;
+        loop {
+            if cur == NONE || cur as usize >= n {
+                base = ST_BLOCK;
+                break;
+            }
+            let m = memo[cur as usize].load(Relaxed);
+            if m != 0 {
+                base = m;
+                break;
+            }
+            if roots.contains(&cur) {
+                // явный корень разрешён всегда (даже если он сам «точечный» или node_modules)
+                memo[cur as usize].store(ST_OK, Relaxed);
+                base = ST_OK;
+                break;
+            }
+            scratch.push(cur);
+            if scratch.len() > 8192 {
+                return ST_BLOCK;
+            }
+            cur = v.ents[cur as usize].parent;
+        }
+        while let Some(x) = scratch.pop() {
+            let st = if base == ST_BLOCK || user_excluded(x) {
+                ST_BLOCK
+            } else if base == ST_SMART || base == ST_SMART_ROOT {
+                ST_SMART
+            } else if marks.as_ref().map(|m| m.skip(v, x)).unwrap_or(false) {
+                ST_SMART_ROOT
+            } else {
+                ST_OK
+            };
+            memo[x as usize].store(st, Relaxed);
+            base = st;
+        }
+        base
+    };
     let nchunks = n.div_ceil(CHUNK);
-    let hits: Vec<Vec<u32>> = (0..nchunks)
+    let hits: Vec<(Vec<u32>, u64)> = (0..nchunks)
         .into_par_iter()
         .map(|c| {
             let lo = c * CHUNK;
             let hi = (lo + CHUNK).min(n);
             let mut out = Vec::new();
+            let mut smart_files = 0u64;
             let mut scratch = Vec::new();
             for i in lo..hi {
                 let e = v.ents[i];
@@ -604,21 +675,18 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> Vec<ListGroup> {
                 if !excl_idx.is_empty() && excl_idx.contains(&(i as u32)) {
                     continue;
                 }
-                let ok = memo.eval(
-                    v,
-                    e.parent,
-                    &mut scratch,
-                    |d| if roots.contains(&d) { Some(true) } else { None },
-                    |x, pv| pv && !excluded_dir(x),
-                );
-                if ok {
-                    out.push(i as u32);
+                match dir_state(e.parent, &mut scratch) {
+                    ST_OK => out.push(i as u32),
+                    ST_SMART | ST_SMART_ROOT => smart_files += 1,
+                    _ => {}
                 }
             }
-            out
+            (out, smart_files)
         })
         .collect();
-    let mut idx: Vec<(u32, u32)> = hits.into_iter().flatten().map(|i| (v.ents[i as usize].parent, i)).collect();
+    let smart_files: u64 = hits.iter().map(|h| h.1).sum();
+    let smart_dirs = if spec.smart { memo.par_iter().filter(|m| m.load(Relaxed) == ST_SMART_ROOT).count() as u64 } else { 0 };
+    let mut idx: Vec<(u32, u32)> = hits.into_iter().flat_map(|h| h.0).map(|i| (v.ents[i as usize].parent, i)).collect();
     idx.sort_unstable();
     let mut groups: Vec<(u32, Vec<u32>)> = Vec::new();
     for (p, i) in idx {
@@ -627,10 +695,18 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> Vec<ListGroup> {
             _ => groups.push((p, vec![i])),
         }
     }
-    groups
-        .par_iter()
-        .map(|(p, l)| ListGroup { dir: v.path(*p), nchild: v.nchild[*p as usize], names: l.iter().map(|&i| v.name(i).to_string()).collect() })
-        .collect()
+    let groups = groups
+        .into_par_iter()
+        .map(|(p, l)| ListGroup {
+            dir: v.path(p),
+            dir_idx: p,
+            nchild: v.nchild[p as usize],
+            names: l.iter().map(|&i| v.name(i).to_string()).collect(),
+            files: l,
+            tags: Vec::new(),
+        })
+        .collect();
+    ListOut { groups, roots, smart_dirs, smart_files }
 }
 
 /// Записи с точно таким же именем (без учёта регистра).

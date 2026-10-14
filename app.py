@@ -96,10 +96,23 @@ def _attach_engine(ix):
             raise RuntimeError("движок ещё строит индекс")
         r = client.request("list", roots=cfg["content_roots"], exts=sorted(core.CONTENT_EXT),
                            exclude_dirs=cfg["exclude_dirs"], exclude_paths=cfg["exclude_paths"],
-                           skip_dot_dirs=True, skip_cloud=True)
-        return [(it["path"], os.path.basename(it["path"]), it["size"], it["mtime"]) for it in r["items"]]
+                           skip_dot_dirs=True, skip_cloud=True, classify=True, smart_excludes=True)
+        items = r["items"]
+        # Движок старой версии не знает признаков и умных исключений — тогда его список неполон по смыслу
+        # (в него попали бы сборки и зависимости), и папки обходим сами
+        if items and "tag" not in items[0]:
+            raise RuntimeError("движок старой версии, без признаков чужого кода")
+        return [(it["path"], os.path.basename(it["path"]), it["size"], it["mtime"], it.get("tag"))
+                for it in items], True
+
+    def ready():
+        try:
+            return bool(client.request("status").get("ready"))
+        except Exception:
+            return False
 
     ix.engine_lister = lister
+    ix.engine_ready = ready
     client.subscribe(cfg["content_roots"], ix.on_engine_event)
     ix.state["watching"] = True
     log.info("движок имён подключён (%s): список файлов и изменения — от него", mode)
@@ -139,7 +152,7 @@ def boot():
         n = store.load(conn)
         log.info("модель загружена за %.0f с, векторов: %d", time.time() - t0, n)
         indexer = Indexer(cfg, emb, store)
-        indexer.engine_active = lambda: names.current() is not names.local
+        indexer.engine_active = names.reachable
         indexer.manual_pause = os.environ.get("SEMSEARCH_PAUSED") == "1"  # для отладки: поднять без нагрузки на GPU
         if not _attach_engine(indexer):
             try:
@@ -295,7 +308,7 @@ def _semantic(v, kinds):
         if hits:
             best, strict = hits[0][1], store.count(k) >= MIN_N_FOR_Z
             hits = [h for h in hits if h[1] >= best - REL_DROP and (not strict or h[2] >= MIN_Z)]
-        out[k] = _cards([(cid, cos, k) for cid, cos, _ in hits])[:CAPS[k]]
+        out[k] = _copies_count(_cards([(cid, cos, k) for cid, cos, _ in hits])[:CAPS[k]])
     return out
 
 
@@ -317,9 +330,23 @@ def _indexed_paths(paths):
     paths = list(paths)
     for i in range(0, len(paths), 900):
         part = paths[i:i + 900]
-        out |= {r[0] for r in _rows(f"SELECT path FROM files WHERE status=1 AND path IN ({','.join('?' * len(part))})",
-                                    part)}
+        # копия (status 5) тоже «проиндексирована»: её содержимое ищется через оригинал
+        out |= {r[0] for r in _rows("SELECT path FROM files WHERE status IN (1, 5) "
+                                    f"AND path IN ({','.join('?' * len(part))})", part)}
     return out
+
+
+def _copies_count(cards):
+    """Сколько точных копий у каждого найденного файла — в выдаче «ещё N копий»."""
+    ids = [int(c["id"][1:]) for c in cards if c["id"].startswith("f")]
+    counts = {}
+    for i in range(0, len(ids), 900):
+        part = ids[i:i + 900]
+        counts.update(_rows(f"SELECT copy_of, count(*) FROM files WHERE status=5 AND copy_of IN "
+                            f"({','.join('?' * len(part))}) GROUP BY copy_of", part))
+    for c in cards:
+        c["copies"] = counts.get(int(c["id"][1:]), 0) if c["id"].startswith("f") else 0
+    return cards
 
 
 def _response(q, tab, t0, by_kind, name_total=0, name_items=()):
@@ -395,23 +422,31 @@ async def search_image(file: UploadFile = File(...), tab: str = "image"):
 
 @app.get("/api/preview")
 def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
-    row = _rows("SELECT id, kind, status, duration, err FROM files WHERE path=?", (path,))
+    row = _rows("SELECT id, kind, status, duration, err, copy_of FROM files WHERE path=?", (path,))
     if not (row or _known(path)) or not os.path.isfile(path):
         raise HTTPException(404, "файл не найден")
     st = os.stat(path)
     name = os.path.basename(path)
     ext = meta.ext_of(name)
-    fid, kind, status, dur, err = row[0] if row else (None, None, None, None, None)
-    indexed = status == 1
-    # Почему файл найден только по имени: ждёт очереди, не прочитался, вне папок поиска или такой тип не индексируем
-    state = ("indexed" if indexed else "pending" if status == 0 else "failed" if status == 2
+    fid, kind, status, dur, err, copy_of = row[0] if row else (None,) * 6
+    copy_path = None
+    if status == core.ST_COPY and copy_of:  # точная копия: содержимое и найденные места — у оригинала
+        orig = _rows("SELECT id, status, duration, path FROM files WHERE id=?", (copy_of,))
+        if orig and orig[0][1] == core.ST_DONE:
+            fid, status, dur, copy_path = orig[0]
+    indexed = status == core.ST_DONE
+    # Почему файл найден только по имени: ждёт очереди, не прочитался, пропущен правилом «чужого кода»,
+    # вне папок поиска или такой тип не индексируем
+    state = ("indexed" if indexed else "pending" if status == core.ST_PENDING else "failed" if status == core.ST_FAILED
+             else "skipped" if status == core.ST_SKIPPED
              else "outside" if core.kind_of("." + ext.lower()) else "unsupported")
     k = kind if indexed else "name"
     out = {"path": path, "name": name, "ext": ext, "kind": k, "crumbs": meta.crumbs(path), "size": st.st_size,
            "mtime": st.st_mtime, "ctime": st.st_ctime, "type": meta.type_name(ext), "taken": None, "duration": None,
            "pages": None, "dims": None, "page_label": None, "hit_pos": None, "hits": [], "code": None, "marks": None,
            "wave": None, "seg": None, "dupes": [], "thumb": None, "can_similar": k in ("image", "video"),
-           "indexed": indexed, "state": state, "reason": err if status == 2 else None}
+           "indexed": indexed, "state": state,
+           "reason": err if status in (core.ST_FAILED, core.ST_SKIPPED) else None, "copy_of": copy_path}
     if indexed:
         all_chunks = _rows("SELECT id, loc, label, snippet FROM chunks WHERE file_id=? ORDER BY loc", (fid,))
         by_id = {c[0]: c for c in all_chunks}
@@ -454,11 +489,18 @@ def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
             out["wave"] = preview.waveform(path, st.st_mtime)
             end = best[1] + cfg["audio_segment_sec"]
             out["seg"] = [best[1], min(end, dur) if dur else end]
+    # Сначала точные копии по содержимому (exact: true), потом просто файлы с таким же именем
+    dupes = []
+    if indexed and fid is not None:
+        dupes = [{"path": p, "crumbs": meta.crumbs(p), "exact": True} for (p,) in _rows(
+            "SELECT path FROM files WHERE (copy_of=? OR id=?) AND path<>? ORDER BY path LIMIT 20", (fid, fid, path))]
     try:
-        out["dupes"] = [{"path": d["path"], "crumbs": meta.crumbs(d["path"])}
-                        for d in names.same_name(name, 8) if d["path"] != path][:5]
+        seen = {d["path"] for d in dupes} | {path}
+        dupes += [{"path": d["path"], "crumbs": meta.crumbs(d["path"]), "exact": False}
+                  for d in names.same_name(name, 8) if d["path"] not in seen]
     except Exception:
         log.exception("поиск копий %s", name)
+    out["dupes"] = dupes[:8]
     return out
 
 
@@ -526,11 +568,15 @@ def _throttle_state():
 @app.get("/api/status")
 def status():
     kinds = {k: {"done": 0, "total": 0, "failed": 0} for k in core.KINDS}
+    for k in kinds.values():
+        k.update(skipped=0, copies=0)
     for k, s, n in _rows("SELECT kind, status, count(*) FROM files GROUP BY kind, status"):
         if k in kinds:
             kinds[k]["total"] += n
-            kinds[k]["done"] += n if s in (1, 2) else 0
-            kinds[k]["failed"] += n if s == 2 else 0
+            kinds[k]["done"] += n if s != core.ST_PENDING else 0  # готово: посчитан, не прочитался, пропущен, копия
+            kinds[k]["failed"] += n if s == core.ST_FAILED else 0
+            kinds[k]["skipped"] += n if s == core.ST_SKIPPED else 0  # чужой или сгенерированный код
+            kinds[k]["copies"] += n if s == core.ST_COPY else 0
     remaining = {k: v["total"] - v["done"] for k, v in kinds.items()}
     pending = any(remaining.values())
     ix = indexer.state if indexer else {}
@@ -611,12 +657,15 @@ def settings_get():
     failed = _rows("SELECT count(*) FROM files WHERE status=2")[0][0]
     keys = ("exclude_dirs", "hotkey", "theme", "accent", "pause_on_fullscreen", "pause_processes", "pause_on_battery",
             "video_frame_every_sec", "video_max_frames", "audio_segment_sec", "audio_max_segments", "max_text_mb",
-            "max_pdf_pages")
+            "max_pdf_pages", "foreign_code")
+    skipped = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_SKIPPED,))[0][0]
+    copies = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_COPY,))[0][0]
     return {"content_roots": roots, "drives": {"available": core.fixed_drives(), "selected": cfg["name_drives"]},
             **{k: cfg[k] for k in keys},
             "info": {"model": "EmbeddingGemma 2", "device": emb.device if emb else None,
                      "index_bytes": _index_bytes(), "rescan_minutes": cfg["rescan_minutes"],
-                     "name_rescan_minutes": cfg["name_rescan_minutes"], "failed": failed}}
+                     "name_rescan_minutes": cfg["name_rescan_minutes"], "failed": failed,
+                     "foreign_skipped": skipped, "copies": copies}}
 
 
 LIMITS = {"video_frame_every_sec": (1, 600), "video_max_frames": (1, 500), "audio_segment_sec": (5, 120),
@@ -642,6 +691,10 @@ def _validate(key, value):
         if any(not _name_re.match(x) for x in items):
             raise HTTPException(400, "в списке есть недопустимое имя")
         return items
+    if key == "foreign_code":
+        if value not in ("skip", "last", "normal"):
+            raise HTTPException(400, "foreign_code: skip, last или normal")
+        return value
     if key == "theme":
         if value not in ("system", "light", "dark"):
             raise HTTPException(400, "неизвестная тема")
@@ -683,8 +736,8 @@ async def settings_post(request: Request):
     else:
         core.derive_config(cfg)
     restart = any(k in changes for k in ("content_roots", "name_drives")) or ("hotkey" in changes and not IN_SHELL)
-    if indexer and any(k in changes for k in ("content_roots", "exclude_dirs", "name_drives")):
-        indexer.request_rescan()
+    if indexer and any(k in changes for k in ("content_roots", "exclude_dirs", "name_drives", "foreign_code")):
+        indexer.request_rescan()  # правило «чужого кода» пересчитывается при обходе
     log.info("настройки изменены: %s", ", ".join(changes))
     return {"ok": True, "restart": restart}
 

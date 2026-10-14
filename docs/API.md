@@ -40,7 +40,8 @@ Item = {
   "score": float,
   "hits": [Hit],             // ≤3, лучший первым; у видео — совпавшие моменты, у аудио — отрезки; у "name" — []
   "thumb": "/thumb/55" | null,   // для image/video; UI сам дописывает ?t=<token>
-  "duration": float|null
+  "duration": float|null,
+  "copies": int              // точные копии этого файла (по содержимому) — в выдаче «ещё N копий»
 }
 SearchResponse = {
   "q": str, "tab": str, "ms": int,
@@ -70,8 +71,10 @@ SearchResponse = {
     "dupes": [{ "path", "crumbs" }],  // другие файлы с таким же именем (для вкладки «По имени»)
     "thumb": "/thumb/55?size=640" | null,
     "can_similar": bool, "indexed": bool,
-    "state": "indexed"|"pending"|"failed"|"outside"|"unsupported",   // почему найден только по имени
-    "reason": str|null }                                             // причина для "failed"
+    "state": "indexed"|"pending"|"failed"|"skipped"|"outside"|"unsupported",   // почему найден только по имени
+    "reason": str|null,     // причина для "failed" и "skipped" (чужой код: подмодуль, архив, .gitignore, сгенерированный)
+    "copy_of": str|null }   // путь оригинала, если файл — его точная копия
+  // dupes[]: { "path", "crumbs", "exact": bool } — exact: та же начинка (копия), иначе только то же имя
   ```
   `kind` здесь — настоящий вид файла (если файл из вкладки «По имени» проиндексирован как документ — будет "text").
 - `GET /api/similar?chunk=<int>&tab=image|video|all` → SearchResponse (`q` = "", заполнены только `counts.image/video/all`).
@@ -83,7 +86,8 @@ SearchResponse = {
     "state": "loading"|"indexing"|"idle"|"paused"|"error",
     "phase": "scan"|"text"|"code"|"image"|"audio"|"video"|null,
     "paused": null | { "reason": "manual"|"fullscreen"|"process"|"battery", "detail": str|null },
-    "kinds": { "text": {"done","total","failed"}, "code": {…}, "image": {…}, "audio": {…}, "video": {…} },
+    "kinds": { "text": {"done","total","failed","skipped","copies"}, "code": {…}, "image": {…}, "audio": {…}, "video": {…} },
+             // done включает пропущенные правилом «чужого кода» (skipped) и точные копии (copies)
     "current": { "kind": "image", "done": 11280, "total": 18204 } | null,
     "names": { "count": int, "drives": ["C:"], "engine": "mft"|"walk"|"python", "ready": bool, "updated": float|null,
                "progress": float|null /*0..1 во время пересборки, если известно*/ },
@@ -98,8 +102,9 @@ SearchResponse = {
     "pause_on_fullscreen": bool, "pause_processes": [str], "pause_on_battery": bool,
     "video_frame_every_sec": int, "video_max_frames": int, "audio_segment_sec": int, "audio_max_segments": int,
     "max_text_mb": int, "max_pdf_pages": int,
+    "foreign_code": "skip"|"last"|"normal",   // чужой код: не индексировать / в последнюю очередь / как обычный
     "info": { "model": "EmbeddingGemma 2", "device": "cuda", "index_bytes": int, "rescan_minutes": int,
-              "name_rescan_minutes": int, "failed": int } }
+              "name_rescan_minutes": int, "failed": int, "foreign_skipped": int, "copies": int } }
   ```
 - `POST /api/settings {…любые редактируемые ключи выше; content_roots — список строк, drives — список выбранных…}` → `{"ok": true, "restart": bool}`.
 - `GET /api/failed?limit=200` → `{"total": int, "items": [{ "path", "err" }]}`.
@@ -141,7 +146,7 @@ Shell запускает backend: `<root>\.venv\Scripts\pythonw.exe <root>\serve
 | `status` | — | `{"mode", "ready", "files", "dirs", "volumes": [{"drive","fs","mode","files","ready"}], "updated": epoch_ms, "build_ms"}` |
 | `search` | `{"q", "mode": "auto"\|"substr"\|"glob"\|"regex", "limit": 200, "offset": 0, "files_only": true, "roots": [..]?, "exts": [".pdf"]?}` | `{"total", "ms", "items": [{"path","name","dir","size","mtime","ctime"}]}` |
 | `same_name` | `{"name", "limit": 10}` | `{"items": [...]}` |
-| `list` | `{"roots", "exts", "exclude_dirs", "exclude_paths", "skip_dot_dirs": true, "skip_cloud": true}` | `{"items": [{"path","size","mtime","attrs"}]}` |
+| `list` | `{"roots", "exts", "exclude_dirs", "exclude_paths", "skip_dot_dirs": true, "skip_cloud": true, "classify": bool, "smart_excludes": bool}` | `{"items": [{"path","size","mtime","attrs","tag","repo"}]}` |
 | `exists` | `{"path"}` | `{"exists": bool, "indexed": bool}` |
 | `subscribe` | `{"roots": [..]}` | `{"ok": true}`, затем поток событий `{"ev": "created"\|"modified"\|"deleted"\|"renamed"\|"rescan", "path", "old": str\|null, "dir": bool}` |
 | `reload_config` | — | перечитать `config.json` (диски) |
@@ -150,4 +155,8 @@ Shell запускает backend: `<root>\.venv\Scripts\pythonw.exe <root>\serve
 `auto`: есть `*`/`?` → glob; префикс `re:` → regex; иначе слова через пробел (AND, без учёта регистра, кириллица тоже); слово с `\` или `/` сравнивается с полным путём, остальные — с именем.
 Сортировка: точное совпадение имени → имя начинается с первого слова → короче имя → короче путь.
 «modified» — только по закрытию файла (USN_REASON_CLOSE), чтобы недописанный файл не индексировался.
+
+`list` с `smart_excludes` не отдаёт папки сборки и зависимостей, узнавая их по соседним файлам проекта (`bin`/`obj` рядом с `*.csproj`, `target` рядом с `Cargo.toml`, `Library`/`Temp` в проекте Unity, `Intermediate`/`Saved` рядом с `*.uproject`, `build`/`dist` рядом с `package.json`, папка с `pyvenv.cfg`, `node_modules` всегда…) — те же правила, что `core.is_build_dir`.
+С `classify` у каждого файла `tag`: `submodule` (путь из `.gitmodules` или `.git`-файл, ведущий в `.git/modules`; worktree — не подмодуль), `gitignored` (по `.gitignore` проекта и `info/exclude`), `archive` (вне git, папка-предок `*-main`, `*-master`, `*-1.2.3`), `foreign` (клон без коммитов локального пользователя git), иначе `null`. Что с ними делать, решает backend (настройка `foreign_code`).
+Для разработки: `semsearch-engine.exe --pipe <имя>` и переменная `SEMSEARCH_ENGINE_PIPE` для backend/клиента — свой канал, установленный движок не трогается.
 Канал доступен только текущему пользователю (DACL: SYSTEM, Администраторы, SID пользователя; метка целостности Medium). Движок ничего не меняет на диске.
