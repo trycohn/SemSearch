@@ -637,8 +637,11 @@ def status():
         k.update(skipped=0, copies=0)
     for k, s, n in _rows("SELECT kind, status, count(*) FROM files GROUP BY kind, status"):
         if k in kinds:
-            kinds[k]["total"] += n
-            kinds[k]["done"] += n if s != core.ST_PENDING else 0  # готово: посчитан, не прочитался, пропущен, копия
+            # Пропущенный чужой и сгенерированный код в счётчик не входит — ни в «всего», ни в «готово»:
+            # иначе при первом же обходе код стартовал бы с «29 000 из 70 000» вместо «0 из 41 000»
+            if s != core.ST_SKIPPED:
+                kinds[k]["total"] += n
+                kinds[k]["done"] += n if s != core.ST_PENDING else 0  # готово: посчитан, не прочитался, копия
             kinds[k]["failed"] += n if s == core.ST_FAILED else 0
             kinds[k]["skipped"] += n if s == core.ST_SKIPPED else 0  # чужой или сгенерированный код
             kinds[k]["copies"] += n if s == core.ST_COPY else 0
