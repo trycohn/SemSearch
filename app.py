@@ -103,6 +103,7 @@ import extract  # noqa: E402
 import meta  # noqa: E402
 import preview  # noqa: E402
 import watcher  # noqa: E402
+from engine_client import EngineClient  # noqa: E402
 from indexer import Indexer  # noqa: E402
 from names import NamesProvider  # noqa: E402
 
@@ -143,9 +144,15 @@ def _attach_engine(ix):
         # Пока движок строит индекс, его список неполный — тогда обходим папки сами (см. Indexer._content_files)
         if not client.request("status").get("ready"):
             raise RuntimeError("движок ещё строит индекс")
-        r = client.request("list", roots=cfg["content_roots"], exts=sorted(core.CONTENT_EXT),
-                           exclude_dirs=cfg["exclude_dirs"], exclude_paths=cfg["exclude_paths"],
-                           skip_dot_dirs=True, skip_cloud=True, classify=True, smart_excludes=True)
+        # Список с признаками чужого кода на большом профиле движок собирает десятки секунд: отдельное соединение
+        # с запасом по времени, чтобы не держать общий клиент — через него идёт поиск по имени
+        bulk = EngineClient(timeout=180)
+        try:
+            r = bulk.request("list", roots=cfg["content_roots"], exts=sorted(core.CONTENT_EXT),
+                             exclude_dirs=cfg["exclude_dirs"], exclude_paths=cfg["exclude_paths"],
+                             skip_dot_dirs=True, skip_cloud=True, classify=True, smart_excludes=True)
+        finally:
+            bulk.close()
         items = r["items"]
         # Движок старой версии не знает признаков и умных исключений — тогда его список неполон по смыслу
         # (в него попали бы сборки и зависимости), и папки обходим сами
@@ -630,8 +637,11 @@ def status():
         k.update(skipped=0, copies=0)
     for k, s, n in _rows("SELECT kind, status, count(*) FROM files GROUP BY kind, status"):
         if k in kinds:
-            kinds[k]["total"] += n
-            kinds[k]["done"] += n if s != core.ST_PENDING else 0  # готово: посчитан, не прочитался, пропущен, копия
+            # Пропущенный чужой и сгенерированный код в счётчик не входит — ни в «всего», ни в «готово»:
+            # иначе при первом же обходе код стартовал бы с «29 000 из 70 000» вместо «0 из 41 000»
+            if s != core.ST_SKIPPED:
+                kinds[k]["total"] += n
+                kinds[k]["done"] += n if s != core.ST_PENDING else 0  # готово: посчитан, не прочитался, копия
             kinds[k]["failed"] += n if s == core.ST_FAILED else 0
             kinds[k]["skipped"] += n if s == core.ST_SKIPPED else 0  # чужой или сгенерированный код
             kinds[k]["copies"] += n if s == core.ST_COPY else 0
