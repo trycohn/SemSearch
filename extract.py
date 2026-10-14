@@ -1,5 +1,6 @@
 """Извлечение содержимого из файлов. Каждая функция возвращает список
 (loc, label, snippet, payload), где payload идёт в модель."""
+import locale
 import os
 import re
 
@@ -7,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 Image.MAX_IMAGE_PIXELS = 200_000_000
+ANSI = locale.getencoding()  # кодовая страница ANSI системы (cp1251, cp1252…): так сохраняют старые редакторы
 
 
 class Skip(Exception):
@@ -43,7 +45,7 @@ def _read_plain(path, cfg):
     try:
         return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
-        return raw.decode("cp1251", errors="replace")
+        return raw.decode(ANSI, errors="replace")
 
 
 def extract_text(path, cfg):

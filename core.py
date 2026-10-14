@@ -1,29 +1,83 @@
 """Общие вещи: конфиг, база, модель, хранилище векторов, детектор игр."""
 import ctypes
+import errno
+import gc
 import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import threading
+import uuid
 from ctypes import wintypes
 
 import numpy as np
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(APP_DIR, "data")
+log = logging.getLogger("core")
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))  # папка программы: во время работы только читается
+FOLDERID_LOCAL_APP_DATA = "F1B32785-6FBA-4FCF-9D55-7B8E7F157091"
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8)]
+
+
+def known_folder(folder_id):
+    """Путь известной папки Windows (SHGetKnownFolderPath, FOLDERID_*) или None, если её нет."""
+    path = ctypes.c_wchar_p()
+    guid = _GUID.from_buffer_copy(uuid.UUID(folder_id).bytes_le)
+    try:
+        ok = ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(path)) == 0
+        return path.value if ok else None
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(path)  # освобождать нужно и при ошибке
+
+
+def abs_env(name):
+    """Переменная окружения, если в ней абсолютный путь (с диском или \\\\сервер\\папка), иначе None."""
+    v = os.environ.get(name, "").strip()
+    return v if os.path.splitdrive(v)[0] and os.path.isabs(v) else None
+
+
+def data_dir():
+    """Папка данных: SEMSEARCH_DATA_DIR (только абсолютный путь), иначе %LOCALAPPDATA%\\SemSearch.
+    Shell и движок ищут её так же (docs/API.md). Здесь настройки, индексы, превью, журналы и токен."""
+    d = abs_env("SEMSEARCH_DATA_DIR")
+    if d:
+        return os.path.normpath(d)
+    base = known_folder(FOLDERID_LOCAL_APP_DATA) or abs_env("LOCALAPPDATA")
+    if not base:
+        profile = abs_env("USERPROFILE")
+        if profile:
+            base = os.path.join(profile, "AppData", "Local")
+        else:  # в крайнем случае — временная папка, как std::env::temp_dir() в shell и движке
+            import tempfile
+
+            base = tempfile.gettempdir()
+    return os.path.join(base, "SemSearch")
+
+
+DATA_DIR = data_dir()
 DB_PATH = os.path.join(DATA_DIR, "index.db")
-CONFIG_PATH = os.path.join(APP_DIR, "config.json")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+LEGACY_CONFIG_PATH = os.path.join(APP_DIR, "config.json")  # старая раскладка: читаем, пока не перенесён
 MODEL_ID = "google/embeddinggemma-2"
 DIM = 256  # Matryoshka: 768 -> 256, индекс в 3 раза меньше почти без потери качества
 
 HOME = os.path.expanduser("~")
+# Документы, Рабочий стол, Изображения, Видео, Музыка, Загрузки — их часто переносят на другой диск
+PROFILE_FOLDERS = ("FDD39AD0-238F-46AF-ADB4-6C85480369C7", "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
+                   "33E28130-4E1E-4676-835A-98395C3BC3BB", "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
+                   "4BD8D571-6D19-48D3-BE97-422220080E43", "374DE290-123F-4565-9164-39C4925E467B")
 
 DEFAULT_CONFIG = {
-    # Где искать по содержимому (смыслу)
+    # Где искать по содержимому (смыслу); load_config добавляет известные папки вне HOME (default_content_roots)
     "content_roots": [HOME],
-    # Где искать по имени файла: диски целиком (из них же выводится name_roots)
-    "name_drives": ["C:"],
+    # Где искать по имени файла: диски целиком (из них же выводится name_roots); None — все несъёмные диски
+    "name_drives": None,
     # Папки с такими именами пропускаются везде (плюс все папки, начинающиеся с точки, в content_roots)
     "exclude_dirs": [
         "node_modules", "__pycache__", "venv", "env", "site-packages", "dist", "build", "obj",
@@ -81,26 +135,66 @@ def kind_of(ext):
     return None
 
 
+def default_content_roots():
+    """Папка пользователя и известные папки вне её (например, «Документы», перенесённые на D:).
+    Вложенные не дублируются: обход корня и так их пройдёт."""
+    roots = [HOME]
+    for folder_id in PROFILE_FOLDERS:
+        p = known_folder(folder_id)
+        if p and not under(p, roots):
+            roots = [r for r in roots if not under(r, [p])] + [p]
+    return roots
+
+
+def _config_source():
+    """Откуда читать настройки: из папки данных, а если там их ещё нет — из старой папки программы (только чтение)."""
+    for p in (CONFIG_PATH, LEGACY_CONFIG_PATH):
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def load_config():
-    cfg = dict(DEFAULT_CONFIG)
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, encoding="utf-8-sig") as f:  # -sig: Блокнот и PowerShell пишут BOM
+    cfg = dict(DEFAULT_CONFIG, content_roots=default_content_roots())
+    src = _config_source()
+    if src:
+        with open(src, encoding="utf-8-sig") as f:  # -sig: Блокнот и PowerShell пишут BOM
             cfg.update(json.load(f))
+        if cfg.get("name_drives") is None and cfg.get("name_roots"):  # конфиг старого формата
+            cfg["name_drives"] = [r.rstrip("\\/") for r in cfg["name_roots"]]
     else:
+        os.makedirs(DATA_DIR, exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=2)
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    # Пропавшие папки (отключённый диск, удалённая папка) пропускаем, но в файле оставляем — вдруг вернутся
+    roots = [r for r in cfg["content_roots"] if os.path.isdir(r)]
+    for r in cfg["content_roots"]:
+        if r not in roots:
+            log.warning("папки для поиска нет — пропускаю: %s", r)
+    cfg["content_roots"] = roots or [HOME]
     derive_config(cfg)
     return cfg
 
 
 def derive_config(cfg):
     """Производные ключи — пересчитываются и после изменения настроек из интерфейса."""
-    if "name_roots" in cfg and "name_drives" not in cfg:  # конфиг старого формата
-        cfg["name_drives"] = [r.rstrip("\\/") for r in cfg["name_roots"]]
-    cfg["name_roots"] = [d.rstrip("\\/") + "\\" for d in cfg["name_drives"]]
-    # Собственную папку не индексируем никогда: иначе превью из data/thumbs попадут в «фото»
-    cfg["exclude_paths"] = [p for p in cfg["exclude_paths"] if os.path.normcase(p) != os.path.normcase(APP_DIR)]
-    cfg["exclude_paths"].append(APP_DIR)
+    drives = cfg.get("name_drives")
+    fixed = [d["drive"] for d in fixed_drives()]
+    if not isinstance(drives, list):  # не задано (нет ключа, null) — все несъёмные диски
+        drives = fixed
+    else:
+        drives = list(dict.fromkeys(str(d).upper().rstrip("\\/") for d in drives))
+        for d in drives:
+            if d not in fixed:
+                log.warning("диск %s не найден среди несъёмных — по имени на нём не ищу", d)
+        drives = [d for d in drives if d in fixed]
+    # В памяти — всегда конкретный список: его показывают интерфейс и /api/status
+    cfg["name_drives"] = drives
+    cfg["name_roots"] = [d + "\\" for d in drives]
+    # Собственные папки не индексируем никогда: иначе превью из thumbs попадут в «фото»
+    own = {os.path.normcase(APP_DIR), os.path.normcase(DATA_DIR)}
+    cfg["exclude_paths"] = [p for p in cfg["exclude_paths"] if os.path.normcase(p) not in own]
+    cfg["exclude_paths"] += [APP_DIR, DATA_DIR]
 
 
 EDITABLE = {  # ключ -> тип; только их можно менять через POST /api/settings
@@ -112,13 +206,15 @@ EDITABLE = {  # ключ -> тип; только их можно менять ч
 
 
 def save_config(changes):
-    """Записывает изменения в config.json, не трогая остальные ключи файла (атомарно)."""
+    """Записывает изменения в config.json папки данных, не трогая остальные ключи файла (атомарно)."""
     data = {}
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, encoding="utf-8-sig") as f:
+    src = _config_source()  # старый файл из папки программы при первой записи переезжает целиком
+    if src:
+        with open(src, encoding="utf-8-sig") as f:
             data = json.load(f)
     data.update(changes)
     data.pop("name_roots", None)  # выводится из name_drives
+    os.makedirs(DATA_DIR, exist_ok=True)
     tmp = CONFIG_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -149,6 +245,72 @@ def setup_logging():
     )
     for noisy in ("pypdf", "httpx", "urllib3", "huggingface_hub", "transformers", "sentence_transformers"):
         logging.getLogger(noisy).setLevel(logging.ERROR)
+
+
+def _move(src, dst):
+    """os.replace в пределах тома, на другой том — копированием (shutil.move)."""
+    try:
+        os.replace(src, dst)
+    except OSError as ex:
+        if ex.errno != errno.EXDEV:
+            raise
+        shutil.move(src, dst)
+
+
+def _remove(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path)
+    else:
+        os.remove(path)
+
+
+def migrate_legacy(legacy_root, data_dir):
+    """Разовый перенос старой раскладки (legacy_root\\config.json и legacy_root\\data\\) в data_dir — до того,
+    как открыты журнал, базы и настройки. Переносится только то, чего в data_dir ещё нет; база — вместе
+    со своими -wal/-shm или никак (при сбое возвращается на место). Журналы и токен остаются.
+    Никогда не бросает. -> [(уровень logging, сообщение)]: журнал в этот момент ещё не открыт."""
+    old = os.path.join(legacy_root, "data")
+    groups = ((legacy_root, ("config.json",)), (old, ("index.db", "index.db-wal", "index.db-shm")),
+              (old, ("names.db", "names.db-wal", "names.db-shm")), (old, ("thumbs",)))
+    notes = []
+    for src_dir, names in groups:
+        try:
+            if (not os.path.exists(os.path.join(src_dir, names[0]))
+                    or os.path.normcase(os.path.abspath(src_dir)) == os.path.normcase(os.path.abspath(data_dir))):
+                continue
+            if any(os.path.lexists(os.path.join(data_dir, n)) for n in names):
+                notes.append((logging.WARNING, f"{names[0]} есть и в {data_dir}, и в {src_dir} — используется "
+                                               f"{data_dir}, старая копия не переносится"))
+                continue
+            os.makedirs(data_dir, exist_ok=True)
+            present = [n for n in names if os.path.lexists(os.path.join(src_dir, n))]
+            done = []
+            try:
+                for n in present:
+                    _move(os.path.join(src_dir, n), os.path.join(data_dir, n))
+                    done.append(n)
+            except OSError as ex:
+                notes.append((logging.WARNING, f"не удалось перенести {', '.join(present)} в {data_dir} ({ex}) — "
+                                               f"оставлено в {src_dir}"))
+                # Недокопированное на другой том (источник цел) убираем, уже перенесённое — возвращаем
+                n = present[len(done)]
+                undo = [(os.path.join(data_dir, n), None)] if os.path.lexists(os.path.join(src_dir, n)) else []
+                undo += [(os.path.join(data_dir, d), os.path.join(src_dir, d)) for d in reversed(done)]
+                for dst, back in undo:
+                    try:
+                        if not os.path.lexists(dst):
+                            continue
+                        if back:
+                            _move(dst, back)
+                        else:
+                            _remove(dst)
+                    except OSError as ex2:
+                        notes.append((logging.ERROR, f"не удалось вернуть {dst} на место: {ex2}"))
+                continue
+            notes.append((logging.INFO, f"перенесено в {data_dir}: {', '.join(present)}"))
+        except Exception as ex:
+            notes.append((logging.WARNING, f"перенос {names[0]} в {data_dir}: {type(ex).__name__}: {ex}"))
+    return notes
 
 
 # ---------------------------------------------------------------- база
@@ -242,6 +404,34 @@ def neutralize(text):
     return _MEDIA_MARKERS.sub(lambda m: f"<{m.group(1)}>" if m.group(1) else f"< {m.group(2)} >", text)
 
 
+def _arch_ok(cap, archs):
+    """Есть ли в сборке torch код для карты: sm_XY работает на картах того же поколения X с minor >= Y."""
+    for a in archs:
+        m = re.fullmatch(r"sm_(\d+)(\d)[a-z]?", a)
+        if m and int(m.group(1)) == cap[0] and cap[1] >= int(m.group(2)):
+            return True
+    return False
+
+
+def _usable_gpu(torch):
+    """-> (название, capability) видеокарты, на которой можно считать, иначе None (причина — в журнале).
+    is_available() мало: torch для CUDA 12.8 собран под sm_75+, и на GTX 10xx (sm_61) ядра не запускаются."""
+    try:
+        if not torch.cuda.is_available():
+            log.info("CUDA недоступна (torch %s) — модель считает на процессоре", torch.__version__)
+            return None
+        name, cap = torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)
+        archs = torch.cuda.get_arch_list()
+    except Exception as ex:
+        log.warning("CUDA не отвечает (%s: %s) — модель считает на процессоре", type(ex).__name__, ex)
+        return None
+    if not _arch_ok(cap, archs):
+        log.warning("видеокарта %s (sm_%d%d) не поддерживается этой сборкой torch %s (есть: %s) — "
+                    "модель считает на процессоре", name, *cap, torch.__version__, " ".join(archs) or "—")
+        return None
+    return name, cap
+
+
 class Embedder:
     """Одна модель на процесс; индексатор и поиск делят её через lock."""
 
@@ -254,10 +444,33 @@ class Embedder:
 
         self.throttle = throttle
         self.torch = torch
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.bfloat16 if self.device == "cuda" and torch.cuda.is_bf16_supported() else torch.float32
-        self.model = SentenceTransformer(MODEL_ID, device=self.device, model_kwargs={"torch_dtype": dtype})
-        if self.device == "cuda":
+        self.device, self.model = "cpu", None
+        gpu = _usable_gpu(torch)
+        if gpu:
+            name, cap = gpu
+            # bfloat16 — с Ampere (8.0); fp16 Gemma не держит, поэтому на более старых картах — float32
+            dtype = torch.bfloat16 if cap >= (8, 0) else torch.float32
+            try:
+                self.model = SentenceTransformer(MODEL_ID, device="cuda", model_kwargs={"torch_dtype": dtype})
+                self.model.encode(["проверка"], show_progress_bar=False)  # ядра под эту карту действительно есть
+                self.device = "cuda"
+                log.info("модель на видеокарте %s (sm_%d%d), %s", name, *cap, str(dtype).replace("torch.", ""))
+            except Exception as ex:
+                log.warning("видеокарта %s (sm_%d%d): модель не запустилась (%s: %s) — считаю на процессоре",
+                            name, *cap, type(ex).__name__, str(ex)[:300])
+                self.model = None
+        if self.device == "cpu":
+            if gpu:  # отдать видеопамять, занятую неудачной попыткой
+                gc.collect()
+                try:
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+            # Не больше половины логических ядер: фоновая индексация не должна занимать процессор целиком
+            torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
+            self.model = SentenceTransformer(MODEL_ID, device="cpu", model_kwargs={"torch_dtype": torch.float32})
+            log.info("модель на процессоре, потоков: %d", torch.get_num_threads())
+        else:
             throttle.attach(self.model, torch)  # дробит фоновые порции на короткие всплески по слоям
         self.lock = threading.Lock()
 
@@ -307,7 +520,8 @@ class Embedder:
 # ---------------------------------------------------------------- векторы в памяти
 
 class VecStore:
-    """Все векторы лежат на GPU по видам; поиск — одно матричное умножение."""
+    """Все векторы лежат на GPU (без него или если не влезли — в памяти процессора) по видам;
+    поиск — одно матричное умножение."""
 
     def __init__(self, device):
         import torch
@@ -348,9 +562,26 @@ class VecStore:
         ids, t = self.tensors[kind]
         p_ids, p_mats = self.pending[kind]
         if p_ids:
-            new_t = self.torch.from_numpy(np.concatenate(p_mats)).to(self.device)
+            mat = self.torch.from_numpy(np.concatenate(p_mats))
+            try:
+                new_t = mat.to(self.device)
+                t = new_t if t is None else self.torch.cat([t, new_t])
+            except RuntimeError as ex:  # не хватило видеопамяти — весь индекс переезжает в обычную память
+                if self.device == "cpu":
+                    raise
+                log.warning("векторы не помещаются на видеокарту (%s) — индекс остаётся в памяти процессора",
+                            str(ex)[:200])
+                self.device = "cpu"
+                for k, (k_ids, k_t) in self.tensors.items():
+                    if k_t is not None:
+                        self.tensors[k] = (k_ids, k_t.cpu())
+                t = self.tensors[kind][1]
+                t = mat if t is None else self.torch.cat([t, mat])
+                try:
+                    self.torch.cuda.empty_cache()
+                except Exception:
+                    pass
             ids = np.concatenate([ids] + p_ids)
-            t = new_t if t is None else self.torch.cat([t, new_t])
             self.tensors[kind] = (ids, t)
             self.pending[kind] = ([], [])
         return ids, t
@@ -439,7 +670,7 @@ def on_battery():
 
 
 def fixed_drives():
-    """Локальные несъёмные диски: [{"drive": "C:", "label": "...", "fs": "NTFS"}]."""
+    """Локальные несъёмные диски с файловой системой: [{"drive": "C:", "label": "...", "fs": "NTFS"}]."""
     k32 = ctypes.windll.kernel32
     mask, out = k32.GetLogicalDrives(), []
     for i in range(26):
@@ -447,7 +678,8 @@ def fixed_drives():
         if not mask >> i & 1 or k32.GetDriveTypeW(root) != 3:  # 3 = DRIVE_FIXED
             continue
         label, fs = ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
-        k32.GetVolumeInformationW(root, label, 261, None, None, None, fs, 261)
+        if not k32.GetVolumeInformationW(root, label, 261, None, None, None, fs, 261):
+            continue  # том не размечен или заблокирован (BitLocker) — искать на нём нечего
         out.append({"drive": root[:2], "label": label.value, "fs": fs.value})
     return out
 

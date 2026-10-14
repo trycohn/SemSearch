@@ -1,5 +1,5 @@
 //! semsearch-engine — индекс имён всех файлов (как Everything) с мгновенным поиском и
-//! живой лентой изменений, отдаётся по `\\.\pipe\semsearch-engine` (docs/API.md §4).
+//! живой лентой изменений, отдаётся по `\\.\pipe\semsearch-engine-<SessionId>` (docs/API.md §4).
 //!
 //! Режимы: MFT + USN-журнал (с правами администратора) или параллельный обход +
 //! ReadDirectoryChangesExW (без них). Флаги: --walk, --selftest, --console.
@@ -23,14 +23,20 @@ use std::time::Instant;
 use engine::*;
 
 const USAGE: &str = "semsearch-engine [--root <dir>] [--walk] [--console] [--selftest]
-  --root <dir> project root (folder with config.json); default: nearest
-               ancestor of the exe folder that contains config.json
+  --root <dir> project root (folder with server.py); default: nearest ancestor
+               of the exe folder that contains server.py or config.json
   --walk       force walk mode (directory enumeration + ReadDirectoryChangesW)
   --console    log to stdout instead of the log file
   --selftest   build the index, run sample searches and a live-update check,
                print stats JSON and exit
-Logs: <root>\\data\\engine.log; when elevated <exe dir>\\logs\\engine.log
-(an elevated engine never writes into the user-writable project folder).
+Data folder <data>: %SEMSEARCH_DATA_DIR% (absolute path), else
+%LOCALAPPDATA%\\SemSearch.
+Settings: <data>\\config.json, else <root>\\config.json (old layout, read-only),
+else defaults: all fixed drives (NTFS: MFT/USN when elevated, otherwise and on
+other file systems: walk).
+Logs: <data>\\engine.log; when elevated <exe dir>\\logs\\engine.log
+(an elevated engine never writes into the user-writable data folder).
+Pipe: \\\\.\\pipe\\semsearch-engine-<session id>
 ";
 
 /// Значение флага: `--root <dir>` или `--root=<dir>`.
@@ -67,9 +73,10 @@ fn main() {
         },
         None => (util::find_root(), None),
     };
+    let (data, data_err) = util::data_dir();
     let exe_dir = util::exe_dir();
-    // с повышенными правами — ничего не пишем в папку проекта (она доступна пользователю на запись)
-    let log_dir = if elevated { exe_dir.join("logs") } else { root.join("data") };
+    // с повышенными правами — ничего не пишем в папку данных (она доступна пользователю на запись)
+    let log_dir = if elevated { exe_dir.join("logs") } else { data.clone() };
     if selftest {
         util::log_init(&log_dir, true, Some("engine-selftest.log"));
     } else if console {
@@ -82,10 +89,11 @@ fn main() {
     }));
     util::set_below_normal();
     info!(
-        "semsearch-engine {} start: pid {}, elevated {elevated}, root {}, exe dir {}, logs {}, args {:?}",
+        "semsearch-engine {} start: pid {}, elevated {elevated}, root {}, data {}, exe dir {}, logs {}, args {:?}",
         ops::VERSION,
         std::process::id(),
         root.display(),
+        data.display(),
         exe_dir.display(),
         log_dir.display(),
         args
@@ -93,14 +101,17 @@ fn main() {
     if let Some(e) = root_err {
         warn!("--root ignored ({e}); using {}", root.display());
     }
+    if let Some(e) = data_err {
+        warn!("{e}; using {}", data.display());
+    }
     if selftest {
-        let code = run_selftest(root, elevated, force_walk);
+        let code = run_selftest(root, data, log_dir, elevated, force_walk);
         std::process::exit(code);
     }
     let (first, sec) = match server::create_first() {
         Ok(x) => x,
         Err(server::FirstErr::Busy) => {
-            info!("another engine instance owns {} — exiting", server::PIPE_NAME);
+            info!("another engine instance owns {} — exiting", server::pipe_name());
             std::process::exit(0);
         }
         Err(server::FirstErr::Other(e)) => {
@@ -108,11 +119,12 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let eng = Engine::new(root.clone(), elevated, force_walk);
-    let drives = util::config_drives(&root);
-    info!("name drives: {:?}", drives);
+    let eng = Engine::new(root.clone(), data.clone(), elevated, force_walk);
+    let drives = util::config_drives(&data, &root);
+    let cfg_file = util::config_path(&data, &root).map(|p| p.display().to_string());
+    info!("name drives: {:?} (config: {})", drives, cfg_file.as_deref().unwrap_or("none, defaults"));
     if drives.is_empty() {
-        warn!("no drives to index (config.json name_drives empty and no fixed NTFS drives)");
+        warn!("no drives to index (no fixed drive with a file system, or config.json name_drives lists none of them)");
     }
     if !elevated || force_walk {
         // для журнала: проверка непривилегированного USN-журнала (имена в нём обнуляются)
@@ -210,15 +222,14 @@ fn live_check(eng: &std::sync::Arc<Engine>, base: PathBuf) -> Value {
 
 /// --selftest: запустить тома как в обычной работе (MFT + USN-журнал или обход + RDCW),
 /// дождаться готовности, прогнать поиски / list / same_name / exists, проверить живые
-/// обновления и вывести статистику JSON (также в файл — см. out_dir ниже).
-fn run_selftest(root: PathBuf, elevated: bool, force_walk: bool) -> i32 {
-    // Куда писать: без прав — <root>\data и %TEMP%; с правами и exe вне папки проекта
-    // (установлен в Program Files) — <папка exe>\logs; с правами из папки проекта — отчёт в
-    // <root>\data, а проверку живых обновлений пропускаем (не пишем от администратора туда,
-    // где пользователь может подменить папку ссылкой).
+/// обновления и вывести статистику JSON (также в файл out_dir\engine-selftest.json).
+fn run_selftest(root: PathBuf, data: PathBuf, out_dir: PathBuf, elevated: bool, force_walk: bool) -> i32 {
+    // Отчёт — туда же, где лог: без прав — папка данных, с правами — <папка exe>\logs.
+    // Проверка живых обновлений: без прав — в %TEMP%; с правами и exe вне папки проекта
+    // (установлен в Program Files) — в <папка exe>\logs; с правами из папки проекта — пропускаем
+    // (не пишем от администратора туда, где пользователь может подменить папку ссылкой).
     let exe_dir = util::exe_dir();
     let installed = elevated && !util::path_under(&exe_dir, &root);
-    let out_dir = if installed { exe_dir.join("logs") } else { root.join("data") };
     let live_base: Option<PathBuf> = if !elevated {
         std::env::var("TEMP").ok().map(PathBuf::from)
     } else if installed {
@@ -226,8 +237,8 @@ fn run_selftest(root: PathBuf, elevated: bool, force_walk: bool) -> i32 {
     } else {
         None
     };
-    let drives = util::config_drives(&root);
-    let eng = Engine::new(root.clone(), elevated, force_walk);
+    let drives = util::config_drives(&data, &root);
+    let eng = Engine::new(root.clone(), data, elevated, force_walk);
     let t_all = Instant::now();
     for d in &drives {
         eng.start_volume(d);
@@ -288,15 +299,21 @@ fn run_selftest(root: PathBuf, elevated: bool, force_walk: bool) -> i32 {
         let top: Vec<Value> = r["items"].as_array().map(|a| a.iter().take(3).map(|i| i["path"].clone()).collect()).unwrap_or_default();
         searches.push(json!({"q": q, "total": r["total"], "search_ms": r["search_ms"], "ms_with_stats": r["ms"], "error": r.get("error"), "top": top}));
     }
-    // имена из System32 (проверка жёстких ссылок WinSxS ↔ System32 в режиме MFT)
-    let sys32 = parse(&ops::search(&eng, &json!({"q": "notepad.exe", "roots": [r"C:\Windows\System32"], "limit": 5})).unwrap_or_default());
-    let home = std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Users".into());
+    // имена из System32 (проверка жёстких ссылок WinSxS ↔ System32 в режиме MFT); системная папка и
+    // папка пользователя — известные папки, запасные — %SystemRoot%\System32, %USERPROFILE%
+    use windows_sys::Win32::UI::Shell::{FOLDERID_Profile, FOLDERID_System};
+    let known = |id| util::known_folder(id).map(|p| p.to_string_lossy().to_string());
+    let sys_dir = known(&FOLDERID_System)
+        .or_else(|| std::env::var("SystemRoot").ok().map(|r| format!(r"{r}\System32")))
+        .unwrap_or_default();
+    let sys32 = parse(&ops::search(&eng, &json!({"q": "notepad.exe", "roots": [sys_dir], "limit": 5})).unwrap_or_default());
+    let home = known(&FOLDERID_Profile).or_else(|| std::env::var("USERPROFILE").ok()).unwrap_or_default();
     let lreq = json!({"roots": [home], "exts": [".pdf", ".docx", ".py", ".jpg"], "exclude_dirs": [], "exclude_paths": [], "skip_dot_dirs": true, "skip_cloud": true});
     let t = Instant::now();
     let lr = parse(&ops::list(&eng, &lreq).unwrap_or_default());
     let list = json!({"root": lreq["roots"][0], "items": lr["total"], "ms": t.elapsed().as_millis() as u64, "index_ms": lr["index_ms"]});
     let sn = parse(&ops::same_name(&eng, &json!({"name": "notepad.exe", "limit": 5})).unwrap_or_default());
-    let ex = parse(&ops::exists_op(&eng, &json!({"path": r"C:\Windows\System32\cmd.exe"})).unwrap_or_default());
+    let ex = parse(&ops::exists_op(&eng, &json!({"path": format!(r"{sys_dir}\cmd.exe")})).unwrap_or_default());
     let live = match live_base {
         Some(b) if b.is_dir() => live_check(&eng, b),
         Some(b) => json!({"skipped": format!("folder for the test does not exist: {}", b.display())}),

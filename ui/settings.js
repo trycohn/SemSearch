@@ -163,7 +163,7 @@
     let p = null;
     if (SS.tauri) {
       try { p = await SS.invoke('pick_folder'); } catch (e) { p = null; }
-    } else p = window.prompt('Папка для поиска по смыслу:', 'C:\\Users\\');
+    } else p = window.prompt('Папка для поиска по смыслу:', '');
     if (!p) return;
     const cur = (S.content_roots || []).map((r) => r.path);
     if (cur.some((x) => x.toLowerCase() === p.toLowerCase())) { SS.toast('Эта папка уже в списке'); return; }

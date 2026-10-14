@@ -2,6 +2,8 @@
 name = "semsearch-engine"
 version = "1.0.0"
 edition = "2021"
+# rayon 1.12 (Cargo.lock) and <[u8]>::trim_ascii need 1.80
+rust-version = "1.80"
 description = "SemSearch file-name engine: MFT/USN or walk + ReadDirectoryChangesW index served over a named pipe"
 publish = false
 
@@ -31,6 +33,9 @@ features = [
     "Win32_System_ProcessStatus",
     "Win32_System_Console",
     "Win32_System_SystemInformation",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
 ]
 
 [profile.release]

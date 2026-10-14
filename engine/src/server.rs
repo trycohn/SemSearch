@@ -1,10 +1,10 @@
-//! Именованный канал `\\.\pipe\semsearch-engine`: построчный JSON, поток на соединение.
+//! Именованный канал `\\.\pipe\semsearch-engine-<SessionId>`: построчный JSON, поток на соединение.
 //! DACL: SYSTEM, Администраторы, SID текущего пользователя (чтение/запись); метка целостности
 //! Medium — процесс пользователя со средним уровнем может подключиться к повышенному движку.
 
 use serde_json::Value;
 use std::sync::mpsc::{sync_channel, RecvTimeoutError};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::*;
@@ -17,7 +17,20 @@ use crate::engine::*;
 use crate::ops;
 use crate::util::*;
 
-pub const PIPE_NAME: &str = r"\\.\pipe\semsearch-engine";
+/// Имя канала (docs/API.md §4): свой у каждого сеанса Windows — `\\.\pipe\semsearch-engine-<SessionId>`,
+/// SessionId = ProcessIdToSessionId(текущий процесс), десятичное. Так движки разных вошедших
+/// пользователей не мешают друг другу.
+pub fn pipe_name() -> &'static str {
+    static NAME: OnceLock<String> = OnceLock::new();
+    NAME.get_or_init(|| {
+        use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+        use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+        let mut session = 0u32;
+        unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) };
+        format!(r"\\.\pipe\semsearch-engine-{session}")
+    })
+}
+
 const MAX_REQ: usize = 1 << 20;
 const PIPE_BUF: u32 = 64 * 1024;
 
@@ -58,7 +71,7 @@ pub enum FirstErr {
 
 fn create_instance(sec: &Security, first: bool) -> Result<Handle, u32> {
     let sa = SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sec.sd, bInheritHandle: 0 };
-    let name = wide_z(PIPE_NAME);
+    let name = wide_z(pipe_name());
     let mut open_mode = PIPE_ACCESS_DUPLEX;
     if first {
         open_mode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
@@ -82,7 +95,7 @@ fn create_instance(sec: &Security, first: bool) -> Result<Handle, u32> {
 }
 
 fn pipe_exists() -> bool {
-    let name = wide_z(PIPE_NAME);
+    let name = wide_z(pipe_name());
     unsafe { WaitNamedPipeW(name.as_ptr(), 1) != 0 || GetLastError() == ERROR_SEM_TIMEOUT }
 }
 
@@ -92,7 +105,7 @@ pub fn create_first() -> Result<(Handle, Security), FirstErr> {
     for sec in Security::candidates() {
         match create_instance(&sec, true) {
             Ok(h) => {
-                info!("pipe {PIPE_NAME} listening, SDDL {}", sec.sddl);
+                info!("pipe {} listening, SDDL {}", pipe_name(), sec.sddl);
                 return Ok((h, sec));
             }
             Err(e) => {

@@ -216,9 +216,9 @@ class Component extends DCLogic {
       this.setState({ [key + 'Out']: name });
       this.later(() => this.setState({ [key]: list.filter(n => n !== name), [key + 'Out']: null }), 200);
     };
-    const folderList = st.folders || ['C:\\Users\\1337', 'D:\\Проекты'];
+    const folderList = st.folders || ['C:\\Users\\Anna', 'D:\\Проекты'];
     const folders = folderList.map(p => ({
-      path: p, note: p === 'C:\\Users\\1337' ? '65 475 файлов' : (st.foldersNew === p ? 'считаю файлы…' : '8 102 файла'),
+      path: p, note: p === 'C:\\Users\\Anna' ? '65 475 файлов' : (st.foldersNew === p ? 'считаю файлы…' : '8 102 файла'),
       cls: st.foldersOut === p ? 'rowout' : (st.foldersNew === p ? 'rowin' : ''),
       remove: () => removeWithAnim('folders', folderList, p)
     }));

@@ -1,4 +1,4 @@
-"""Клиент движка имён semsearch-engine (named pipe \\\\.\\pipe\\semsearch-engine, docs/API.md §4).
+"""Клиент движка имён semsearch-engine (named pipe \\\\.\\pipe\\semsearch-engine-<SessionId>, docs/API.md §4).
 
 Без зависимостей (ctypes + перекрытый ввод-вывод, чтобы работали таймауты).
 
@@ -6,7 +6,7 @@
     ec = EngineClient()
     if EngineClient.available():
         r = ec.request("search", q="отчёт *.pdf", limit=50)
-        sub = ec.subscribe([r"C:\\Users\\1337"], lambda ev: print(ev))
+        sub = ec.subscribe([os.path.expanduser("~")], lambda ev: print(ev))
         ...
         sub.stop()
 
@@ -16,11 +16,22 @@ CLI: python engine_client.py ping | status | search <q> | list <root> [ext ...] 
 
 import ctypes
 import json
+import os
 import sys
 import threading
 import time
 
-PIPE_NAME = r"\\.\pipe\semsearch-engine"
+
+def _session_id():
+    """Номер сеанса Windows этого процесса (ProcessIdToSessionId)."""
+    sid = ctypes.c_ulong(0)
+    if sys.platform == "win32" and ctypes.WinDLL("kernel32").ProcessIdToSessionId(os.getpid(), ctypes.byref(sid)):
+        return sid.value
+    return 0
+
+
+# В каждом сеансе Windows свой канал: движки разных вошедших пользователей не мешают друг другу
+PIPE_NAME = rf"\\.\pipe\semsearch-engine-{_session_id()}"
 
 __all__ = ["EngineClient", "EngineError", "EngineUnavailable", "Subscription", "PIPE_NAME"]
 
@@ -311,7 +322,7 @@ def _main(argv):
                 print(f"  {it['path']}  size={it['size']} dir={it['dir']}")
             return 0
         elif cmd == "list":
-            root = args[0] if args else "C:\\"
+            root = args[0] if args else os.environ.get("SystemDrive", "C:") + "\\"
             exts = args[1:] or [".pdf", ".docx", ".py", ".jpg"]
             t = time.perf_counter()
             r = ec.request("list", roots=[root], exts=exts, exclude_dirs=[], exclude_paths=[],

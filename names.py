@@ -19,7 +19,7 @@ def _stat(path):
 
 
 class LocalNames:
-    """FTS5-индекс в data/names.db, который строит Indexer.names_loop."""
+    """FTS5-индекс в names.db (папка данных), который строит Indexer.names_loop."""
 
     kind = "python"
 

@@ -1,4 +1,5 @@
 """Данные для панели просмотра: страницы PDF, размеры и дата съёмки фото, строки кода, волна аудио."""
+import locale
 import logging
 import re
 from collections import OrderedDict
@@ -115,7 +116,7 @@ def code_window(path, snippet, size=8):
         try:
             text = raw.decode("utf-8-sig")
         except UnicodeDecodeError:
-            text = raw.decode("cp1251", errors="replace")
+            text = raw.decode(locale.getencoding(), errors="replace")  # кодовая страница ANSI системы
     except OSError:
         return None
     lines = text.splitlines()

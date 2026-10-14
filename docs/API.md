@@ -7,10 +7,36 @@
 
 | Часть | Где | Что делает |
 |---|---|---|
-| **Backend** (Python, FastAPI) | `server.py` → `app.py`, порт `config.json:port` (8765), только 127.0.0.1 | ML-индексация, поиск по смыслу, JSON API, отдаёт страницы UI. Запускает движок. |
-| **Engine** (Rust) | `bin/semsearch-engine.exe`, исходники `engine/` | Индекс имён всех файлов: MFT + USN-журнал (с правами администратора) или обход + ReadDirectoryChangesW (без них). Named pipe `\\.\pipe\semsearch-engine`. С ним говорит только backend. |
+| **Backend** (Python, FastAPI) | `server.py` → `app.py`, порт `SEMSEARCH_PORT` (выбирает shell) или `config.json:port` (8765), только 127.0.0.1 | ML-индексация, поиск по смыслу, JSON API, отдаёт страницы UI. Запускает движок. |
+| **Engine** (Rust) | `bin/semsearch-engine.exe`, исходники `engine/` | Индекс имён всех файлов: MFT + USN-журнал (NTFS, с правами администратора) или обход + ReadDirectoryChangesW (без них и на других ФС). Named pipe `\\.\pipe\semsearch-engine-<SessionId>`. С ним говорит только backend. |
 | **Shell** (Rust, Tauri v2) | `SemSearch.exe` в корне, исходники `shell/` | Окна без рамки (main / settings / tray-popup) с страницами backend, значок в трее, глобальная клавиша, автозапуск, запуск/остановка backend. |
 | **UI** | `ui/*.html, *.js, *.css` | Страницы 1:1 по макету. Работают и в Tauri, и в обычном браузере. |
+
+### Папка данных `D`
+
+`D` = `SEMSEARCH_DATA_DIR` (только абсолютный путь), иначе `%LOCALAPPDATA%\SemSearch` (Known Folder LocalAppData).
+Все части находят её одинаково; shell передаёт свою `D` backend'у, backend — движку (через окружение). Движок из задачи
+Планировщика видит `SEMSEARCH_DATA_DIR`, только если это постоянная переменная пользователя.
+
+- В `D`: `config.json`, `index.db` и `names.db` (+ `-wal`, `-shm`), `thumbs\`, `token`, `semsearch.log`, `shell.log`,
+  `engine.log` / `engine-selftest.*` (движок без прав; с правами — `<ProgramFiles>\SemSearch\logs`).
+- Папка программы `<root>` (где `server.py`) во время работы только читается.
+- Старая раскладка (`<root>\config.json`, `<root>\data\`): backend при старте один раз переносит в `D` config.json,
+  базы (вместе с `-wal`/`-shm` или никак) и `thumbs\`. Пока `D\config.json` нет, shell и движок читают `<root>\config.json`.
+- `config.json`: `name_drives` нет или `null` — все несъёмные диски с файловой системой; `content_roots` по умолчанию —
+  папка пользователя и известные папки (Документы, Рабочий стол, Изображения, Видео, Музыка, Загрузки) вне её.
+
+### Переменные окружения
+
+| Переменная | Кто читает | Что делает |
+|---|---|---|
+| `SEMSEARCH_DATA_DIR` | все | папка данных `D` |
+| `SEMSEARCH_PORT` | backend | порт (shell передаёт выбранный, §3) |
+| `SEMSEARCH_TOKEN` | backend | токен сессии (shell создаёт его сам) |
+| `SEMSEARCH_SHELL=1` | backend | запущен из shell: окно, трей и горячую клавишу ведёт shell |
+| `SEMSEARCH_ROOT` | shell | папка с `server.py` вместо поиска вверх от exe |
+| `SEMSEARCH_DEV_URL` | shell | брать страницы с этого адреса (вёрстка с `mock_api.py`) |
+| `SEMSEARCH_NO_BACKEND=1` | shell | не запускать и не останавливать backend |
 
 ## 2. Backend HTTP
 
@@ -22,9 +48,9 @@
   ⇒ **никаких inline `<script>` и `onclick=`**, только внешние .js + addEventListener.
 
 ### Авторизация
-- Все `/api/*` требуют заголовок `X-SemSearch-Token: <token>`. Без него — 403.
+- Все `/api/*`, кроме `GET /api/ping`, требуют заголовок `X-SemSearch-Token: <token>`. Без него — 403.
 - `GET /thumb/*` принимает токен в query: `?t=<token>` (для `<img src>`).
-- Токен также пишется в `data/token` (для shell).
+- Токен — `SEMSEARCH_TOKEN` (его создаёт shell) или случайный; backend пишет его в `D\token`.
 - Ошибки: HTTP 4xx/5xx с `{"detail": "..."}`. Пока модель грузится, поисковые запросы → 503.
 
 ### Типы
@@ -51,7 +77,9 @@ SearchResponse = {
 ```
 
 ### Эндпоинты
+- `GET /api/ping` (без токена) → `{"app": "semsearch", "pid": int}` — по нему shell и второй запуск отличают SemSearch от чужой программы на порту.
 - `GET /api/search?q=<text>&tab=all|text|code|image|video|audio|name`
+  - Если поиск по смыслу упал (модель, видеокарта), ответ всё равно приходит — с совпадениями по имени.
   - `tab=all`: items идут секциями в порядке: текст+код (≤30) → фото+видео (≤24) → аудио (≤5) → «только по имени» (≤5, файлы, чьё содержимое НЕ индексируется). `counts.all` = длина items.
   - `tab=name`: совпадения по имени по всему диску (≤200). `counts.name` = полное число совпадений (может быть > 200).
   - Остальные `counts.*` = сколько карточек покажет соответствующая вкладка.
@@ -79,7 +107,7 @@ SearchResponse = {
 - `POST /api/open {"path": str, "reveal": bool}` → `{"ok": true}`; 404, если путь неизвестен индексам или файла нет.
 - `GET /api/status` →
   ```
-  { "ready": bool, "error": str|null, "device": "cuda"|"cpu"|null,
+  { "ready": bool, "error": str|null, "device": "cuda"|"cpu"|null,   // cpu — нет подходящей видеокарты, причина в semsearch.log
     "state": "loading"|"indexing"|"idle"|"paused"|"error",
     "phase": "scan"|"text"|"code"|"image"|"audio"|"video"|null,
     "paused": null | { "reason": "manual"|"fullscreen"|"process"|"battery", "detail": str|null },
@@ -101,10 +129,10 @@ SearchResponse = {
     "info": { "model": "EmbeddingGemma 2", "device": "cuda", "index_bytes": int, "rescan_minutes": int,
               "name_rescan_minutes": int, "failed": int } }
   ```
-- `POST /api/settings {…любые редактируемые ключи выше; content_roots — список строк, drives — список выбранных…}` → `{"ok": true, "restart": bool}`.
+- `POST /api/settings {…любые редактируемые ключи выше; content_roots — список строк, drives — список выбранных или null (все несъёмные)…}` → `{"ok": true, "restart": bool}`.
 - `GET /api/failed?limit=200` → `{"total": int, "items": [{ "path", "err" }]}`.
 - `GET /api/processes` → `{"items": ["cs2.exe", …]}` — имена запущенных процессов (для «Добавить процесс»).
-- `POST /api/open_log {}` — открыть `data/semsearch.log`.
+- `POST /api/open_log {}` — открыть `D\semsearch.log`.
 - `POST /api/shutdown {}` — завершить backend.
 - `GET /thumb/<chunk>?t=<token>&size=360|640` → image/jpeg.
 
@@ -129,10 +157,19 @@ UI проверяет `window.__TAURI__`; без него (обычный бра
 
 События shell → UI (`__TAURI__.event.listen`): `focus-search` (главное окно: фокус в поле, выделить текст), `tray-shown` (попап: обновить статус).
 
-Shell запускает backend: `<root>\.venv\Scripts\pythonw.exe <root>\server.py --no-browser`, cwd = `<root>`, env `SEMSEARCH_SHELL=1` (backend тогда не регистрирует свою горячую клавишу). `<root>` — папка с `server.py` (поиск вверх от exe). Готовность — `GET /api/status` с токеном из `data\token` отвечает 200.
+Shell запускает backend: `<root>\.venv\Scripts\pythonw.exe <root>\server.py --no-browser`, cwd = `<root>`, env `SEMSEARCH_SHELL=1` (backend тогда не регистрирует свою горячую клавишу), `SEMSEARCH_PORT`, `SEMSEARCH_TOKEN`, `SEMSEARCH_DATA_DIR`. `<root>` — папка с `server.py` (поиск вверх от exe или `SEMSEARCH_ROOT`).
 
-## 4. Backend ⇄ Engine (named pipe `\\.\pipe\semsearch-engine`)
+Порт (выбирается заново при каждом запуске backend). Предпочтительный `P` = `config.json:port` или 8765.
+- На `P` отвечает `/api/ping` с `"app": "semsearch"`, и `GET /api/status` с токеном из `D\token` даёт 200 → shell подключается к этому backend.
+- Иначе `P` свободен → backend запускается на нём; занят (чужая программа или SemSearch другого пользователя) → на первом свободном из `P+1…P+20`, иначе на порту от системы. Свободен = привязка к 127.0.0.1 удалась и никто не отвечает (соединение с самим собой не считается).
+- Готовность — `/api/ping` отвечает `"app": "semsearch"` и `GET /api/status` с токеном даёт 200.
+- Backend без shell (`start.bat`): если на его порту SemSearch — открывает браузер там и выходит; если чужая программа — берёт свободный порт так же. Под shell порт не меняет: занят — выходит с кодом 1, shell выберет другой.
 
+Автозапуск: shell пишет `"<exe>" --hidden` в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; если exe переехал, при старте путь в записи исправляется.
+
+## 4. Backend ⇄ Engine (named pipe `\\.\pipe\semsearch-engine-<SessionId>`)
+
+`<SessionId>` — номер сеанса Windows (`ProcessIdToSessionId` текущего процесса, десятичный): у каждого вошедшего пользователя свой движок.
 Построчный JSON (UTF-8, `\n`). Запрос `{"id": 1, "op": "...", ...}` → ответ `{"id": 1, "ok": true, ...}` или `{"id": 1, "ok": false, "error": "..."}`.
 
 | op | Запрос | Ответ |
@@ -144,7 +181,7 @@ Shell запускает backend: `<root>\.venv\Scripts\pythonw.exe <root>\serve
 | `list` | `{"roots", "exts", "exclude_dirs", "exclude_paths", "skip_dot_dirs": true, "skip_cloud": true}` | `{"items": [{"path","size","mtime","attrs"}]}` |
 | `exists` | `{"path"}` | `{"exists": bool, "indexed": bool}` |
 | `subscribe` | `{"roots": [..]}` | `{"ok": true}`, затем поток событий `{"ev": "created"\|"modified"\|"deleted"\|"renamed"\|"rescan", "path", "old": str\|null, "dir": bool}` |
-| `reload_config` | — | перечитать `config.json` (диски) |
+| `reload_config` | — | перечитать `D\config.json` (диски) |
 | `shutdown` | — | завершиться |
 
 `auto`: есть `*`/`?` → glob; префикс `re:` → regex; иначе слова через пробел (AND, без учёта регистра, кириллица тоже); слово с `\` или `/` сравнивается с полным путём, остальные — с именем.

@@ -27,7 +27,7 @@ TOKEN = "dev-token"
 CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
 
 KB, MB, GB = 1024, 1024 * 1024, 1024 ** 3
-H = "C:\\Users\\1337"
+H = "C:\\Users\\Anna"
 ROOF = H + "\\Documents\\Дом\\Ремонт крыши"
 
 
