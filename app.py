@@ -33,7 +33,11 @@ def _port_state(port):
     """Кто на 127.0.0.1:port: "free", "semsearch" (наш backend отвечает на /api/ping) или "busy" (чужая программа)."""
     with socket.socket() as s:
         s.settimeout(0.25)  # отказ на loopback Windows приходит только через ~2 с, а слушающий порт отвечает сразу
-        if s.connect_ex(("127.0.0.1", port)) != 0:
+        connected = s.connect_ex(("127.0.0.1", port)) == 0
+        # Соединение с самим собой (бывает на портах из динамического диапазона) значит, что никто не слушает
+        if connected and s.getsockname() == s.getpeername():
+            return "free"
+        if not connected:
             try:
                 with socket.socket() as b:
                     b.bind(("127.0.0.1", port))
