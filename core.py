@@ -15,6 +15,11 @@ from ctypes import wintypes
 
 import numpy as np
 
+# OpenMP в torch после каждой операции на процессоре ещё 200 мс крутит все свои потоки вхолостую в ожидании
+# следующей. Индексатор делает мелкие операции на процессоре чаще — и занимал 10–14 ядер впустую, а движок имён
+# в это время не успевал отвечать. С 0 потоки засыпают сразу; читается при загрузке torch, поэтому — до неё.
+os.environ.setdefault("KMP_BLOCKTIME", "0")
+
 log = logging.getLogger("core")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))  # папка программы: во время работы только читается
@@ -849,6 +854,12 @@ def running_blocker(names):
     return None
 
 
+# Без объявленных типов псевдодескриптор процесса (-1) обрезался до 32 бит, и SetPriorityClass молча не срабатывал
+_k32 = ctypes.WinDLL("kernel32")
+_k32.GetCurrentProcess.restype = wintypes.HANDLE
+_k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+
+
 def lower_priority():
     BELOW_NORMAL_PRIORITY_CLASS = 0x4000
-    ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
+    _k32.SetPriorityClass(_k32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
