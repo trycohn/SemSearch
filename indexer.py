@@ -1,6 +1,7 @@
 """Фоновая индексация: обход папок, отслеживание изменений, извлечение, эмбеддинги, индекс имён."""
 import logging
 import os
+import re
 import stat
 import threading
 import time
@@ -25,8 +26,9 @@ NAME_EXCLUDE_DIRS = ["$Recycle.Bin", "System Volume Information", "WinSxS"]
 QUIET_SEC = 3  # файл должен «успокоиться» (докопироваться/докачаться), прежде чем его индексировать
 
 
-def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop):
-    """Быстрый обход через os.scandir. Отдаёт (path, name, size, mtime)."""
+def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop, smart=False):
+    """Быстрый обход через os.scandir. Отдаёт (path, name, size, mtime).
+    smart — пропускать папки сборки и зависимостей, узнавая их по соседним файлам проекта (core.is_build_dir)."""
     excl = {d.lower() for d in exclude_dirs}
     excl_paths = tuple(os.path.normcase(p) for p in exclude_paths)
     stack = list(roots)
@@ -35,27 +37,30 @@ def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop):
             return
         d = stack.pop()
         try:
-            it = os.scandir(d)
+            with os.scandir(d) as it:
+                entries = list(it)
         except OSError:
             continue
-        with it:
-            for e in it:
-                try:
-                    st = e.stat(follow_symlinks=False)
-                except OSError:
+        names = [e.name for e in entries] if smart else ()
+        for e in entries:
+            try:
+                st = e.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            attrs = getattr(st, "st_file_attributes", 0)
+            if attrs & _REPARSE:
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                low = e.name.lower()
+                if low in excl or (skip_dot_dirs and e.name.startswith(".")):
                     continue
-                attrs = getattr(st, "st_file_attributes", 0)
-                if attrs & _REPARSE:
+                if excl_paths and os.path.normcase(e.path).startswith(excl_paths):
                     continue
-                if stat.S_ISDIR(st.st_mode):
-                    low = e.name.lower()
-                    if low in excl or (skip_dot_dirs and e.name.startswith(".")):
-                        continue
-                    if excl_paths and os.path.normcase(e.path).startswith(excl_paths):
-                        continue
-                    stack.append(e.path)
-                elif not attrs & _CLOUD:
-                    yield e.path, e.name, st.st_size, st.st_mtime
+                if smart and core.is_build_dir(e.name, names, e.path):
+                    continue
+                stack.append(e.path)
+            elif not attrs & _CLOUD:
+                yield e.path, e.name, st.st_size, st.st_mtime
 
 
 def build_names(gen, roots):
@@ -93,6 +98,8 @@ class Indexer(threading.Thread):
         self.state = {"phase": "start", "current": "", "paused": None, "names": 0, "names_scan": None,
                       "names_updated": None, "watching": False}
         self.rates = {}  # вид -> секунд на файл (скользящее среднее) — для оценки оставшегося времени
+        self._hashes = {}  # id файла -> хеш содержимого (пока файл считается)
+        self._later_copies = {}  # id файла -> id таких же файлов из той же пачки
         self.last_name_scan = 0.0
         # Картинки/видео/аудио декодируются в C-коде без GIL — хватает потоков.
         # PDF и документы разбираются на чистом Python — в отдельных процессах, иначе они душат поток,
@@ -131,6 +138,11 @@ class Indexer(threading.Thread):
             if not freed:
                 self.emb.free_cache()  # отдаём игре видеопамять кеша
                 freed = True
+            # Обход и пересборка видеокарту не нагружают — пауза их не держит (пачка будет отброшена, см. _process_kind)
+            if self._retag_needed and self.engine_ready():
+                self.full_scan_requested = True
+            if self.full_scan_requested or self.rebuild_requested:
+                return time.time() - t0
             time.sleep(3)
         return time.time() - t0
 
@@ -208,6 +220,8 @@ class Indexer(threading.Thread):
             try:
                 if self.rebuild_requested:
                     self._rebuild()
+                if self._retag_needed and self.engine_ready():
+                    self.full_scan_requested = True  # движок достроил индекс — теперь обход с признаками чужого кода
                 if self.full_scan_requested or time.time() - last_full > self.cfg["rescan_minutes"] * 60:
                     self.full_scan_requested = False
                     self.scan_content()
@@ -235,17 +249,47 @@ class Indexer(threading.Thread):
     # ------------------------------------------------ содержимое: полный обход
 
     engine_lister = None  # app подставляет список файлов от движка на Rust (быстрее обхода папок)
+    engine_ready = staticmethod(lambda: False)  # app подставляет: движок построил индекс?
+    _retag_needed = False  # обход прошёл без признаков движка — повторить, как только он будет готов
 
     def _content_files(self):
+        """-> (файлы (path, name, size, mtime, tag), есть ли признаки tag от движка)."""
         if self.engine_lister:
             try:
-                return self.engine_lister()
+                files = self.engine_lister()
+                self._retag_needed = False
+                return files
             except RuntimeError as ex:  # ожидаемо: движок ещё строит индекс
                 log.info("%s — обхожу папки сам", ex)
+                self._retag_needed = True
             except Exception:
                 log.exception("движок не отдал список файлов — обхожу папки сам")
-        return walk(self.cfg["content_roots"], self.cfg["exclude_dirs"], self.cfg["exclude_paths"], True,
-                    lambda: self.stop_flag)
+        files = walk(self.cfg["content_roots"], self.cfg["exclude_dirs"], self.cfg["exclude_paths"], True,
+                     lambda: self.stop_flag, smart=True)
+        return ((p, n, s, m, None) for p, n, s, m in files), False
+
+    # Что делать с файлом: правило «чужого кода» (настройка foreign_code). Касается кода и документации
+    # разработчика (.md/.rst — README и CHANGELOG библиотек); ваши PDF, Word и фото не трогает.
+    DEV_DOCS = (".md", ".markdown", ".rst")
+    GEN_NAME = re.compile(r"(_pb2(_grpc)?\.py|\.pb\.(go|cc|h)|\.g\.cs|\.g\.i\.cs|\.designer\.cs|\.generated\.\w+)$",
+                          re.I)
+    TAG_REASON = {"submodule": "чужой код: git-подмодуль",
+                  "gitignored": "не исходник: так считает .gitignore проекта",
+                  "archive": "чужой код: скачанный архив исходников"}
+
+    def _policy(self, kind, name, tag):
+        """-> (status, prio, причина) для нового или изменённого файла."""
+        mode = self.cfg.get("foreign_code", "skip")
+        lname = name.lower()
+        if mode == "normal" or not (kind == "code" or (kind == "text" and lname.endswith(self.DEV_DOCS))):
+            return core.ST_PENDING, 0, None
+        why = self.TAG_REASON.get(tag) or ("сгенерированный файл" if kind == "code" and self.GEN_NAME.search(name)
+                                           else None)
+        if why:  # точные признаки: не индексировать (или в конец очереди, если так выбрано)
+            return (core.ST_SKIPPED, 0, why) if mode == "skip" else (core.ST_PENDING, 1, None)
+        if tag == "foreign" or lname.endswith(".d.ts"):  # неточные признаки — только в конец очереди
+            return core.ST_PENDING, 1, None
+        return core.ST_PENDING, 0, None
 
     def on_engine_event(self, ev):
         """Событие из журнала изменений движка (вместо watchdog): created/modified/deleted/renamed/rescan."""
@@ -260,42 +304,64 @@ class Indexer(threading.Thread):
                 self.wake.set()
 
     def scan_content(self):
+        self.full_scan_requested = False  # запрошенный обход — вот он
         self.state.update(phase="scan", current="")
-        known = {p: (i, s, m) for i, p, s, m in self.conn.execute("SELECT id, path, size, mtime FROM files")}
-        seen, new, changed = set(), [], []
-        for path, name, size, mtime in self._content_files():
+        known = {p: (i, s, m, st, pr, tg) for i, p, s, m, st, pr, tg in
+                 self.conn.execute("SELECT id, path, size, mtime, status, prio, tag FROM files")}
+        files, tagged = self._content_files()
+        seen, new, changed, repol = set(), [], [], []
+        for path, name, size, mtime, tag in files:
             kind = self._kind(name, size)
             if not kind:
                 continue
             seen.add(path)
             old = known.get(path)
+            if old and not tagged:
+                tag = old[5]  # движка нет — признаков тоже нет; держимся прежних, а не индексируем чужое заново
+            status, prio, why = self._policy(kind, name, tag)
             if old is None:
-                new.append((path, name, kind, size, mtime))
+                new.append((path, name, kind, size, mtime, status, prio, tag, why))
             elif old[1] != size or abs(old[2] - mtime) > 1:
-                changed.append((old[0], size, mtime))
+                changed.append((old[0], size, mtime, status, prio, tag, why))
+            elif (status == core.ST_SKIPPED) != (old[3] == core.ST_SKIPPED) or (prio, tag) != (old[4] or 0, old[5]):
+                # файл не менялся, но правило для него поменялось (настройка, новый .gitignore, подмодуль)
+                repol.append((old[0], old[3], status, prio, tag, why))
         if self.stop_flag:
             return
-        gone = [i for p, (i, _, _) in known.items() if p not in seen]
+        gone = [v[0] for p, v in known.items() if p not in seen]
         if len(gone) > max(1000, len(known) // 2):
             # Разом «пропало» больше половины индекса — так бывает, если источник списка ответил не полностью
             # (движок ещё строит индекс). Перепроверяем своим обходом, прежде чем стирать посчитанное.
             log.warning("обход: пропало %d из %d файлов — перепроверяю обходом папок", len(gone), len(known))
             really = {path for path, *_ in walk(self.cfg["content_roots"], self.cfg["exclude_dirs"],
-                                               self.cfg["exclude_paths"], True, lambda: self.stop_flag)}
+                                               self.cfg["exclude_paths"], True, lambda: self.stop_flag, smart=True)}
             if self.stop_flag:
                 return
-            gone = [i for p, (i, _, _) in known.items() if p not in really]
+            gone = [v[0] for p, v in known.items() if p not in really]
             log.warning("после перепроверки пропало %d", len(gone))
         with self.conn:
-            self.conn.executemany("INSERT INTO files(path, name, kind, size, mtime) VALUES (?,?,?,?,?)", new)
-            for fid, size, mtime in changed:
+            self.conn.executemany("INSERT INTO files(path, name, kind, size, mtime, status, prio, tag, err) "
+                                  "VALUES (?,?,?,?,?,?,?,?,?)", new)
+            for fid, size, mtime, status, prio, tag, why in changed:
                 self._drop_chunks(fid)
-                self.conn.execute("UPDATE files SET size=?, mtime=?, status=0, err=NULL WHERE id=?", (size, mtime, fid))
+                self.conn.execute("UPDATE files SET size=?, mtime=?, status=?, prio=?, tag=?, err=?, hash=NULL, "
+                                  "copy_of=NULL WHERE id=?", (size, mtime, status, prio, tag, why, fid))
+            for fid, old_status, status, prio, tag, why in repol:
+                if status == core.ST_SKIPPED:  # стал «чужим» — убрать из индекса
+                    self._drop_chunks(fid)
+                    self.conn.execute("UPDATE files SET status=?, prio=?, tag=?, err=?, copy_of=NULL WHERE id=?",
+                                      (status, prio, tag, why, fid))
+                elif old_status == core.ST_SKIPPED:  # снова нужен — в очередь
+                    self.conn.execute("UPDATE files SET status=0, prio=?, tag=?, err=NULL WHERE id=?", (prio, tag, fid))
+                else:
+                    self.conn.execute("UPDATE files SET prio=?, tag=? WHERE id=?", (prio, tag, fid))
             for fid in gone:
                 self._drop_chunks(fid)
                 self.conn.execute("DELETE FROM files WHERE id=?", (fid,))
         self.state["phase"] = "idle"
-        log.info("обход: новых %d, изменённых %d, удалённых %d", len(new), len(changed), len(gone))
+        skipped = sum(1 for v in new if v[5] == core.ST_SKIPPED) + sum(1 for v in repol if v[2] == core.ST_SKIPPED)
+        log.info("обход: новых %d, изменённых %d, удалённых %d, правило поменялось у %d (пропущено как чужое: %d)",
+                 len(new), len(changed), len(gone), len(repol), skipped)
 
     def _kind(self, name, size):
         kind = core.kind_of(os.path.splitext(name)[1].lower())
@@ -308,6 +374,8 @@ class Indexer(threading.Thread):
         if ids:
             self.store.remove(ids)
             self.conn.execute("DELETE FROM chunks WHERE file_id=?", (fid,))
+        # оригинал удалён или изменился — его копии больше не копии: в очередь, одна из них станет оригиналом
+        self.conn.execute("UPDATE files SET status=0, copy_of=NULL WHERE copy_of=?", (fid,))
 
     # ------------------------------------------------ содержимое: точечные изменения
 
@@ -334,7 +402,7 @@ class Indexer(threading.Thread):
                 if os.path.isdir(p):
                     if self._in_scope(p, True):
                         for path, name, size, mtime in walk([p], self.cfg["exclude_dirs"], self.cfg["exclude_paths"],
-                                                            True, lambda: self.stop_flag):
+                                                            True, lambda: self.stop_flag, smart=True):
                             n += self._upsert(path, name, size, mtime)
                 elif os.path.isfile(p):
                     if not self._in_scope(p, False):
@@ -352,20 +420,31 @@ class Indexer(threading.Thread):
             log.info("изменения на диске: %d", n)
         return n
 
+    def _sibling_tag(self, path):
+        """Признак движка для файла из события: у соседей по папке он почти всегда тот же
+        (подмодуль, архив, клон — свойства папки). Полный обход потом уточнит."""
+        lo, hi = core.prefix_range(os.path.dirname(path))
+        row = self.conn.execute("SELECT tag FROM files WHERE path >= ? AND path < ? AND tag IS NOT NULL LIMIT 1",
+                                (lo, hi)).fetchone()
+        return row[0] if row else None
+
     def _upsert(self, path, name, size, mtime):
         kind = self._kind(name, size)
         if not kind:
             return 0
-        row = self.conn.execute("SELECT id, size, mtime FROM files WHERE path=?", (path,)).fetchone()
+        row = self.conn.execute("SELECT id, size, mtime, tag FROM files WHERE path=?", (path,)).fetchone()
+        tag = row[3] if row and row[3] else self._sibling_tag(path)
+        status, prio, why = self._policy(kind, name, tag)
         if row is None:
-            self.conn.execute("INSERT INTO files(path, name, kind, size, mtime) VALUES (?,?,?,?,?)",
-                              (path, name, kind, size, mtime))
+            self.conn.execute("INSERT INTO files(path, name, kind, size, mtime, status, prio, tag, err) "
+                              "VALUES (?,?,?,?,?,?,?,?,?)", (path, name, kind, size, mtime, status, prio, tag, why))
             return 1
-        fid, old_size, old_mtime = row
+        fid, old_size, old_mtime, _ = row
         if old_size == size and abs(old_mtime - mtime) <= 1:
             return 0
         self._drop_chunks(fid)
-        self.conn.execute("UPDATE files SET size=?, mtime=?, status=0, err=NULL WHERE id=?", (size, mtime, fid))
+        self.conn.execute("UPDATE files SET size=?, mtime=?, status=?, prio=?, tag=?, err=?, hash=NULL, copy_of=NULL "
+                          "WHERE id=?", (size, mtime, status, prio, tag, why, fid))
         return 1
 
     def _delete_under(self, path):
@@ -386,12 +465,43 @@ class Indexer(threading.Thread):
         except FuturesTimeout:
             if in_procs:
                 self._reset_procs()
-            return None, "разбор не уложился в 3 минуты"
+            return None, "разбор не уложился в 3 минуты", None
         except (BrokenProcessPool, CancelledError):
             self._reset_procs()
-            return None, "сбой разбора файла"
+            return None, "сбой разбора файла", None
         except Exception as ex:
-            return None, f"{type(ex).__name__}: {ex}"[:200]
+            return None, f"{type(ex).__name__}: {ex}"[:200], None
+
+    def _safe_hash(self, row):
+        try:
+            return extract.file_hash(row[1], row[2])
+        except OSError:
+            return None
+
+    def _dedupe(self, rows):
+        """Точные копии уже проиндексированного файла не разбираются и не считаются на видеокарте —
+        запоминаются копиями (status 5). -> строки, которые нужно разбирать."""
+        hashes = list(self.pool.map(self._safe_hash, rows))
+        keep, first, copies = [], {}, []
+        for r, h in zip(rows, hashes):
+            fid = r[0]
+            if h is None:
+                keep.append(r)
+                continue
+            self._hashes[fid] = h
+            orig = self.conn.execute("SELECT id FROM files WHERE hash=? AND status=1 AND id<>? LIMIT 1",
+                                     (h, fid)).fetchone()
+            if orig:
+                copies.append((orig[0], h, fid))
+            elif h in first:  # такой же, как другой файл этой пачки — решится, когда тот посчитается
+                self._later_copies.setdefault(first[h], []).append(fid)
+            else:
+                first[h] = fid
+                keep.append(r)
+        if copies:
+            with self.conn:
+                self.conn.executemany("UPDATE files SET status=5, copy_of=?, hash=? WHERE id=? AND status=0", copies)
+        return keep
 
     def _reset_procs(self):
         old = self.procs
@@ -421,48 +531,68 @@ class Indexer(threading.Thread):
         if not total:
             return
         batch_files = {"text": 32, "code": 32, "image": 32, "audio": 4, "video": 1}
-        for kind in self.ORDER:
-            rows = self.conn.execute("SELECT id, path, kind, mtime FROM files WHERE status=0 AND kind=?",
-                                     (kind,)).fetchall()
-            if not rows:
-                continue
-            self.state["phase"] = kind
-            last_end = time.time()
-            n = batch_files[kind]
-            slices = iter([rows[i:i + n] for i in range(0, len(rows), n)])
-            # Пока GPU считает текущую пачку, потоки уже читают следующую
-            futures = deque()
-
-            in_procs = kind in ("text", "code")
-
-            def submit_next():
-                sl = next(slices, None)
-                if sl is not None:  # каждый файл — отдельная задача, файлы пачки разбираются параллельно
-                    pool = self.procs if in_procs else self.pool  # пул процессов мог быть перезапущен
-                    futures.append((sl, [pool.submit(extract.run_job, r[2], r[1], self.cfg) for r in sl]))
-
-            submit_next()
-            while futures:
-                sl, futs = futures.popleft()
-                t0 = time.time()
-                results = [(r, *self._result(f, in_procs)) for r, f in zip(sl, futs)]
-                if self.stop_flag or self.rebuild_requested:
+        # Сначала обычные файлы всех видов, потом отложенные (prio 1: возможно чужой код) — они не задерживают ваши
+        for prio in (0, 1):
+            for kind in self.ORDER:
+                if self._process_kind(kind, prio, batch_files[kind]) is False:
                     return
-                paused = self.wait_if_paused()
-                submit_next()
-                t1 = time.time()
-                n_items = self._store(kind, results)
-                now = time.time()
-                log.info("пачка %s: файлов %d, фрагментов %d, ждал извлечения %.1f с, модель+запись %.1f с",
-                         kind, len(sl), n_items, t1 - t0, now - t1)
-                # Скорость для оценки «осталось около N минут»: время пачки без пауз, сглаженное
-                per_file = max(0.0, now - last_end - paused) / len(sl)
-                last_end = now
-                old = self.rates.get(kind)
-                self.rates[kind] = per_file if old is None else old * 0.8 + per_file * 0.2
-                self.state["current"] = os.path.basename(sl[-1][1])
-                # Свежие изменения на диске (в т.ч. удаления) не ждут конца долгого прохода
-                self.apply_changes()
+
+    def _process_kind(self, kind, prio, n):
+        rows = self.conn.execute("SELECT id, path, kind, mtime FROM files WHERE status=0 AND kind=? AND prio=?",
+                                 (kind, prio)).fetchall()
+        if not rows:
+            return True
+        self.state["phase"] = kind
+        last_end = time.time()
+        slices = iter([rows[i:i + n] for i in range(0, len(rows), n)])
+        # Пока GPU считает текущую пачку, потоки уже читают следующую
+        futures = deque()
+        in_procs = kind in ("text", "code")
+
+        def submit_next():
+            while True:
+                sl = next(slices, None)
+                if sl is None:
+                    return
+                sl = self._dedupe(sl)  # копии уже посчитанного — без разбора и без видеокарты
+                if sl:
+                    break
+            # каждый файл — отдельная задача, файлы пачки разбираются параллельно
+            pool = self.procs if in_procs else self.pool  # пул процессов мог быть перезапущен
+            futures.append((sl, [pool.submit(extract.run_job, r[2], r[1], self.cfg, prio) for r in sl]))
+
+        submit_next()
+        while futures:
+            sl, futs = futures.popleft()
+            t0 = time.time()
+            results = [(r, *self._result(f, in_procs)) for r, f in zip(sl, futs)]
+            if self.stop_flag or self.rebuild_requested:
+                return False
+            paused = self.wait_if_paused()
+            if self.stop_flag or self.full_scan_requested or self.rebuild_requested:
+                self.wake.set()  # сначала обход/пересборка; разобранная пачка останется в очереди
+                return False
+            submit_next()
+            t1 = time.time()
+            n_items = self._store(kind, results)
+            now = time.time()
+            log.info("пачка %s%s: файлов %d, фрагментов %d, ждал извлечения %.1f с, модель+запись %.1f с",
+                     kind, " (отложенные)" if prio else "", len(sl), n_items, t1 - t0, now - t1)
+            # Скорость для оценки «осталось около N минут»: время пачки без пауз, сглаженное
+            per_file = max(0.0, now - last_end - paused) / len(sl)
+            last_end = now
+            old = self.rates.get(kind)
+            self.rates[kind] = per_file if old is None else old * 0.8 + per_file * 0.2
+            self.state["current"] = os.path.basename(sl[-1][1])
+            # Свежие изменения на диске (в т.ч. удаления) не ждут конца долгого прохода
+            self.apply_changes()
+            if self._retag_needed and self.engine_ready():
+                # Очередь собрана без признаков движка; он готов — прервёмся на обход с признаками,
+                # чтобы не тратить видеокарту на чужой код
+                self.full_scan_requested = True
+                self.wake.set()
+                return False
+        return True
 
     def _encode_per_file(self, kind, payloads, meta):
         """Пачка упала — считаем по файлам, чтобы ошибка одного файла не губила остальные."""
@@ -482,8 +612,14 @@ class Indexer(threading.Thread):
         return ok_meta, vecs, failed
 
     def _store(self, kind, results):
-        payloads, meta, failed = [], [], []
-        for (fid, path, _, _), items, err in results:
+        payloads, meta, failed, skipped, deferred = [], [], [], [], []
+        for (fid, path, _, _), items, err, flag in results:
+            if flag == "skip":  # сгенерированный файл — правило, а не ошибка
+                skipped.append((err, fid))
+                continue
+            if flag == "defer":  # похоже на чужую библиотеку — во второй проход
+                deferred.append((fid,))
+                continue
             if err:
                 failed.append((err, fid))
                 continue
@@ -499,11 +635,11 @@ class Indexer(threading.Thread):
                 self.emb.free_cache()
                 meta, vecs, bad = self._encode_per_file(kind, payloads, meta)
                 failed += bad
-        mtimes = {fid: mtime for (fid, _, _, mtime), items, err in results if not err}
+        mtimes = {fid: mtime for (fid, _, _, mtime), items, err, flag in results if not err and not flag}
         done_fids = set(mtimes) - {f for _, f in failed}
         durations = []
         if kind in ("audio", "video"):  # длительность нужна интерфейсу (таймлайн, «совпал отрезок … из 1:52»)
-            paths = {fid: path for (fid, path, _, _), items, err in results}
+            paths = {fid: path for (fid, path, _, _), items, err, flag in results}
             durations = [(extract.media_duration(paths[f]), f) for f in done_fids]
         with self.conn:
             self.conn.executemany("UPDATE files SET duration=? WHERE id=?", durations)
@@ -520,8 +656,24 @@ class Indexer(threading.Thread):
                     "INSERT INTO chunks(file_id, kind, loc, label, snippet, vec) VALUES (?,?,?,?,?,?)",
                     (fid, kind, loc, label, snippet, v.astype(np.float16).tobytes()))
                 new_ids.append((cur.lastrowid, v))
-            self.conn.executemany("UPDATE files SET status=1 WHERE id=?", [(f,) for f in alive])
+            # хеш оригинала — по нему найдутся его будущие копии
+            self.conn.executemany("UPDATE files SET status=1, hash=? WHERE id=?",
+                                  [(self._hashes.get(f), f) for f in alive])
             self.conn.executemany("UPDATE files SET status=2, err=? WHERE id=? AND status=0", failed)
+            self.conn.executemany("UPDATE files SET status=3, err=? WHERE id=? AND status=0", skipped)
+            self.conn.executemany("UPDATE files SET prio=1 WHERE id=? AND status=0", deferred)
+            # Такие же файлы из этой пачки: оригинал посчитан — они его копии; пропущен или не прочитался —
+            # с одинаковым содержимым будет то же самое
+            for f in alive:
+                self.conn.executemany("UPDATE files SET status=5, copy_of=?, hash=? WHERE id=? AND status=0",
+                                      [(f, self._hashes.get(f), c) for c in self._later_copies.get(f, ())])
+            for status, rows in ((2, failed), (3, skipped)):
+                for err, f in rows:
+                    self.conn.executemany("UPDATE files SET status=?, err=? WHERE id=? AND status=0",
+                                          [(status, err, c) for c in self._later_copies.get(f, ())])
+        for (fid, *_), *_rest in results:
+            self._hashes.pop(fid, None)
+            self._later_copies.pop(fid, None)
         if new_ids:
             self.store.add(kind, [i for i, _ in new_ids], np.stack([v for _, v in new_ids]))
         return len(payloads)

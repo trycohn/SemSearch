@@ -17,17 +17,29 @@ use crate::engine::*;
 use crate::ops;
 use crate::util::*;
 
-/// Имя канала (docs/API.md §4): свой у каждого сеанса Windows — `\\.\pipe\semsearch-engine-<SessionId>`,
-/// SessionId = ProcessIdToSessionId(текущий процесс), десятичное. Так движки разных вошедших
-/// пользователей не мешают друг другу.
+pub const DEFAULT_PIPE: &str = "semsearch-engine";
+static PIPE: OnceLock<String> = OnceLock::new();
+
+/// `--pipe <name>` для отладочного экземпляра. Допустимы только [A-Za-z0-9._-], до 100 символов.
+pub fn set_pipe_name(name: &str) -> Result<(), String> {
+    let ok = !name.is_empty() && name.len() <= 100 && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'_' || c == b'-');
+    if !ok {
+        return Err(format!("invalid pipe name {name:?} (allowed: A-Z a-z 0-9 . _ -, up to 100 chars)"));
+    }
+    let _ = PIPE.set(format!(r"\\.\pipe\{name}"));
+    Ok(())
+}
+
+/// Имя канала (docs/API.md §4): `--pipe <name>`, иначе свой у каждого сеанса Windows —
+/// `\\.\pipe\semsearch-engine-<SessionId>`, SessionId = ProcessIdToSessionId(текущий процесс), десятичное.
+/// Так движки разных вошедших пользователей не мешают друг другу.
 pub fn pipe_name() -> &'static str {
-    static NAME: OnceLock<String> = OnceLock::new();
-    NAME.get_or_init(|| {
+    PIPE.get_or_init(|| {
         use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
         use windows_sys::Win32::System::Threading::GetCurrentProcessId;
         let mut session = 0u32;
         unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) };
-        format!(r"\\.\pipe\semsearch-engine-{session}")
+        format!(r"\\.\pipe\{DEFAULT_PIPE}-{session}")
     })
 }
 

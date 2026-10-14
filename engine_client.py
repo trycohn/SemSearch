@@ -10,8 +10,9 @@
         ...
         sub.stop()
 
-CLI: python engine_client.py ping | status | search <q> | list <root> [ext ...] | same <name>
-                            | exists <path> | subscribe [root ...] | reload | shutdown
+CLI: python engine_client.py ping | status | search <q> | list <root> [ext ...] [--smart] [--classify]
+                            | same <name> | exists <path> | subscribe [root ...] | reload | shutdown
+Канал: переменная окружения SEMSEARCH_ENGINE_PIPE (по умолчанию semsearch-engine-<SessionId>).
 """
 
 import ctypes
@@ -30,8 +31,17 @@ def _session_id():
     return 0
 
 
-# В каждом сеансе Windows свой канал: движки разных вошедших пользователей не мешают друг другу
-PIPE_NAME = rf"\\.\pipe\semsearch-engine-{_session_id()}"
+def _pipe_from_env():
+    """Имя канала: переменная SEMSEARCH_ENGINE_PIPE (например, semsearch-engine-dev для отладочного движка,
+    запущенного с --pipe), иначе свой у каждого сеанса Windows — semsearch-engine-<SessionId>:
+    движки разных вошедших пользователей не мешают друг другу."""
+    name = (os.environ.get("SEMSEARCH_ENGINE_PIPE") or "").strip() or f"semsearch-engine-{_session_id()}"
+    if name.lower().startswith("\\\\.\\pipe\\"):
+        return name
+    return "\\\\.\\pipe\\" + name
+
+
+PIPE_NAME = _pipe_from_env()
 
 __all__ = ["EngineClient", "EngineError", "EngineUnavailable", "Subscription", "PIPE_NAME"]
 
@@ -322,15 +332,19 @@ def _main(argv):
                 print(f"  {it['path']}  size={it['size']} dir={it['dir']}")
             return 0
         elif cmd == "list":
+            flags = {a for a in args if a.startswith("--")}
+            args = [a for a in args if not a.startswith("--")]
             root = args[0] if args else os.environ.get("SystemDrive", "C:") + "\\"
             exts = args[1:] or [".pdf", ".docx", ".py", ".jpg"]
             t = time.perf_counter()
             r = ec.request("list", roots=[root], exts=exts, exclude_dirs=[], exclude_paths=[],
-                           skip_dot_dirs=True, skip_cloud=True)
+                           skip_dot_dirs=True, skip_cloud=True,
+                           smart_excludes="--smart" in flags, classify="--classify" in flags)
             dt = (time.perf_counter() - t) * 1000
-            print(f"items={len(r['items'])} engine_ms={r.get('ms')} roundtrip_ms={dt:.0f}")
+            print(f"items={len(r['items'])} engine_ms={r.get('ms')} roundtrip_ms={dt:.0f}"
+                  f" smart_skipped={r.get('smart_skipped')} tags={r.get('tags')}")
             for it in r["items"][:10]:
-                print(f"  {it['path']}  {it['size']}")
+                print(f"  {it['path']}  {it['size']}  {it.get('tag', '')}")
             return 0
         elif cmd == "same":
             r = ec.request("same_name", name=args[0] if args else "", limit=10)

@@ -8,6 +8,7 @@
 
 #[macro_use]
 mod util;
+mod classify;
 mod engine;
 mod index;
 mod mft;
@@ -22,9 +23,11 @@ use std::time::Instant;
 
 use engine::*;
 
-const USAGE: &str = "semsearch-engine [--root <dir>] [--walk] [--console] [--selftest]
+const USAGE: &str = "semsearch-engine [--root <dir>] [--pipe <name>] [--walk] [--console] [--selftest]
   --root <dir> project root (folder with server.py); default: nearest ancestor
                of the exe folder that contains server.py or config.json
+  --pipe <name> pipe name (\\\\.\\pipe\\<name>), default semsearch-engine-<SessionId>;
+               use another name for a development instance
   --walk       force walk mode (directory enumeration + ReadDirectoryChangesW)
   --console    log to stdout instead of the log file
   --selftest   build the index, run sample searches and a live-update check,
@@ -103,6 +106,13 @@ fn main() {
     }
     if let Some(e) = data_err {
         warn!("{e}; using {}", data.display());
+    }
+    if let Some(p) = arg_value(&args, "--pipe") {
+        // неверное имя — выход, а не тихий откат на рабочий канал
+        if let Err(e) = server::set_pipe_name(p.trim()) {
+            warn!("{e}");
+            std::process::exit(2);
+        }
     }
     if selftest {
         let code = run_selftest(root, data, log_dir, elevated, force_walk);

@@ -78,12 +78,14 @@ DEFAULT_CONFIG = {
     "content_roots": [HOME],
     # Где искать по имени файла: диски целиком (из них же выводится name_roots); None — все несъёмные диски
     "name_drives": None,
-    # Папки с такими именами пропускаются везде (плюс все папки, начинающиеся с точки, в content_roots)
-    "exclude_dirs": [
-        "node_modules", "__pycache__", "venv", "env", "site-packages", "dist", "build", "obj",
-        "bin", "Library", "Temp", "target", "packages", "vendor", "AppData", "$Recycle.Bin",
-        "System Volume Information", "WinSxS", "Logs", "Cache", "cache",
-    ],
+    # Папки с такими именами пропускаются везде (плюс все папки, начинающиеся с точки, в content_roots).
+    # Сборки и зависимости (bin/obj, build/dist, Library в Unity, venv…) узнаются по соседним файлам проекта —
+    # см. is_build_dir; поэтому обычная папка «Library» с книгами или «Logs» с документами не пропадает.
+    "exclude_dirs": ["node_modules", "__pycache__", "site-packages", "AppData", "$Recycle.Bin",
+                     "System Volume Information", "WinSxS"],
+    # Чужой код (git-подмодули, скачанные архивы исходников, то, что .gitignore проекта считает не исходниками,
+    # сгенерированные файлы): skip — не индексировать, last — в последнюю очередь, normal — как обычный
+    "foreign_code": "skip",
     "exclude_paths": [],
     "port": 8765,
     "hotkey": "ctrl+alt+s",
@@ -135,6 +137,13 @@ def kind_of(ext):
     return None
 
 
+# Прежний список по умолчанию: исключал папки по одному имени. У кого в config.json он так и записан
+# (то есть пользователь его не менял) — подменяем на новый, иначе умные правила не заработают.
+OLD_DEFAULT_EXCLUDES = {"node_modules", "__pycache__", "venv", "env", "site-packages", "dist", "build", "obj", "bin",
+                        "library", "temp", "target", "packages", "vendor", "appdata", "$recycle.bin",
+                        "system volume information", "winsxs", "logs", "cache"}
+
+
 def default_content_roots():
     """Папка пользователя и известные папки вне её (например, «Документы», перенесённые на D:).
     Вложенные не дублируются: обход корня и так их пройдёт."""
@@ -166,6 +175,8 @@ def load_config():
         os.makedirs(DATA_DIR, exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
+    if {d.lower() for d in cfg["exclude_dirs"]} == OLD_DEFAULT_EXCLUDES:
+        cfg["exclude_dirs"] = list(DEFAULT_CONFIG["exclude_dirs"])
     # Пропавшие папки (отключённый диск, удалённая папка) пропускаем, но в файле оставляем — вдруг вернутся
     roots = [r for r in cfg["content_roots"] if os.path.isdir(r)]
     for r in cfg["content_roots"]:
@@ -174,6 +185,39 @@ def load_config():
     cfg["content_roots"] = roots or [HOME]
     derive_config(cfg)
     return cfg
+
+
+ALWAYS_SKIP_DIRS = {"node_modules", "bower_components", "jspm_packages", "__pycache__", "site-packages",
+                    "dist-packages"}
+
+
+def is_build_dir(name, siblings, path):
+    """Папка сборки или зависимостей — по соседним файлам проекта, а не по одному имени.
+    siblings — имена в родительской папке. Те же правила в движке (list с smart_excludes)."""
+    n = name.lower()
+    if n in ALWAYS_SKIP_DIRS:
+        return True
+    sib = {s.lower() for s in siblings}
+    has = lambda *names: any(x in sib for x in names)  # noqa: E731
+    ext = lambda *exts: any(s.endswith(exts) for s in sib)  # noqa: E731
+    if n in ("bin", "obj") and ext(".csproj", ".vbproj", ".fsproj", ".sln"):
+        return True
+    if n == "target" and has("cargo.toml", "pom.xml"):
+        return True
+    if n in ("build", "dist", "out") and has("package.json", "cmakelists.txt", "pyproject.toml", "setup.py",
+                                              "build.gradle", "build.gradle.kts", "meson.build"):
+        return True
+    if n in ("library", "temp", "logs", "obj", "build", "builds") and has("assets") and has("projectsettings"):
+        return True  # Unity
+    if n in ("intermediate", "saved", "deriveddatacache", "binaries") and ext(".uproject"):
+        return True  # Unreal
+    if n == "vendor" and has("composer.json", "go.mod", "gemfile"):
+        return True
+    if n == "packages" and (ext(".sln") or has("packages.config")):
+        return True
+    if n == "pods" and has("podfile"):
+        return True
+    return os.path.exists(os.path.join(path, "pyvenv.cfg"))  # виртуальное окружение Python с любым именем
 
 
 def derive_config(cfg):
@@ -201,7 +245,7 @@ EDITABLE = {  # ключ -> тип; только их можно менять ч
     "content_roots": list, "name_drives": list, "exclude_dirs": list, "hotkey": str, "theme": str, "accent": str,
     "pause_on_fullscreen": bool, "pause_processes": list, "pause_on_battery": bool,
     "video_frame_every_sec": int, "video_max_frames": int, "audio_segment_sec": int, "audio_max_segments": int,
-    "max_text_mb": int, "max_pdf_pages": int,
+    "max_text_mb": int, "max_pdf_pages": int, "foreign_code": str,
 }
 
 
@@ -376,12 +420,27 @@ def _open(path, schema):
     return conn
 
 
+# Статусы файла: 0 — ждёт, 1 — проиндексирован, 2 — не прочитался, 3 — пропущен правилом (чужой или
+# сгенерированный код; причина в err), 5 — точная копия проиндексированного файла copy_of (своих векторов нет)
+ST_PENDING, ST_DONE, ST_FAILED, ST_SKIPPED, ST_COPY = 0, 1, 2, 3, 5
+NEW_COLUMNS = {  # колонки, добавленные после первой версии базы
+    "duration": "REAL",          # длительность аудио/видео
+    "hash": "TEXT",              # хеш содержимого — для поиска точных копий
+    "copy_of": "INTEGER",        # id оригинала для status=5
+    "prio": "INTEGER DEFAULT 0",  # 1 — в последнюю очередь (возможно чужой код)
+    "tag": "TEXT",               # признак от движка: submodule / gitignored / archive / foreign
+}
+
+
 def connect():
     conn = _open(DB_PATH, SCHEMA)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(files)")}
-    if "duration" not in cols:  # база старой версии
-        conn.execute("ALTER TABLE files ADD COLUMN duration REAL")
-        conn.commit()
+    for col, ddl in NEW_COLUMNS.items():
+        if col not in cols:  # база старой версии
+            conn.execute(f"ALTER TABLE files ADD COLUMN {col} {ddl}")
+    conn.execute("CREATE INDEX IF NOT EXISTS files_hash ON files(hash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS files_copy ON files(copy_of)")
+    conn.commit()
     return conn
 
 

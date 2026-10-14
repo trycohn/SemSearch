@@ -117,7 +117,8 @@
       h('span.ico', svg(ic[k] || ic.file, { s: 18, sw: 1.6, join: true })),
       h('span.bd',
         h('span.l1', h('span.nm', { text: it.name }), it.ext ? h('span.ext', { text: it.ext }) : null),
-        h('span.cr', { text: it.crumbs || '' }),
+        /* точные копии считаются один раз — в выдаче одна строка и «ещё N копий» */
+        h('span.cr', { text: (it.crumbs || '') + (it.copies ? ' · ещё ' + it.copies + ' ' + SS.pl(it.copies, ['копия', 'копии', 'копий']) : '') }),
         loc || snip ? h('span.l3', loc ? h('span.loc', { text: loc }) : null, h('span.snip' + (k === 'code' ? '.mono' : ''), { text: snip })) : null),
       h('span.sd', h('span', { text: SS.dateShort(it.mtime) }), h('span', { text: SS.size(it.size) })));
   };
@@ -382,6 +383,8 @@
       const why = {
         pending: 'Найдено по имени. Файл ещё ждёт индексации — по содержимому он найдётся, когда до него дойдёт очередь.',
         failed: 'Найдено по имени. Содержимое не удалось прочитать' + (pv && pv.reason ? ': ' + pv.reason : '') + '.',
+        skipped: 'Найдено по имени. По содержимому не индексируется' + (pv && pv.reason ? ' — ' + pv.reason : '') +
+          '. Это меняется в настройках: «Чужой код и библиотеки».',
         outside: 'Найдено по имени. Эта папка не входит в поиск по смыслу — её можно добавить в настройках.'
       }[pv && pv.state];
       box.appendChild(h('div.nmbox',
@@ -435,14 +438,22 @@
         }))));
     }
 
-    /* копии с тем же именем */
-    if (nameTab && pv && pv.dupes && pv.dupes.length) {
-      const n = pv.dupes.length;
-      const where = R.places(pv.dupes.slice(0, 3)) + (n > 3 ? ' и ещё в ' + (n - 3) : '');
-      pane.appendChild(h('div.dupes', { title: pv.dupes.map((d) => d.path).join('\n') },
+    /* копии: точные (по содержимому) — на любой вкладке; просто с тем же именем — на «По имени» */
+    const exact = pv && pv.dupes ? pv.dupes.filter((d) => d.exact) : [];
+    const sameName = pv && pv.dupes ? pv.dupes.filter((d) => !d.exact) : [];
+    const dupeNote = (list, tail) => {
+      const n = list.length;
+      const where = R.places(list.slice(0, 3)) + (n > 3 ? ' и ещё в ' + (n - 3) : '');
+      pane.appendChild(h('div.dupes', { title: list.map((d) => d.path).join('\n') },
         svg(ic.info, { s: 16, sw: 1.7 }),
-        h('span', { text: 'Ещё ' + n + ' ' + SS.pl(n, ['копия', 'копии', 'копий']) + ' с таким же именем: ' + where + '.' })));
+        h('span', { text: 'Ещё ' + n + ' ' + SS.pl(n, ['копия', 'копии', 'копий']) + tail + ': ' + where + '.' })));
+    };
+    if (pv && pv.copy_of) {
+      pane.appendChild(h('div.dupes', { title: pv.copy_of }, svg(ic.info, { s: 16, sw: 1.7 }),
+        h('span', { text: 'Точная копия файла «' + String(pv.copy_of).split(/[\\/]/).pop() + '» — содержимое ищется по нему.' })));
     }
+    if (exact.length) dupeNote(exact, ' с точно таким же содержимым');
+    else if (nameTab && sameName.length) dupeNote(sameName, ' с таким же именем');
 
     /* действия */
     const canSim = pv ? !!pv.can_similar : kind === 'image' || kind === 'video';

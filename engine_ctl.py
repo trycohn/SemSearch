@@ -47,11 +47,15 @@ def ensure():
         return None
     if _wait(client, 0.5):
         return "running"
-    r = subprocess.run(["schtasks", "/run", "/tn", TASK], capture_output=True, creationflags=NO_WINDOW)
-    if r.returncode == 0 and _wait(client, 10):
-        log.info("движок запущен через задачу Планировщика (MFT)")
-        return "task"
-    _spawned = subprocess.Popen([EXE], cwd=os.path.dirname(EXE), creationflags=NO_WINDOW, close_fds=True)
+    # SEMSEARCH_ENGINE_PIPE — свой канал для разработки: установленный движок (задача Планировщика) не трогаем
+    dev_pipe = os.environ.get("SEMSEARCH_ENGINE_PIPE")
+    if not dev_pipe:
+        r = subprocess.run(["schtasks", "/run", "/tn", TASK], capture_output=True, creationflags=NO_WINDOW)
+        if r.returncode == 0 and _wait(client, 10):
+            log.info("движок запущен через задачу Планировщика (MFT)")
+            return "task"
+    args = [EXE] + (["--pipe", dev_pipe] if dev_pipe else [])
+    _spawned = subprocess.Popen(args, cwd=os.path.dirname(EXE), creationflags=NO_WINDOW, close_fds=True)
     if _wait(client, 10):
         log.info("движок запущен без прав администратора (обход диска)")
         return "spawned"

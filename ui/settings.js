@@ -5,6 +5,8 @@
   const $ = (id) => document.getElementById(id);
   let S = null;
   let fresh = '';          // только что добавленная папка («считаю файлы…»)
+  // правило «чужого кода» (config foreign_code)
+  const FOREIGN = { skip: 'Не индексировать', last: 'В последнюю очередь', normal: 'Как обычный код' };
 
   /* ---------- сохранение: применяется сразу, внизу — «Сохранено» ---------- */
   async function save(patch, okText) {
@@ -87,6 +89,8 @@
     $('iModel').textContent = (i.model || 'модель') + ' · ' + (i.device === 'cuda' ? 'на видеокарте' : i.device === 'cpu' ? 'на процессоре' : 'загружается');
     $('iSize').textContent = i.index_bytes != null ? SS.size(i.index_bytes) : '—';
     $('iRescan').textContent = every(i.rescan_minutes) + ', имена — ' + every(i.name_rescan_minutes);
+    $('foreignLbl').textContent = FOREIGN[S.foreign_code || 'skip'] || FOREIGN.skip;
+    $('iForeign').textContent = 'пропущено ' + SS.num(i.foreign_skipped || 0) + ' · копий ' + SS.num(i.copies || 0);
     const f = $('iFailed');
     f.textContent = '';
     if (i.failed) {
@@ -349,6 +353,53 @@
   });
   document.addEventListener('mousedown', (e) => { if (menuEl && !(e.target.closest && e.target.closest('.dd'))) closeMenu(); });
 
+  /* ---------- чужой код: такой же список, как у темы ---------- */
+  const fbtn = $('foreignBtn'), fdd = $('foreignDd');
+  let fmenu = null;
+  function openFMenu() {
+    fmenu = h('div.menu', { role: 'listbox', 'aria-label': 'Чужой код и библиотеки' });
+    Object.keys(FOREIGN).forEach((k) => {
+      const on = (S.foreign_code || 'skip') === k;
+      fmenu.appendChild(h('button.opt', { type: 'button', role: 'option', 'aria-selected': on ? 'true' : 'false', 'data-foreign': k },
+        on ? h('span.bar', { 'aria-hidden': 'true' }) : null, FOREIGN[k]));
+    });
+    fdd.appendChild(fmenu);
+    fbtn.setAttribute('aria-expanded', 'true');
+    (fmenu.querySelector('[aria-selected="true"]') || fmenu.querySelector('button')).focus();
+  }
+  function closeFMenu(focusBtn) {
+    if (!fmenu) return;
+    const m = fmenu;
+    fmenu = null;
+    fbtn.setAttribute('aria-expanded', 'false');
+    m.classList.add('closing');
+    SS.after(m, 120, () => m.remove());
+    if (focusBtn) fbtn.focus();
+  }
+  fbtn.addEventListener('click', () => (fmenu ? closeFMenu() : openFMenu()));
+  fdd.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-foreign]');
+    if (!b || !fmenu) return;
+    const v = b.getAttribute('data-foreign');
+    closeFMenu(true);
+    if (v === (S.foreign_code || 'skip')) return;
+    if (await save({ foreign_code: v })) render();  // индекс пересчитает правило при ближайшем обходе
+  });
+  fdd.addEventListener('keydown', (e) => {
+    if (!fmenu) return;
+    const items = Array.from(fmenu.querySelectorAll('button'));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFMenu(true);
+    }
+  });
+  document.addEventListener('mousedown', (e) => { if (fmenu && !(e.target.closest && e.target.closest('#foreignDd'))) closeFMenu(); });
+
   /* ---------- паузы и процессы ---------- */
   $('swFull').addEventListener('click', async () => {
     const v = $('swFull').getAttribute('aria-checked') !== 'true';
@@ -488,7 +539,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented || capturing) return;
     if (dlgOpen) { e.preventDefault(); closeDialog(); return; }
-    if (menuEl) return;
+    if (menuEl || fmenu) return;
     if (SS.tauri) SS.invoke('win_hide').catch(() => {});
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !dlgOpen && !capturing) reload(); });

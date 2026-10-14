@@ -30,6 +30,12 @@ pub struct ListItem {
     pub size: u64,
     pub mtime: f64,
     pub attrs: u32,
+    /// classify: null | "submodule" | "gitignored" | "archive" | "foreign" (без classify поля нет)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<Option<&'static str>>,
+    /// classify: корень репозитория или null
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo: Option<Option<Arc<str>>>,
 }
 
 pub fn str_list(v: Option<&Value>) -> Vec<String> {
@@ -173,6 +179,7 @@ pub fn list(eng: &Engine, req: &Value) -> Result<String, String> {
         return Err("roots required".into());
     }
     let skip_cloud = get_bool(req, "skip_cloud", true);
+    let classify = get_bool(req, "classify", false);
     let spec = ListSpec {
         roots,
         exts: norm_exts(&str_list(req.get("exts"))),
@@ -180,18 +187,41 @@ pub fn list(eng: &Engine, req: &Value) -> Result<String, String> {
         excl_paths: str_list(req.get("exclude_paths")),
         skip_dot: get_bool(req, "skip_dot_dirs", true),
         skip_cloud,
+        smart: get_bool(req, "smart_excludes", false),
     };
     let mut groups: Vec<ListGroup> = Vec::new();
+    let (mut smart_dirs, mut smart_files) = (0u64, 0u64);
+    let mut tags = crate::classify::TagCounts::default();
+    let mut classify_ms = 0u64;
     for s in eng.slots() {
         let v = s.read();
-        groups.extend(list_volume(&v, &spec));
+        let mut out = list_volume(&v, &spec);
+        smart_dirs += out.smart_dirs;
+        smart_files += out.smart_files;
+        if classify {
+            let tc = Instant::now();
+            tags.add(&crate::classify::classify_groups(&v, &out.roots, &mut out.groups));
+            classify_ms += tc.elapsed().as_millis() as u64;
+        }
+        groups.extend(out.groups);
     }
     let idx_ms = t0.elapsed().as_millis() as u64;
-    let items: Vec<ListItem> = groups.into_par_iter().flat_map_iter(|g| stat_group(g, skip_cloud)).collect();
+    let items: Vec<ListItem> = groups.into_par_iter().flat_map_iter(|g| stat_group(g, skip_cloud, classify)).collect();
     let ms = t0.elapsed().as_millis() as u64;
     let n = items.len();
+    let mut extra = String::new();
+    if spec.smart {
+        extra.push_str(&format!(r#","smart_skipped":{{"dirs":{smart_dirs},"files":{smart_files}}}"#));
+    }
+    if classify {
+        // счётчики по найденным в индексе файлам (до проверки на диске)
+        extra.push_str(&format!(
+            r#","classify_ms":{classify_ms},"repos":{},"tags":{{"submodule":{},"gitignored":{},"archive":{},"foreign":{},"none":{}}}"#,
+            tags.repos, tags.submodule, tags.gitignored, tags.archive, tags.foreign, tags.none
+        ));
+    }
     let items_json = serde_json::to_string(&items).map_err(|e| e.to_string())?;
-    Ok(format!(r#"{{"total":{n},"ms":{ms},"index_ms":{idx_ms},"items":{items_json}}}"#))
+    Ok(format!(r#"{{"total":{n},"ms":{ms},"index_ms":{idx_ms}{extra},"items":{items_json}}}"#))
 }
 
 fn join(dir: &str, name: &str) -> String {
@@ -204,14 +234,27 @@ fn join(dir: &str, name: &str) -> String {
 
 /// Размер/время/атрибуты для файлов одного каталога: если нужна заметная доля каталога —
 /// одно перечисление FindFirstFileExW, иначе GetFileAttributesExW на каждый файл.
-fn stat_group(g: ListGroup, skip_cloud: bool) -> Vec<ListItem> {
+fn stat_group(g: ListGroup, skip_cloud: bool, classify: bool) -> Vec<ListItem> {
     let keep = |a: u32| a & A_DIRECTORY == 0 && !(skip_cloud && a & (A_CLOUD | A_REPARSE) != 0);
+    // тег k-го файла группы (только с classify)
+    let tag_of = |k: usize| -> (Option<Option<&'static str>>, Option<Option<Arc<str>>>) {
+        if !classify {
+            return (None, None);
+        }
+        match g.tags.get(k) {
+            Some((t, r)) => (Some(*t), Some(r.clone())),
+            None => (Some(None), Some(None)),
+        }
+    };
     let mut out = Vec::with_capacity(g.names.len());
     if g.names.len() >= 4 && g.names.len() * 8 >= g.nchild as usize {
-        let want: std::collections::HashSet<&str> = g.names.iter().map(|s| s.as_str()).collect();
+        let want: std::collections::HashMap<&str, usize> = g.names.iter().enumerate().map(|(k, s)| (s.as_str(), k)).collect();
         let ok = for_each_dir_entry(&g.dir, |name, a, size, mtime| {
-            if keep(a) && want.contains(name) {
-                out.push(ListItem { path: join(&g.dir, name), size, mtime, attrs: a });
+            if let Some(&k) = want.get(name) {
+                if keep(a) {
+                    let (tag, repo) = tag_of(k);
+                    out.push(ListItem { path: join(&g.dir, name), size, mtime, attrs: a, tag, repo });
+                }
             }
         });
         if ok {
@@ -219,11 +262,12 @@ fn stat_group(g: ListGroup, skip_cloud: bool) -> Vec<ListItem> {
         }
         out.clear();
     }
-    for n in &g.names {
+    for (k, n) in g.names.iter().enumerate() {
         let p = join(&g.dir, n);
         if let Some(st) = stat(&p) {
             if keep(st.attrs) {
-                out.push(ListItem { path: p, size: st.size, mtime: st.mtime, attrs: st.attrs });
+                let (tag, repo) = tag_of(k);
+                out.push(ListItem { path: p, size: st.size, mtime: st.mtime, attrs: st.attrs, tag, repo });
             }
         }
     }
