@@ -491,6 +491,18 @@ def _usable_gpu(torch):
     return name, cap
 
 
+def _load_model(device, dtype):
+    """Скачанную модель грузим без сети: иначе huggingface_hub при каждом запуске спрашивает Hugging Face,
+    не вышла ли новая версия. Нет её в кэше (первый запуск, оборванная загрузка) — тогда качаем."""
+    from sentence_transformers import SentenceTransformer
+
+    kw = {"device": device, "model_kwargs": {"torch_dtype": dtype}}
+    try:
+        return SentenceTransformer(MODEL_ID, local_files_only=True, **kw)
+    except OSError:
+        return SentenceTransformer(MODEL_ID, **kw)
+
+
 class Embedder:
     """Одна модель на процесс; индексатор и поиск делят её через lock."""
 
@@ -499,7 +511,6 @@ class Embedder:
 
         throttle.init()  # низкий приоритет GPU для процесса — до создания CUDA-контекста
         import torch
-        from sentence_transformers import SentenceTransformer
 
         self.throttle = throttle
         self.torch = torch
@@ -510,7 +521,7 @@ class Embedder:
             # bfloat16 — с Ampere (8.0); fp16 Gemma не держит, поэтому на более старых картах — float32
             dtype = torch.bfloat16 if cap >= (8, 0) else torch.float32
             try:
-                self.model = SentenceTransformer(MODEL_ID, device="cuda", model_kwargs={"torch_dtype": dtype})
+                self.model = _load_model("cuda", dtype)
                 self.model.encode(["проверка"], show_progress_bar=False)  # ядра под эту карту действительно есть
                 self.device = "cuda"
                 log.info("модель на видеокарте %s (sm_%d%d), %s", name, *cap, str(dtype).replace("torch.", ""))
@@ -527,7 +538,7 @@ class Embedder:
                     pass
             # Не больше половины логических ядер: фоновая индексация не должна занимать процессор целиком
             torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
-            self.model = SentenceTransformer(MODEL_ID, device="cpu", model_kwargs={"torch_dtype": torch.float32})
+            self.model = _load_model("cpu", torch.float32)
             log.info("модель на процессоре, потоков: %d", torch.get_num_threads())
         else:
             throttle.attach(self.model, torch)  # дробит фоновые порции на короткие всплески по слоям
