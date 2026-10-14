@@ -147,7 +147,7 @@ class Indexer(threading.Thread):
         return time.time() - t0
 
     # Сколько секунд в среднем уходит на файл, пока своих замеров нет (RTX 4070 SUPER)
-    DEFAULT_RATES = {"text": 0.25, "code": 0.05, "image": 0.08, "audio": 1.5, "video": 10.0}
+    DEFAULT_RATES = {"text": 0.12, "code": 0.025, "image": 0.045, "audio": 1.5, "video": 10.0}
 
     def eta(self, remaining):
         """remaining: {вид: сколько файлов осталось} -> секунд до конца или None."""
@@ -478,10 +478,9 @@ class Indexer(threading.Thread):
         except OSError:
             return None
 
-    def _dedupe(self, rows):
+    def _dedupe(self, rows, hashes):
         """Точные копии уже проиндексированного файла не разбираются и не считаются на видеокарте —
-        запоминаются копиями (status 5). -> строки, которые нужно разбирать."""
-        hashes = list(self.pool.map(self._safe_hash, rows))
+        запоминаются копиями (status 5). hashes — хеши rows (_safe_hash). -> строки, которые нужно разбирать."""
         keep, first, copies = [], {}, []
         for r, h in zip(rows, hashes):
             fid = r[0]
@@ -545,22 +544,28 @@ class Indexer(threading.Thread):
         self.state["phase"] = kind
         last_end = time.time()
         slices = iter([rows[i:i + n] for i in range(0, len(rows), n)])
-        # Пока GPU считает текущую пачку, потоки уже читают следующую
-        futures = deque()
+        # Пока GPU считает текущую пачку, потоки уже разбирают следующую, а хеши для поиска копий считаются
+        # ещё на пачку вперёд: синхронно они занимали ~0,2 с перед каждой пачкой, и видеокарта ждала
+        futures, hashing = deque(), deque()
         in_procs = kind in ("text", "code")
 
-        def submit_next():
-            while True:
-                sl = next(slices, None)
-                if sl is None:
-                    return
-                sl = self._dedupe(sl)  # копии уже посчитанного — без разбора и без видеокарты
-                if sl:
-                    break
-            # каждый файл — отдельная задача, файлы пачки разбираются параллельно
-            pool = self.procs if in_procs else self.pool  # пул процессов мог быть перезапущен
-            futures.append((sl, [pool.submit(extract.run_job, r[2], r[1], self.cfg, prio) for r in sl]))
+        def prefetch():
+            sl = next(slices, None)
+            if sl is not None:
+                hashing.append((sl, [self.pool.submit(self._safe_hash, r) for r in sl]))
 
+        def submit_next():
+            while hashing:
+                sl, hashes = hashing.popleft()
+                prefetch()
+                sl = self._dedupe(sl, [f.result() for f in hashes])  # копии уже посчитанного — без разбора и GPU
+                if sl:
+                    # каждый файл — отдельная задача, файлы пачки разбираются параллельно
+                    pool = self.procs if in_procs else self.pool  # пул процессов мог быть перезапущен
+                    futures.append((sl, [pool.submit(extract.run_job, r[2], r[1], self.cfg, prio) for r in sl]))
+                    return
+
+        prefetch()
         submit_next()
         while futures:
             sl, futs = futures.popleft()

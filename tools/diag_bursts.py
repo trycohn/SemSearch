@@ -25,7 +25,7 @@ for name, m in emb.model.named_modules():
         print("layers:", name, len(m), type(m[0]).__name__)
 run = (lambda x, **k: emb.images(x, **k)) if kind == "image" else (lambda x, **k: emb.documents(x, **k))
 run(data[:8])
-throttle.force({"bs": bsm, "duty": 1, "split": split})
+throttle.force({"bs": bsm, "tokens": int(bsm * 16 * 512), "duty": 1, "split": split})  # text: bs x 16 chunks
 throttle.trace = []
 t = time.perf_counter()
 run(data, background=True)

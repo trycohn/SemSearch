@@ -35,7 +35,8 @@ PROBE = os.path.join(APP_DIR, "tools", "frameprobe.exe")
 MODES = {"light": 0, "game": 2400}  # PS loop iterations: 0 = desktop-like, 2400 ~ 2.3 ms GPU per 720p frame
 
 S = {  # name: (kind, gpu priority, profile); profile: bs = multiplier of the default sub-batch (text 16,
-    # images 8), duty = max GPU duty cycle, split = GPU burst boundary (0 none, 1 layer, 2 attention/MLP block)
+    # images 8; text runs in "tokens" now, derived as bs x 16 chunks x 512 tokens when absent), duty = max GPU
+    # duty cycle, split = GPU burst boundary (0 none, 1 layer, 2 attention/MLP block)
     "base": (None, "normal", None),
     "cur_text": ("text", "normal", {"bs": 1, "duty": 1}),
     "cur_img": ("image", "normal", {"bs": 1, "duty": 1}),
@@ -240,16 +241,16 @@ def main():
     print(f"# hooked layers: {hooked}, gpu priority: {throttle.gpu_priority()}", file=sys.stderr)
     core.lower_priority()  # as Indexer.run does
     counter = [0, []]
-    enc = emb.model.encode
+    fwd = emb._forward
 
-    def counting_encode(sentences, *args, **kw):
+    def counting_forward(payload):  # one sub-batch: text features or a list of images
         t = time.perf_counter()
-        r = enc(sentences, *args, **kw)
+        r = fwd(payload)
         counter[1].append(time.perf_counter() - t)
-        counter[0] += len(sentences)
+        counter[0] += len(r)
         return r
 
-    emb.model.encode = counting_encode
+    emb._forward = counting_forward
     if texts:
         emb.documents(texts[:64])
     if imgs:
@@ -264,6 +265,8 @@ def main():
     modes = [m for m in a.modes.split(",") if m]
     for name in a.scenarios:
         kind, prio, prof = S[name]
+        if isinstance(prof, dict) and "tokens" not in prof:
+            prof = {**prof, "tokens": int(prof["bs"] * 16 * 512)}
         throttle.set_gpu_priority(prio)
         throttle.force(prof)
         load = None

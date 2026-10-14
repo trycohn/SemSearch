@@ -25,7 +25,7 @@ except Exception as e:
     print("tok err", e)
 emb.documents(texts[:32])
 for bs_mult in (float(x) for x in (sys.argv[1:] or ["1"])):
-    throttle.force({"bs": bs_mult, "duty": 1})
+    throttle.force({"bs": bs_mult, "tokens": int(bs_mult * 16 * 512), "duty": 1})  # text: bs x 16 chunks of ~512 tokens
     t = time.perf_counter()
     n = 0
     while time.perf_counter() - t < 8:

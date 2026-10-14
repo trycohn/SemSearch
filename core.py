@@ -9,6 +9,7 @@ import re
 import shutil
 import sqlite3
 import threading
+import types
 import uuid
 from ctypes import wintypes
 
@@ -66,6 +67,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LEGACY_CONFIG_PATH = os.path.join(APP_DIR, "config.json")  # старая раскладка: читаем, пока не перенесён
 MODEL_ID = "google/embeddinggemma-2"
 DIM = 256  # Matryoshka: 768 -> 256, индекс в 3 раза меньше почти без потери качества
+TEXT_TOKENS = 8192  # порция текстов без throttle (поиск, проверки): строк × длина
 
 HOME = os.path.expanduser("~")
 # Документы, Рабочий стол, Изображения, Видео, Музыка, Загрузки — их часто переносят на другой диск
@@ -491,6 +493,43 @@ def _usable_gpu(torch):
     return name, cap
 
 
+def _fuse_rmsnorm(model, torch):
+    """RMSNorm EmbeddingGemma 2 (170 на проход текста, плюс башни картинок и звука) считается семью отдельными
+    ядрами в float32 — у текста это треть всего времени видеокарты. F.rms_norm делает то же одним ядром.
+    Подменяем только у классов, чью формулу проверили, и только если на пробном входе результат совпал.
+    -> сколько слоёв подменено."""
+    import importlib
+
+    import torch.nn.functional as F
+
+    def fused(self, x):
+        return F.rms_norm(x, (x.shape[-1],), self.weight if self.with_scale else None, self.eps)
+
+    n = 0
+    for mod, name in (("embedding_gemma2.modeling_embedding_gemma2", "EmbeddingGemma2RMSNorm"),
+                      ("gemma4.modeling_gemma4", "Gemma4RMSNorm")):
+        try:
+            cls = getattr(importlib.import_module("transformers.models." + mod), name)
+        except (ImportError, AttributeError):
+            continue
+        norms = [m for m in model.modules() if type(m) is cls]
+        probe = next((m for m in norms if m.with_scale), None)
+        if probe is None:
+            continue
+        w = probe.weight
+        try:
+            with torch.inference_mode():
+                x = torch.randn(2, 64, w.shape[0], device=w.device, dtype=w.dtype) * 3
+                torch.testing.assert_close(fused(probe, x), probe(x))
+        except Exception as ex:
+            log.warning("%s одним ядром не совпал с исходным (%s) — оставляю как есть", name, str(ex)[:200])
+            continue
+        for m in norms:
+            m.forward = types.MethodType(fused, m)
+        n += len(norms)
+    return n
+
+
 class Embedder:
     """Одна модель на процесс; индексатор и поиск делят её через lock."""
 
@@ -531,38 +570,78 @@ class Embedder:
             log.info("модель на процессоре, потоков: %d", torch.get_num_threads())
         else:
             throttle.attach(self.model, torch)  # дробит фоновые порции на короткие всплески по слоям
+        log.info("RMSNorm одним ядром: %d слоёв", _fuse_rmsnorm(self.model, torch))
+        import cudagraphs
+
+        self.cg = cudagraphs
+        self.graphs = cudagraphs.install(self.model, throttle) if self.device == "cuda" else None
         self.lock = threading.Lock()
 
-    def _enc(self, items, bs, background=False, **kw):
+    def _enc(self, items, bs, background=False, prompt_name=None):
         """background=True — работа индексатора: размер порции и паузы между порциями задаёт throttle,
         чтобы видеокарта не душила рабочий стол, видео и игры. False (поиск) — без пауз и с обычным
-        приоритетом GPU на время расчёта."""
+        приоритетом GPU на время расчёта. bs — порция картинок и аудио (тексты режутся по токенам)."""
         if not items:
             return np.zeros((0, DIM), np.float32)
-        # Тексты сортируем по длине: в порции короткие дополняются до самого длинного,
-        # и на смешанных длинах половина работы видеокарты уходит в пустоту
-        order = sorted(range(len(items)), key=lambda i: len(items[i]) if isinstance(items[i], str) else 0)
-        ordered = [items[i] for i in order]
-        th, parts, i = self.throttle, [], 0
-        while i < len(ordered):  # lock на каждую порцию — поиск не ждёт всю пачку индексатора
-            n = th.batch_size(bs) if background else bs  # тут же выдерживается пауза после прошлой порции
+        th, done, parts = self.throttle, [], []
+        batches = (self._text_batches(items, background, prompt_name) if isinstance(items[0], str)
+                   else self._item_batches(items, bs, background))
+        for rows, payload in batches:  # lock на каждую порцию — поиск не ждёт всю пачку индексатора
             with self.lock, self.torch.inference_mode(), (th.background() if background else th.foreground()):
-                parts.append(self.model.encode(ordered[i:i + n], batch_size=n, convert_to_numpy=True,
-                                               show_progress_bar=False, **kw))
-            i += n
+                parts.append(self._forward(payload))
+            done += rows
         e = np.empty((len(items), DIM), np.float32)
-        e[order] = np.concatenate([np.asarray(p, np.float32) for p in parts])[:, :DIM]
+        e[done] = np.concatenate(parts)[:, :DIM]
         return e / np.maximum(np.linalg.norm(e, axis=1, keepdims=True), 1e-9)
+
+    def _text_batches(self, texts, background, prompt_name):
+        """Тексты токенизируются всей пачкой и режутся на порции по бюджету токенов (строк × длина до корзины
+        cudagraphs): время слоя растёт с числом токенов, а не текстов, — порция длинных фрагментов кода иначе
+        дала бы всплеск в разы длиннее. Внутри порции длины близкие: короткие не дополняются до длинных.
+        -> (номера текстов, признаки порции)"""
+        m, cg = self.model, self.cg
+        with self.lock:  # токенизатор не потокобезопасен, а поиск зовёт его из другого потока
+            feats = m.preprocess(texts, prompt=m.prompts[prompt_name] if prompt_name else None)
+        am = feats["attention_mask"]
+        lens, left = am.sum(1).tolist(), not bool(am[:, 0].all())  # дополнение слева — срезаем с конца
+        order = sorted(range(len(texts)), key=lens.__getitem__)
+        i = 0
+        while i < len(order):
+            budget = self.throttle.tokens(TEXT_TOKENS) if background else TEXT_TOKENS  # + пауза после прошлой
+            n = next((b for b in reversed(cg.BATCHES)
+                      if b * cg.bucket_len(lens[order[min(i + b, len(order)) - 1]]) <= budget), 1)
+            rows = order[i:i + n]
+            cols = slice(am.shape[1] - lens[rows[-1]], None) if left else slice(lens[rows[-1]])
+            yield rows, {k: v[rows][:, cols] if self.torch.is_tensor(v) and v.dim() == 2 else
+                         v[rows] if self.torch.is_tensor(v) else v for k, v in feats.items()}
+            i += n
+
+    def _item_batches(self, items, bs, background):
+        i = 0
+        while i < len(items):
+            n = self.throttle.batch_size(bs) if background else bs  # тут же выдерживается пауза после прошлой порции
+            yield list(range(i, min(i + n, len(items)))), items[i:i + n]
+            i += n
+
+    def _forward(self, payload):
+        """Одна порция (признаки текстов или список картинок/аудио) — то же, что SentenceTransformer.encode,
+        но без его .to(device) и .eval() на каждый вызов: они обходят все ~15 тыс. модулей модели (с видео-
+        и аудиобашнями) — ~20 мс процессора, столько же, сколько видеокарта считает порцию из 4 текстов."""
+        from sentence_transformers.util import batch_to_device
+
+        m = self.model
+        feats = m.preprocess(payload) if isinstance(payload, list) else payload
+        return m(batch_to_device(feats, m.device))["sentence_embedding"].float().cpu().numpy()
 
     def query(self, q, code=False):
         """Вектор запроса. Промпт CodeRetrieval лучше для вкладки «Код», но завышает косинусы,
         поэтому в смешанной выдаче код сравнивается с текстом на общем промпте."""
-        return self._enc([neutralize(q)], 1, prompt_name="CodeRetrieval" if code else "SearchQuery")[0]
+        return self._enc([neutralize(q)], None, prompt_name="CodeRetrieval" if code else "SearchQuery")[0]
 
     # background=True передаёт только индексатор; поиск (в т.ч. по картинке) зовёт без него
     def documents(self, texts, background=False):
         # тексты уже в формате "title: ... | text: ..."
-        return self._enc([neutralize(t) for t in texts], 16, background)
+        return self._enc([neutralize(t) for t in texts], None, background)
 
     def images(self, pil_images, background=False):
         return self._enc(pil_images, 8, background)
@@ -573,7 +652,10 @@ class Embedder:
 
     def free_cache(self):
         if self.device == "cuda":
-            self.torch.cuda.empty_cache()
+            with self.lock:  # графы могут как раз считать запрос поиска
+                if self.graphs:
+                    self.graphs.reset()  # пул графов и их буферы тоже отдаём (пауза ради игры)
+                self.torch.cuda.empty_cache()
 
 
 # ---------------------------------------------------------------- векторы в памяти

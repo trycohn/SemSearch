@@ -14,6 +14,9 @@ What is applied
   layer ("split": 1) or block ("split": 2), so the GPU never holds more than ~2-5 ms of our work and
   graphics gets the GPU between bursts; with "duty" < 1 they also sleep after each burst so that
   busy / (busy + pause) <= duty. Outside background() the hooks cost a thread-local lookup.
+  The text tower runs as one CUDA graph per layer (cudagraphs.py): replays fire no hooks, so it calls
+  layer_done() after every layer instead, and text sub-batches are sized in tokens ("tokens") — a layer
+  of N tokens is one burst whatever the number of texts.
 - Profile, re-evaluated before every sub-batch (input/lock checks cached 0.25 s; NVML runs in a 1 Hz
   daemon thread):
     full   - no keyboard/mouse input for IDLE_AFTER s, or the session is locked: maximum throughput;
@@ -38,12 +41,13 @@ IDLE_AFTER = 60.0     # s without input -> "full"
 OTHERS_STRONG = 45.0  # % SM utilization of all other processes (DWM included) -> "strong"
 OTHERS_CALM = 35.0    # "strong" ends after this stays below for HOLD s
 HOLD = 5.0
-# bs: multiplier of the caller's sub-batch (text 16, images 8, audio 4); duty: max GPU duty cycle;
-# split: burst boundary, 1 = transformer layer, 2 = attention / MLP block
+# bs: multiplier of the caller's sub-batch (images 8, audio 4); tokens: text sub-batch budget, texts x padded
+# length (graph path: one layer ~0.4 ms per 1000 tokens on an RTX 4070 SUPER); duty: max GPU duty cycle;
+# split: burst boundary, 1 = transformer layer, 2 = attention / MLP block (graph path: always a layer)
 PROFILES = {
-    "full": {"bs": 0.5, "duty": 1.0, "split": 1},
-    "gentle": {"bs": 0.25, "duty": 1.0, "split": 2},
-    "strong": {"bs": 0.125, "duty": 0.5, "split": 2},
+    "full": {"bs": 0.5, "tokens": 6144, "duty": 1.0, "split": 1},
+    "gentle": {"bs": 0.25, "tokens": 2048, "duty": 1.0, "split": 2},
+    "strong": {"bs": 0.125, "tokens": 1024, "duty": 0.5, "split": 2},
 }
 GPU_PRIORITY = "idle"
 
@@ -295,16 +299,34 @@ def _start_hook(module, args):
 def _layer_hook(module, args, output):
     st = getattr(_tls, "bg", None)
     if st is not None and st["split"] == 1:
-        _sync_point(st, module)
+        _sync_point(st, type(module).__name__)
 
 
 def _block_hook(module, args, output):
     st = getattr(_tls, "bg", None)
     if st is not None and st["split"] == 2:
-        _sync_point(st, module)
+        _sync_point(st, type(module).__name__)
 
 
-def _sync_point(st, module):
+def layer_done():
+    """CUDA-graph path: a replayed layer fires no hooks, so cudagraphs.py calls this after each one."""
+    st = getattr(_tls, "bg", None)
+    if st is not None and st["split"]:
+        _sync_point(st, "graph")
+
+
+@contextmanager
+def suspended():
+    """No sync points for the duration (cudagraphs.py: synchronize is illegal while a graph is captured)."""
+    st = getattr(_tls, "bg", None)
+    _tls.bg = None
+    try:
+        yield
+    finally:
+        _tls.bg = st
+
+
+def _sync_point(st, name):
     try:
         _torch.cuda.synchronize()
         now = time.perf_counter()
@@ -312,7 +334,7 @@ def _sync_point(st, module):
         st["busy"] += busy
         st["bursts"] += 1
         if trace is not None:
-            trace.append((busy, type(module).__name__))
+            trace.append((busy, name))
         if st["duty"] < 1.0:
             time.sleep(busy * (1.0 - st["duty"]) / st["duty"])
         st["t"] = time.perf_counter()
@@ -320,16 +342,30 @@ def _sync_point(st, module):
         st["split"] = 0
 
 
+def _owed_pause(p):
+    if p["duty"] < 1.0:
+        gap = _last_gap - (time.perf_counter() - _last_end)
+        if gap > 0:
+            time.sleep(min(gap, 2.0))
+
+
 def batch_size(default):
     """Before a background sub-batch (outside the model lock): waits out the pause still owed by the
     previous sub-batch and returns the sub-batch size for the current profile."""
     try:
         p = _profile()
-        if p["duty"] < 1.0:
-            gap = _last_gap - (time.perf_counter() - _last_end)
-            if gap > 0:
-                time.sleep(min(gap, 2.0))
+        _owed_pause(p)
         return max(1, int(round(default * p["bs"])))
+    except Exception:
+        return default
+
+
+def tokens(default):
+    """batch_size() for text: the sub-batch budget in tokens (texts x padded length)."""
+    try:
+        p = _profile()
+        _owed_pause(p)
+        return int(p.get("tokens", default))
     except Exception:
         return default
 
@@ -360,7 +396,7 @@ def background():
 
 
 def force(profile=None):
-    """Benchmarks: pin a profile name or a dict {"bs", "duty", "split"}; None -> adaptive."""
+    """Benchmarks: pin a profile name or a dict {"bs", "tokens", "duty", "split"}; None -> adaptive."""
     global _forced
     _forced = profile
 
