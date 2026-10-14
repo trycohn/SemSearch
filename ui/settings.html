@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="semsearch-token" content="__SEMSEARCH_TOKEN__">
+<title>SemSearch — настройки</title>
+<link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/ui/settings.css">
+<script src="/ui/common.js"></script>
+<script src="/ui/settings.js" defer></script>
+</head>
+<body>
+<div class="win" id="win">
+
+<div class="tbar" data-tauri-drag-region="deep">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<span class="ttl">Настройки SemSearch</span>
+<div class="caps" id="caps" hidden>
+<button class="cap" id="capMin" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap x" id="capClose" aria-label="Закрыть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+</div>
+
+<div class="page">
+<h1>Настройки</h1>
+
+<section class="sec" aria-labelledby="s-where">
+<h2 id="s-where">Где искать</h2>
+<div class="card">
+<div class="crow top">
+<div><div>Поиск по смыслу</div><div class="desc">Документы, код, фото, аудио и видео в этих папках</div></div>
+<button class="btn2" id="addRoot">Добавить папку</button>
+</div>
+<div class="roots" id="roots"></div>
+</div>
+<div class="card crow">
+<div><div>Поиск по имени</div><div class="desc">Имена всех файлов на выбранных дисках, включая системные папки</div></div>
+<div class="drives" id="drives"></div>
+</div>
+<div class="card">
+<div class="crow top">
+<div><div>Не индексировать</div><div class="desc">Папки с такими именами пропускаются везде. Скрытые папки с точкой (.ssh, .aws) — всегда.</div></div>
+<button class="btn2" id="editExcl">Изменить</button>
+</div>
+<div class="excl" id="excl"></div>
+</div>
+</section>
+
+<section class="sec" aria-labelledby="s-win">
+<h2 id="s-win">Окно и запуск</h2>
+<div class="card">
+<div class="crow">
+<div><div>Горячая клавиша</div><div class="desc">Открывает окно поиска из любой программы</div></div>
+<div class="hk" id="hk">
+<span class="keys" id="hkKeys"></span>
+<button class="btn2" id="hkBtn">Изменить</button>
+</div>
+</div>
+<div class="err" id="hkErr" role="alert" hidden></div>
+</div>
+<div class="card crow nowrap">
+<div><div id="l-auto">Запускать вместе с Windows</div><div class="desc">Работает в трее, окно открывается по горячей клавише</div></div>
+<button class="sw" id="swAuto" role="switch" aria-checked="false" aria-labelledby="l-auto"><span></span></button>
+</div>
+<div class="card crow">
+<div><div id="l-theme">Тема</div><div class="desc">Светлая, тёмная или как в Windows</div></div>
+<div class="dd">
+<button class="ddb" id="themeBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-theme themeLbl"><span id="themeLbl">Как в Windows</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+</div>
+</section>
+
+<section class="sec" aria-labelledby="s-games">
+<h2 id="s-games">Игры и нагрузка</h2>
+<div class="card crow nowrap">
+<div><div id="l-full">Пауза при полноэкранных приложениях</div><div class="desc">Игры, фильмы, презентации — и окна без рамки на весь экран. Видеопамять отдаётся игре.</div></div>
+<button class="sw" id="swFull" role="switch" aria-checked="false" aria-labelledby="l-full"><span></span></button>
+</div>
+<div class="card crow">
+<div><div>Пауза, пока запущены</div><div class="desc">Например, игры в окне</div></div>
+<div class="procs" id="procs"><button class="btn2" id="addProc">Добавить процесс</button></div>
+</div>
+<div class="card crow nowrap">
+<div><div id="l-batt">Пауза от батареи</div><div class="desc">На ноутбуке без зарядки индексация ждёт</div></div>
+<button class="sw" id="swBatt" role="switch" aria-checked="false" aria-labelledby="l-batt"><span></span></button>
+</div>
+</section>
+
+<section class="sec" aria-labelledby="s-media">
+<h2 id="s-media">Видео, аудио и большие файлы</h2>
+<div class="media">
+<label>Кадр из видео каждые, с<input type="number" min="1" step="1" data-key="video_frame_every_sec"></label>
+<label>Кадров на видео, не больше<input type="number" min="1" step="1" data-key="video_max_frames"></label>
+<label>Отрезок аудио, с<input type="number" min="1" step="1" data-key="audio_segment_sec"></label>
+<label>Отрезков, не больше<input type="number" min="1" step="1" data-key="audio_max_segments"></label>
+<label>Текст больше, МБ — пропуск<input type="number" min="1" step="1" data-key="max_text_mb"></label>
+<label>Страниц PDF, не больше<input type="number" min="1" step="1" data-key="max_pdf_pages"></label>
+</div>
+</section>
+
+<section class="sec" aria-labelledby="s-index">
+<h2 id="s-index">Индекс</h2>
+<div class="card">
+<div class="info">
+<div><div class="k">Модель</div><div id="iModel"></div></div>
+<div><div class="k">Размер на диске</div><div id="iSize"></div></div>
+<div><div class="k">Проверка всего диска</div><div id="iRescan"></div></div>
+<div><div class="k">Не удалось прочитать</div><div id="iFailed"></div></div>
+</div>
+<div class="ibtns">
+<button class="btn2 long" id="bRescan"><span id="bRescanL">Пересканировать сейчас</span></button>
+<button class="btn2" id="bLog">Открыть журнал</button>
+<button class="btn2 danger" id="bRebuild">Собрать индекс заново…</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</body>
+</html>

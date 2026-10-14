@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — анимации</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--hover:#ebebeb;--hover2:#f8f8f8;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--hover:#333333;--hover2:#404040;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.mw{position:absolute;left:50%;top:50%;width:280px;height:168px;margin:-84px 0 0 -140px;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden}
+.mf{position:relative;height:24px;margin:12px;border:1px solid var(--line);border-radius:5px;background:var(--surface);display:flex;align-items:center;padding:0 8px;gap:6px;font-size:11px}
+.mu{position:absolute;left:-1px;right:-1px;bottom:-1px;height:2px;background:var(--accent)}
+.ln{height:6px;border-radius:3px;background:var(--line2);margin:9px 12px}
+.ico{flex:none;width:12px;height:12px;border-radius:3px;background:var(--accent)}
+.spin{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.splash{animation:splash 4.2s var(--eo) infinite}
+@keyframes splash{0%{opacity:0;transform:scale(.85)}8%,40%{opacity:1;transform:none}48%,100%{opacity:0;transform:scale(1.04)}}
+.lwin{animation:lwin 4.2s var(--eo) infinite}
+@keyframes lwin{0%,44%{opacity:0;transform:translateY(14px) scale(.97)}54%,92%{opacity:1;transform:none}100%{opacity:0}}
+.lund{transform-origin:center;animation:lund 4.2s var(--eo) infinite}
+@keyframes lund{0%,54%{transform:scaleX(0)}64%,100%{transform:scaleX(1)}}
+.caret{display:inline-block;width:1px;height:12px;background:var(--text);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.swin{animation:swin 3s infinite}
+@keyframes swin{0%{opacity:0;transform:translateY(8px) scale(.96);animation-timing-function:var(--eo)}8%,66%{opacity:1;transform:none;animation-timing-function:var(--ei)}72%,100%{opacity:0;transform:scale(.98)}}
+.kb1{animation:kb1 3s infinite}
+@keyframes kb1{0%{opacity:0}3%,16%{opacity:1}22%,100%{opacity:0}}
+.kb2{animation:kb2 3s infinite}
+@keyframes kb2{0%,56%{opacity:0}60%,72%{opacity:1}78%,100%{opacity:0}}
+.typed{display:inline-block;overflow:hidden;white-space:nowrap;vertical-align:bottom;animation:type 3.6s steps(17) infinite}
+@keyframes type{0%{width:0}30%,100%{width:17ch}}
+.ibar{position:absolute;left:-1px;right:-1px;bottom:-1px;height:2px;overflow:hidden}
+.ibar i{position:absolute;top:0;bottom:0;width:40%;background:var(--accent);animation:ibar 3.6s infinite}
+@keyframes ibar{0%,30%{opacity:0;transform:translateX(-100%)}32%{opacity:1}50%{opacity:1;transform:translateX(250%)}52%,100%{opacity:0}}
+.shim{background:linear-gradient(90deg,var(--line) 25%,var(--hover2) 50%,var(--line) 75%);background-size:200% 100%;animation:shim 1.2s linear infinite}
+@keyframes shim{from{background-position:100% 0}to{background-position:-100% 0}}
+.skv{animation:skv 3.6s infinite}
+@keyframes skv{0%,31%{opacity:0}34%,50%{opacity:1}54%,100%{opacity:0}}
+.rs{animation:rs 3.6s var(--eo) infinite both}
+@keyframes rs{0%,52%{opacity:0;transform:translateY(6px)}60%,94%{opacity:1;transform:none}100%{opacity:0}}
+.fadein{animation:fadein .22s var(--eo) both}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.th{animation:th 3s var(--eo) infinite both}
+@keyframes th{0%,18%{opacity:0;filter:blur(6px);transform:scale(1.04)}40%,90%{opacity:1;filter:none;transform:none}100%{opacity:0}}
+.ixbar{animation:ixbar 6s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes ixbar{0%{width:6%}20%{width:31%}40%{width:52%}55%{width:79%}68%,100%{width:100%}}
+.ixa{animation:ixa 6s infinite}
+@keyframes ixa{0%,66%{opacity:1;transform:none}72%,100%{opacity:0;transform:translateY(-6px)}}
+.ixb{animation:ixb 6s var(--eo) infinite}
+@keyframes ixb{0%,68%{opacity:0;transform:translateY(6px)}76%,96%{opacity:1;transform:none}100%{opacity:0}}
+.chk{stroke-dasharray:24;animation:chk 6s var(--eo) infinite}
+@keyframes chk{0%,72%{stroke-dashoffset:24}82%,100%{stroke-dashoffset:0}}
+.pulse{animation:pulse 1.6s var(--eo) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 50%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+.fly{animation:fly 3.2s var(--eo) infinite}
+@keyframes fly{0%{opacity:0;transform:translate(-90px,70px) rotate(-8deg)}12%{opacity:1}36%,52%{opacity:1;transform:translate(0,0) rotate(-3deg)}58%,100%{opacity:0;transform:translate(0,8px) scale(.8)}}
+.ovl{animation:ovl 3.2s infinite}
+@keyframes ovl{0%,24%{opacity:0}32%,54%{opacity:1}60%,100%{opacity:0}}
+.breathe{animation:breathe 1.2s ease-in-out infinite alternate}
+@keyframes breathe{from{inset:10px}to{inset:6px}}
+.dres{animation:dres 3.2s var(--eo) infinite both}
+@keyframes dres{0%,58%{opacity:0;transform:scale(.94)}68%,94%{opacity:1;transform:none}100%{opacity:0}}
+.press{animation:press 3s infinite}
+@keyframes press{0%,8%,16%,100%{transform:none}11%{transform:scale(.92)}}
+.toast{animation:toast 3s infinite}
+@keyframes toast{0%,12%{opacity:0;transform:translateY(14px);animation-timing-function:var(--eo)}20%,70%{opacity:1;transform:none;animation-timing-function:var(--ei)}78%,100%{opacity:0;transform:translateY(4px)}}
+.menu{transform-origin:bottom right;animation:menu 3.2s infinite}
+@keyframes menu{0%,10%{opacity:0;transform:translateY(8px) scale(.98);animation-timing-function:var(--eo)}18%,78%{opacity:1;transform:none;animation-timing-function:var(--ei)}84%,100%{opacity:0;transform:translateY(4px)}}
+.mi2{animation:mi2 3.2s var(--eo) infinite both}
+@keyframes mi2{0%,13%{opacity:0;transform:translateY(4px)}24%,78%{opacity:1;transform:none}84%,100%{opacity:0}}
+.mload{animation:mload 4s infinite}
+@keyframes mload{0%,58%{opacity:1}64%,100%{opacity:0}}
+.mdone{animation:mdone 4s var(--eo) infinite}
+@keyframes mdone{0%,60%{opacity:0;transform:scale(.9)}68%,94%{opacity:1;transform:none}100%{opacity:0}}
+.chk2{stroke-dasharray:24;animation:chk2 4s var(--eo) infinite}
+@keyframes chk2{0%,64%{stroke-dashoffset:24}74%,100%{stroke-dashoffset:0}}
+.fen{animation:fen 4s infinite}
+@keyframes fen{0%,60%{opacity:.45}70%,100%{opacity:1}}
+.rbtn:hover{background:var(--hover)}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+<div style="max-width: 1200px; margin: 0 auto; padding: 36px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Анимации</h1>
+<p style="margin: 0; max-width: 760px; color: var(--muted)">Короткие и спокойные: окно и результаты появляются быстро и плавно, ничего не прыгает. Ролики крутятся сами; вкладки, выбор результата и пауза — кликабельные.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px">
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden">
+<div class="splash" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px">
+<span style="width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: var(--onAccent); display: flex; align-items: center; justify-content: center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg></span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted)"><svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" style="color: var(--accent)"><path d="M12 3a9 9 0 0 1 9 9"></path></svg>Загружаю модель…</span>
+</div>
+<div class="mw lwin">
+<div class="mf"><span class="ico"></span><span class="caret"></span><span class="mu lund"></span></div>
+<div class="ln" style="width: 70%"></div><div class="ln" style="width: 55%"></div><div class="ln" style="width: 62%"></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Запуск программы</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Значок с кольцом, пока грузится модель → окно поднимается на 14 px и проявляется за 320 мс, полоса поля раскрывается из центра, курсор мигает.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); overflow: hidden">
+<div class="mw swin">
+<div class="mf"><span class="ico"></span><span class="caret"></span><span class="mu"></span></div>
+<div class="ln" style="width: 66%"></div><div class="ln" style="width: 48%"></div>
+</div>
+<span class="kb1" style="position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 3px 10px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 600">Ctrl+Alt+S</span>
+<span class="kb2" style="position: absolute; left: 50%; bottom: 14px; margin-left: -18px; padding: 3px 10px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 600">Esc</span>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Открыть и спрятать</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">По клавише окно вырастает с 96% за 160 мс (замедление). По Esc уходит за 120 мс (ускорение) — прятать всегда быстрее, чем показывать.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden">
+<div class="mw">
+<div class="mf"><span class="ico"></span><span class="typed">договор про крышу</span><span class="caret"></span><span class="ibar"><i></i></span></div>
+<div style="position: relative">
+<div class="skv" style="position: absolute; left: 0; right: 0; top: 0">
+<div class="shim" style="height: 26px; margin: 6px 12px; border-radius: 5px"></div>
+<div class="shim" style="height: 26px; margin: 6px 12px; border-radius: 5px"></div>
+<div class="shim" style="height: 26px; margin: 6px 12px; border-radius: 5px"></div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 0">
+<div class="rs" style="display: flex; gap: 8px; align-items: center; height: 26px; margin: 6px 12px"><span style="width: 18px; height: 18px; border-radius: 4px; background: var(--hover)"></span><span style="flex: 1; height: 6px; border-radius: 3px; background: var(--line2)"></span></div>
+<div class="rs" style="display: flex; gap: 8px; align-items: center; height: 26px; margin: 6px 12px; animation-delay: .06s"><span style="width: 18px; height: 18px; border-radius: 4px; background: var(--hover)"></span><span style="width: 60%; height: 6px; border-radius: 3px; background: var(--line2)"></span></div>
+<div class="rs" style="display: flex; gap: 8px; align-items: center; height: 26px; margin: 6px 12px; animation-delay: .12s"><span style="width: 18px; height: 18px; border-radius: 4px; background: var(--hover)"></span><span style="width: 75%; height: 6px; border-radius: 3px; background: var(--line2)"></span></div>
+</div>
+</div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Ввод запроса и загрузка</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Бегущая полоска под полем, скелетоны с бликом — только если ответ дольше 150 мс. Результаты всплывают на 6 px с задержкой 25 мс на строку.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center">
+<div style="width: 300px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div role="tablist" aria-label="Вкладки" style="position: relative; display: flex; border-bottom: 1px solid var(--line)">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5"><button role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" class="rbtn" style="width: 60px; height: 36px; border: 0; background: transparent; font-size: 12px; transition: color .2s; {{t.style}}">{{t.label}}</button></sc-for>
+<span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; width: 18px; height: 3px; border-radius: 2px; background: var(--accent); transition: transform .25s cubic-bezier(.2,0,0,1); transform: translateX({{pillX}}px)"></span>
+</div>
+<div style="padding: 6px 0 10px"><sc-for list="{{tabLines}}" as="l" hint-placeholder-count="3"><div class="ln" style="transition: width .3s cubic-bezier(.2,0,0,1); width: {{l}}"></div></sc-for></div>
+</div>
+<span style="margin-top: 10px; font-size: 12px; color: var(--muted)">нажмите на вкладку</span>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Вкладки</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Полоска переезжает к новой вкладке за 250 мс, строки плавно меняют ширину; старая выдача остаётся видна, пока не пришла новая.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 10px">
+<div style="width: 170px; display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<button onClick="{{r.pick}}" aria-pressed="{{r.on}}" class="rbtn" style="position: relative; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 0; border-radius: 6px; text-align: left; font-size: 12px; transition: background .15s; {{r.style}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent); transition: transform .2s cubic-bezier(.2,0,0,1); transform: scaleY({{r.pill}})"></span><span style="width: 16px; height: 16px; border-radius: 4px; flex: none; background: {{r.c}}"></span>{{r.label}}</button>
+</sc-for>
+</div>
+<div style="width: 130px; height: 150px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<sc-if value="{{sel0}}" hint-placeholder-val="{{true}}"><div class="fadein" style="padding: 10px"><div style="height: 70px; border-radius: 4px; background: #dccdb9"></div><div class="ln" style="margin: 10px 0 0; width: 80%"></div><div class="ln" style="margin: 8px 0 0; width: 55%"></div></div></sc-if>
+<sc-if value="{{sel1}}" hint-placeholder-val="{{false}}"><div class="fadein" style="padding: 10px"><div style="height: 70px; border-radius: 4px; background: #56606b"></div><div class="ln" style="margin: 10px 0 0; width: 65%"></div><div class="ln" style="margin: 8px 0 0; width: 85%"></div></div></sc-if>
+<sc-if value="{{sel2}}" hint-placeholder-val="{{false}}"><div class="fadein" style="padding: 10px"><div style="height: 70px; border-radius: 4px; background: #a8bccf"></div><div class="ln" style="margin: 10px 0 0; width: 90%"></div><div class="ln" style="margin: 8px 0 0; width: 40%"></div></div></sc-if>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Выбор результата и просмотр</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Фон строки — 150 мс, метка слева вырастает за 200 мс, панель просмотра сменяется наплывом за 220 мс. Нажмите на строки.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px">
+<sc-for list="{{thumbs}}" as="m" hint-placeholder-count="3">
+<span style="position: relative; display: block; width: 100px; height: 75px; border-radius: 6px; overflow: hidden; background: {{m.ph}}">
+<span class="th" style="position: absolute; inset: 0; background: {{m.c1}}; animation-delay: {{m.d}}"><span style="position: absolute; inset: 0; background: {{m.c2}}; clip-path: {{m.p}}"></span></span>
+</span>
+</sc-for>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Миниатюры фото и кадров</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Сначала плашка основного цвета картинки, потом миниатюра проявляется из размытия за 240 мс, по очереди слева направо.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 290px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12px">
+<div style="position: relative; height: 20px">
+<span class="ixa" style="position: absolute; inset: 0; display: flex; align-items: center; gap: 8px"><span class="pulse" style="width: 8px; height: 8px; border-radius: 4px; background: var(--accent)"></span>Индексирую видео</span>
+<span class="ixb" style="position: absolute; inset: 0; display: flex; align-items: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg>Индекс актуален</span>
+</div>
+<div style="margin-top: 10px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><div class="ixbar" style="height: 100%; border-radius: 2px; background: var(--accent)"></div></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Индексация</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Полоса догоняет новое значение за 400 мс, а не прыгает; точка мягко пульсирует. В конце текст сменяется, а галочка дорисовывается.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 290px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="position: relative; flex: 1; height: 20px">
+<span style="position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; transition: opacity .2s, transform .2s cubic-bezier(.2,0,0,1); {{runStyle}}"><span class="pulse" style="width: 8px; height: 8px; border-radius: 4px; background: var(--accent)"></span>Индексирую фото</span>
+<span style="position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; transition: opacity .2s, transform .2s cubic-bezier(.2,0,0,1); {{pausedStyle}}"><span style="width: 8px; height: 8px; border-radius: 4px; background: var(--muted)"></span>На паузе</span>
+</div>
+<button onClick="{{togglePause}}" aria-label="{{pauseLabel}}" class="rbtn" style="position: relative; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 8px; top: 8px; transition: opacity .2s, transform .25s cubic-bezier(.2,0,0,1); {{iconPause}}"><path d="M9 5v14 M15 5v14"></path></svg>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="position: absolute; left: 8px; top: 8px; transition: opacity .2s, transform .25s cubic-bezier(.2,0,0,1); {{iconPlay}}"><path d="M8 5l11 7-11 7z"></path></svg>
+</button>
+</div>
+<div style="margin-top: 10px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><div style="width: 62%; height: 100%; border-radius: 2px; transition: background .3s; {{barStyle}}"></div></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Пауза и продолжение</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Значки меняются поворотом с наплывом, подпись съезжает на 6 px, полоса гаснет до серого. Так же — когда пауза включилась сама из-за игры.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden">
+<div class="mw">
+<div class="mf"><span class="ico"></span><span class="mu"></span></div>
+<div style="display: flex; gap: 6px; padding: 0 12px">
+<span class="dres" style="flex: 1; height: 54px; border-radius: 4px; background: #c7d3de"></span>
+<span class="dres" style="flex: 1; height: 54px; border-radius: 4px; background: #d5dbe1; animation-delay: .05s"></span>
+<span class="dres" style="flex: 1; height: 54px; border-radius: 4px; background: #e6d8c4; animation-delay: .1s"></span>
+</div>
+<div class="ovl" style="position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent)"><span class="breathe" style="position: absolute; border: 2px dashed var(--accent); border-radius: 6px"></span>Отпустите — найду похожие</div>
+</div>
+<span class="fly" style="position: absolute; left: 50%; top: 50%; width: 56px; height: 42px; margin: -21px 0 0 -28px; border-radius: 4px; background: #c7d3de; border: 2px solid #ffffff; box-shadow: 0 6px 16px rgba(0,0,0,.25)"></span>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Поиск по картинке</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Когда картинку тащат в окно — подсветка и «дышащая» пунктирная рамка. После броска картинка уменьшается, похожие фото появляются по очереди.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden">
+<div class="mw">
+<div style="padding: 14px 12px 0; font-size: 12px; font-weight: 600">Договор подряда №14.pdf</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 4px 12px 0"><span style="flex: 1; height: 6px; border-radius: 3px; background: var(--line2)"></span><span class="press" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9z M5 15H4V4h11v1"></path></svg></span></div>
+<span class="toast" style="position: absolute; left: 50%; bottom: 14px; margin-left: -72px; width: 144px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>Путь скопирован</span>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Копировать путь и подсказки</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Кнопка коротко «вдавливается», подсказка всплывает снизу за 200 мс, держится 1,6 с и уходит за 150 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: #2a3442; overflow: hidden; color: #f2f2f2">
+<div style="position: absolute; right: 12px; bottom: 40px; width: 292px; transform: scale(.6); transform-origin: bottom right; font-size: 14px; line-height: 1.45">
+<div class="menu" style="box-sizing: border-box; padding: 4px; border: 1px solid #3f3f3f; border-radius: 8px; background: #2c2c2c; box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+<div class="mi2" style="display: flex; gap: 10px; padding: 10px 12px 12px; border-bottom: 1px solid #3f3f3f; margin-bottom: 4px">
+<span style="flex: none; width: 32px; height: 32px; border-radius: 6px; background: #73a7d8; color: #111111; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg></span>
+<div style="flex: 1; min-width: 0"><div style="font-weight: 600">SemSearch</div><div style="font-size: 12px; color: #c8c8c8">Индексирую видео: 482 из 612</div><div style="margin-top: 6px; height: 3px; border-radius: 2px; background: #4a4a4a; overflow: hidden"><div style="width: 79%; height: 100%; background: #73a7d8"></div></div></div>
+</div>
+<div class="mi2" style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; animation-delay: .04s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg><span style="flex: 1; font-weight: 600">Открыть поиск</span><span style="font-size: 12px; color: #c8c8c8">Ctrl+Alt+S</span></div>
+<div class="mi2" style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; animation-delay: .08s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14 M15 5v14"></path></svg><span>Пауза индексации</span></div>
+<div class="mi2" style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; animation-delay: .12s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7"></path></svg><span>Пересканировать</span></div>
+<div class="mi2" style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; animation-delay: .16s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg><span>Настройки</span></div>
+<div class="mi2" style="height: 1px; margin: 4px 0; background: #3f3f3f; animation-delay: .2s"></div>
+<div class="mi2" style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; animation-delay: .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9 M6.5 6.5a8 8 0 1 0 11 0"></path></svg><span>Выйти из SemSearch</span></div>
+</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 34px; background: #1c1c1c; display: flex; align-items: center; justify-content: flex-end; padding-right: 60px"><span style="width: 26px; height: 26px; border-radius: 4px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="color: #73a7d8"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg></span></div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Меню в трее</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Меню поднимается от значка на 8 px за 160 мс, пункты проявляются следом с шагом 40 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 220px; background: var(--bg); overflow: hidden">
+<div class="mw">
+<div class="mf fen"><span class="ico"></span><span style="color: var(--muted)">Что ищем?</span><span class="mu"></span></div>
+<div style="position: relative; height: 90px">
+<div class="mload" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--muted)">
+<svg class="spin" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg>
+Загружаю модель на видеокарту
+</div>
+<div class="mdone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--muted)">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk2" d="M5 12l5 5L20 7"></path></svg>
+Готово — можно искать
+</div>
+</div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Модель ещё грузится</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Если окно открыли раньше, чем модель готова: кольцо и честная подпись, поле приглушено. Готово — галочка и поле оживает. Поиск по имени работает сразу.</p></div>
+</div>
+
+</div>
+
+<section aria-labelledby="mspec" style="border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<h2 id="mspec" style="margin: 0; padding: 14px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--line)">Тайминги для реализации</h2>
+<div style="overflow-x: auto">
+<div style="min-width: 640px">
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) 130px minmax(0, 1.4fr); gap: 16px; padding: 8px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line)"><span>Что</span><span>Длительность</span><span>Кривая и детали</span></div>
+<sc-for list="{{spec}}" as="s" hint-placeholder-count="9">
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) 130px minmax(0, 1.4fr); gap: 16px; padding: 9px 16px; font-size: 13px; border-bottom: 1px solid var(--line)"><span>{{s.what}}</span><span style="font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px">{{s.ms}}</span><span style="color: var(--muted)">{{s.how}}</span></div>
+</sc-for>
+</div>
+</div>
+<p style="margin: 0; padding: 12px 16px 14px; font-size: 13px; color: var(--muted)">Если в Windows выключены «Эффекты анимации» — остаются только наплывы прозрачности, без сдвигов и масштаба. Анимируются только transform и opacity, чтобы всё шло в 60 кадров даже во время индексации.</p>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":2700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const tab = st.tab ?? 0;
+    const sel = st.sel ?? 0;
+    const paused = !!st.paused;
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const tabs = ['Всё', 'Доки', 'Код', 'Фото', 'Аудио'].map((label, i) => ({
+      label, on: i === tab,
+      style: i === tab ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)',
+      pick: () => this.setState({ tab: i })
+    }));
+    const LINES = [['82%', '60%', '72%'], ['90%', '45%', '66%'], ['55%', '80%', '38%'], ['70%', '70%', '50%'], ['40%', '62%', '85%']];
+    const rows = ['Договор.pdf', 'IMG_4512.jpg', 'Обход крыши.mp4'].map((label, i) => ({
+      label, on: i === sel, pill: i === sel ? 1 : 0, c: ['#dccdb9', '#56606b', '#a8bccf'][i],
+      style: i === sel ? 'background: color-mix(in srgb, var(--accent) 12%, var(--surface))' : 'background: transparent',
+      pick: () => this.setState({ sel: i })
+    }));
+    const thumbs = [
+      { ph: '#b9c2cb', c1: '#c7d3de', c2: '#56606b', p: 'polygon(0 100%, 0 72%, 50% 32%, 100% 72%, 100% 100%)', d: '0s' },
+      { ph: '#a98a7c', c1: '#d5dbe1', c2: '#7b4e3f', p: 'polygon(0 100%, 0 46%, 100% 16%, 100% 100%)', d: '.15s' },
+      { ph: '#9a9285', c1: '#e6d8c4', c2: '#3e4650', p: 'polygon(0 100%, 0 78%, 38% 40%, 76% 78%, 100% 60%, 100% 100%)', d: '.3s' }
+    ];
+    const spec = [
+      { what: 'Окно: появление по клавише', ms: '160 мс', how: 'замедление cubic-bezier(0.2, 0, 0, 1), масштаб 96% → 100%, сдвиг 8 px' },
+      { what: 'Окно: скрытие (Esc, клик мимо)', ms: '120 мс', how: 'ускорение cubic-bezier(0.3, 0, 1, 1), только прозрачность и 98%' },
+      { what: 'Запуск: заставка → окно', ms: '320 мс', how: 'заставка показывается, только если запуск дольше 400 мс' },
+      { what: 'Результаты поиска', ms: '180 мс', how: 'сдвиг 6 px + прозрачность, +25 мс на строку, не больше 8 строк с задержкой' },
+      { what: 'Скелетоны и полоска загрузки', ms: 'блик 1,2 с', how: 'включаются через 150 мс ожидания; старая выдача тем временем бледнеет до 60%' },
+      { what: 'Вкладки, выбор строки', ms: '200–250 мс', how: 'полоска едет transform, фон строки 150 мс, просмотр — наплыв 220 мс' },
+      { what: 'Миниатюры', ms: '240 мс', how: 'из размытия 6 px и 104%, по очереди с шагом 150 мс в видимой области' },
+      { what: 'Прогресс индексации', ms: '400 мс', how: 'ширина догоняет значение плавно; обновление раз в 0,5–1 с, не чаще' },
+      { what: 'Подсказки («Путь скопирован»)', ms: '200 / 1600 / 150', how: 'вход, показ, выход; новая подсказка заменяет старую без очереди' },
+      { what: 'Меню в трее', ms: '160 мс', how: 'подъём 8 px от значка, пункты с шагом 40 мс' },
+      { what: 'Тумблер', ms: '200 мс', how: 'кружок переезжает и растёт 10 → 12 px, дорожка заливается цветом; при нажатии кружок вытягивается' },
+      { what: 'Выпадающий список', ms: '160 / 120 мс', how: 'раскрывается от кнопки с 97%, стрелка поворачивается на 180°' },
+      { what: 'Добавить / убрать строку или метку', ms: '260 / 200 мс', how: 'строка разъезжается по высоте и проявляется; метки «выпрыгивают» с 70% и сжимаются при удалении' },
+      { what: 'Запись горячей клавиши', ms: 'пульс 1,2 с', how: 'поле пульсирует, красная точка мигает; новые клавиши появляются по одной с шагом 50 мс' },
+      { what: 'Диалог подтверждения', ms: '200 / 120 мс', how: 'фон затемняется, окно вырастает с 96%; закрытие быстрее открытия' },
+      { what: 'Кнопки и поля', ms: '100–150 мс', how: 'наведение — смена фона, нажатие — 97%, фокус поля — полоса акцента снизу' },
+      { what: 'Смена темы', ms: '300 мс', how: 'фон и цвета перетекают, без мигания' },
+      { what: 'Полоса прокрутки', ms: '—', how: 'тонкая линия 3 px без стрелок и фона, 32% серого; при наведении 6 px и 55%, при перетаскивании 72%' }
+    ];
+    return {
+      tabs, pillX: tab * 60 + 21, tabLines: LINES[tab], rows,
+      sel0: sel === 0, sel1: sel === 1, sel2: sel === 2, thumbs, spec,
+      runStyle: paused ? 'opacity: 0; transform: translateY(-6px)' : 'opacity: 1; transform: none',
+      pausedStyle: paused ? 'opacity: 1; transform: none' : 'opacity: 0; transform: translateY(6px)',
+      iconPause: paused ? 'opacity: 0; transform: rotate(-90deg) scale(.6)' : 'opacity: 1; transform: none',
+      iconPlay: paused ? 'opacity: 1; transform: none' : 'opacity: 0; transform: rotate(90deg) scale(.6)',
+      barStyle: paused ? 'background: var(--muted)' : 'background: var(--accent)',
+      pauseLabel: paused ? 'Продолжить' : 'Пауза',
+      togglePause: () => this.setState({ paused: !paused }),
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff'
+    };
+  }
+}
+</script>
+</body>
+</html>

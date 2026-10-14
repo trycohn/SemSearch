@@ -1,0 +1,29 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "backend-pages",
+  "description": "UI pages served by the local SemSearch backend (http://127.0.0.1:<port>/, /settings, /tray).",
+  "windows": ["main", "settings", "tray"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-win-minimize",
+    "allow-win-toggle-maximize",
+    "allow-win-hide",
+    "allow-show-main",
+    "allow-show-settings",
+    "allow-page-ready",
+    "allow-tray-hide",
+    "allow-quit-app",
+    "allow-pick-folder",
+    "allow-get-autostart",
+    "allow-set-autostart",
+    "allow-get-hotkey",
+    "allow-set-hotkey"
+  ]
+}

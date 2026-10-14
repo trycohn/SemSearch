@@ -1,0 +1,33 @@
+# Личные данные — никогда не коммитить: индекс файлов, миниатюры, журналы, токен сессии
+/data/
+# Создаётся при первом запуске с умолчаниями текущего пользователя (core.DEFAULT_CONFIG)
+/config.json
+
+# Python
+__pycache__/
+*.py[cod]
+/.venv/
+
+# Сборка Rust (engine/, shell/, tools/frameprobe/) и схемы, которые Tauri генерирует при сборке
+target/
+/shell/gen/schemas/
+
+# Готовые exe — в релизы, а не в git
+/SemSearch.exe
+/bin/
+/tools/frameprobe.exe
+
+# Результаты замеров на конкретной машине
+/tools/bench_results.jsonl
+
+# Локальная копия старых иконок
+/brand/_backup-old-icons/
+
+# Редакторы и система
+.vscode/
+.idea/
+.claude/settings.local.json
+Thumbs.db
+desktop.ini
+
+# shell/dist — исходники экрана загрузки, а не результат сборки: правило dist/ сюда не добавлять

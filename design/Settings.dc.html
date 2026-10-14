@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — настройки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--hover:#f5f5f5;--line:#e5e5e5;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--knob:#5c5c5c}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--hover:#323232;--line:#383838;--line2:#555555;--text:#f2f2f2;--muted:#bdbdbd;--knob:#cfcfcf}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible,.win input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn2:hover,.cap:hover,.chip:hover{background:var(--hover)}
+.cap.x:hover{background:#c42b1c;color:#ffffff}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="display: flex; align-items: center; height: 40px; padding-left: 16px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color: var(--accent)"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<span style="margin-left: 10px; font-size: 12px">Настройки SemSearch</span>
+<div style="margin-left: auto; align-self: flex-start; display: flex">
+<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap x" aria-label="Закрыть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+</div>
+
+<div style="max-width: 800px; margin: 0 auto; padding: 12px 24px 40px; display: flex; flex-direction: column; gap: 28px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Настройки</h1>
+
+<section aria-labelledby="s-where" style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-where" style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Где искать</h2>
+<div style="padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start">
+<div><div>Поиск по смыслу</div><div style="font-size: 12px; color: var(--muted)">Документы, код, фото, аудио и видео в этих папках</div></div>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Добавить папку</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; margin-top: 12px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 4px; background: var(--bg)">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted)"><path d="M3 6h6l2 2h10v11H3z"></path></svg>
+<span style="flex: 1; min-width: 0; overflow-wrap: anywhere">C:\Users\1337</span><span style="font-size: 12px; color: var(--muted); white-space: nowrap">65 475 файлов</span>
+<button class="btn2" aria-label="Убрать папку C:\Users\1337" style="width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div>Поиск по имени</div><div style="font-size: 12px; color: var(--muted)">Имена всех файлов на выбранных дисках, включая системные папки</div></div>
+<div style="display: flex; gap: 6px">
+<button class="chip" aria-pressed="true" style="height: 30px; padding: 0 12px; border: 1px solid var(--accent); border-radius: 15px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight: 600">C:\</button>
+<button class="chip" aria-pressed="false" style="height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 15px; background: var(--surface)">D:\</button>
+</div>
+</div>
+<div style="padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start">
+<div><div>Не индексировать</div><div style="font-size: 12px; color: var(--muted)">Папки с такими именами пропускаются везде. Скрытые папки с точкой (.ssh, .aws) — всегда.</div></div>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Изменить</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; font-size: 12px">
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">node_modules</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">venv</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">__pycache__</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">AppData</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">build</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">target</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">Temp</span>
+<span style="padding: 2px 8px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace">Cache</span>
+<span style="padding: 2px 8px; color: var(--muted)">и ещё 13</span>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="s-win" style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-win" style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Окно и запуск</h2>
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div>Горячая клавиша</div><div style="font-size: 12px; color: var(--muted)">Открывает окно поиска из любой программы</div></div>
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="display: flex; gap: 4px"><kbd style="display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 13px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 13px">Alt</kbd><kbd style="display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 13px">S</kbd></span>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Изменить</button>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div id="l-auto">Запускать вместе с Windows</div><div style="font-size: 12px; color: var(--muted)">Работает в трее, окно открывается по горячей клавише</div></div>
+<button role="switch" aria-checked="true" aria-labelledby="l-auto" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent)"><span style="position: absolute; top: 3px; right: 3px; width: 12px; height: 12px; border-radius: 6px; background: var(--onAccent)"></span></button>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div>Тема</div><div style="font-size: 12px; color: var(--muted)">Светлая, тёмная или как в Windows</div></div>
+<button class="btn2" style="display: flex; align-items: center; gap: 24px; height: 32px; padding: 0 10px 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)"><span>Как в Windows</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+</section>
+
+<section aria-labelledby="s-games" style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-games" style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Игры и нагрузка</h2>
+<div style="display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div id="l-full">Пауза при полноэкранных приложениях</div><div style="font-size: 12px; color: var(--muted)">Игры, фильмы, презентации — и окна без рамки на весь экран. Видеопамять отдаётся игре.</div></div>
+<button role="switch" aria-checked="true" aria-labelledby="l-full" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent)"><span style="position: absolute; top: 3px; right: 3px; width: 12px; height: 12px; border-radius: 6px; background: var(--onAccent)"></span></button>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div>Пауза, пока запущены</div><div style="font-size: 12px; color: var(--muted)">Например, игры в окне</div></div>
+<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+<span style="display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 4px; background: var(--bg); font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px">cs2.exe<button class="btn2" aria-label="Убрать cs2.exe" style="width: 22px; height: 22px; border: 0; border-radius: 3px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></span>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Добавить процесс</button>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div id="l-batt">Пауза от батареи</div><div style="font-size: 12px; color: var(--muted)">На ноутбуке без зарядки индексация ждёт</div></div>
+<button role="switch" aria-checked="false" aria-labelledby="l-batt" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid var(--knob); border-radius: 10px; background: transparent"><span style="position: absolute; top: 4px; left: 4px; width: 10px; height: 10px; border-radius: 5px; background: var(--knob)"></span></button>
+</div>
+</section>
+
+<section aria-labelledby="s-media" style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-media" style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Видео, аудио и большие файлы</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 13px">
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Кадр из видео каждые, с<input type="number" defaultValue="10" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Кадров на видео, не больше<input type="number" defaultValue="40" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Отрезок аудио, с<input type="number" defaultValue="30" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Отрезков, не больше<input type="number" defaultValue="10" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Текст больше, МБ — пропуск<input type="number" defaultValue="2" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+<label style="display: flex; align-items: center; justify-content: space-between; gap: 12px">Страниц PDF, не больше<input type="number" defaultValue="80" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+</div>
+</section>
+
+<section aria-labelledby="s-index" style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-index" style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Индекс</h2>
+<div style="padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 24px; font-size: 13px">
+<div><div style="color: var(--muted); font-size: 12px">Модель</div><div>EmbeddingGemma 2 · на видеокарте</div></div>
+<div><div style="color: var(--muted); font-size: 12px">Размер на диске</div><div>1,3 ГБ</div></div>
+<div><div style="color: var(--muted); font-size: 12px">Проверка всего диска</div><div>каждые 6 ч, имена — раз в сутки</div></div>
+<div><div style="color: var(--muted); font-size: 12px">Не удалось прочитать</div><div>214 файлов · <a href="#log">почему</a></div></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line)">
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Пересканировать сейчас</button>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Открыть журнал</button>
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); color: #b3261e">Собрать индекс заново…</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    return {
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff'
+    };
+  }
+}
+</script>
+</body>
+</html>

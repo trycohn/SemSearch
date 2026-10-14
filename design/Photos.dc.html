@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — фото</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#60b8ff}a:hover{color:#ffffff}
+.win{--bg:#f3f3f3;--surface:#ffffff;--surface2:#fafafa;--hover:#ebebeb;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--sel:color-mix(in srgb,var(--accent) 11%,var(--surface))}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--surface2:#262626;--hover:#333333;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tile:hover,.tab:hover,.ghost:hover,.cap:hover,.btn2:hover{background:var(--hover)}
+.cap.x:hover{background:#c42b1c;color:#ffffff}
+.prim:hover{filter:brightness(1.08)}
+@media (max-width:760px){.pane{border-left:0!important;border-top:1px solid var(--line)}.sbar{padding-right:16px!important;padding-top:40px!important}}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="position: absolute; top: 0; right: 0; display: flex; z-index: 2">
+<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="Развернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" aria-label="Скрыть в трей" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+
+<div class="sbar" style="display: flex; align-items: center; gap: 8px; padding: 14px 156px 10px 16px">
+<div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex: none; color: var(--accent)"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<label for="q2" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Запрос</label>
+<input id="q2" type="text" autocomplete="off" defaultValue="кот на балконе" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
+<button class="ghost" aria-label="Очистить запрос" style="flex: none; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+<span aria-hidden="true" style="flex: none; width: 1px; height: 22px; background: var(--line)"></span>
+<button class="ghost" aria-label="Искать по картинке" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
+</div>
+</div>
+
+<div role="tablist" aria-label="Что искать" style="display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+<button class="tab" role="tab" aria-selected="{{t.on}}" style="position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 6px 6px 0 0; background: transparent; {{t.style}}"><span>{{t.label}}</span><span style="font-size: 12px; font-weight: 400; color: var(--faint)">{{t.count}}</span><sc-if value="{{t.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if></button>
+</sc-for>
+<span style="margin-left: auto; padding-left: 16px; flex: none; font-size: 12px; color: var(--faint); white-space: nowrap">24 фото · 35 мс</span>
+</div>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+<div style="flex: 999 1 560px; min-width: 0; padding: 10px 12px 24px; box-sizing: border-box">
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px">
+<sc-for list="{{tiles}}" as="m" hint-placeholder-count="12">
+<button class="tile" aria-pressed="{{m.sel}}" style="display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 6px; border: 0; border-radius: 8px; background: transparent; text-align: left; {{m.selStyle}}">
+<span style="position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; overflow: hidden; background: {{m.c1}}; {{m.ring}}">
+<span aria-hidden="true" style="position: absolute; inset: 0; background: {{m.c2}}; clip-path: {{m.p2}}"></span>
+<span aria-hidden="true" style="position: absolute; inset: 0; background: {{m.c3}}; clip-path: {{m.p3}}"></span>
+</span>
+<span style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px"><span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.name}}</span><span style="flex: none; color: var(--muted)">{{m.date}}</span></span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; margin: 16px 6px 0; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" style="flex: none; color: var(--muted)"><path d="M3 6h12v12H3z M15 10l6-3v10l-6-3"></path></svg>
+<span style="flex: 1; min-width: 0; font-size: 13px; color: var(--muted)">Ещё 6 видео, где кот на балконе попадает в кадр: «Дача июнь.mp4» на 3:40, «VID_0614.mp4» на 0:20…</span>
+<button class="btn2" style="flex: none; height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: transparent">Открыть вкладку «Видео»</button>
+</div>
+</div>
+
+<aside class="pane" aria-label="Просмотр файла" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 20px 20px; border-left: 1px solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 16px">
+<div aria-hidden="true" style="position: relative; height: 264px; flex: none; border-radius: 8px; overflow: hidden; background: {{big.c1}}">
+<span style="position: absolute; inset: 0; background: {{big.c2}}; clip-path: {{big.p2}}"></span>
+<span style="position: absolute; inset: 0; background: {{big.c3}}; clip-path: {{big.p3}}"></span>
+</div>
+<div>
+<h2 style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere">IMG_20250612_183044.jpg</h2>
+<div style="display: flex; align-items: flex-start; gap: 6px; margin-top: 4px">
+<span style="flex: 1; min-width: 0; padding-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere">C:\Users\1337\Pictures\Телефон\2025\06\IMG_20250612_183044.jpg</span>
+<button class="ghost" aria-label="Копировать путь" style="flex: none; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9z M5 15H4V4h11v1"></path></svg></button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Тип</span><span>JPEG, 4000 × 3000</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Размер</span><span>3,2 МБ</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Снято</span><span>12 июня 2025, 18:30</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Изменён</span><span>12 июня 2025, 18:30</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: auto">
+<button class="prim" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--accent); color: var(--onAccent); font-weight: 600"><span>Открыть</span><span style="font-size: 12px; font-weight: 400; opacity: .85">Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Показать в папке</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Найти похожие</span><span style="font-size: 12px; color: var(--muted)">Ctrl+F</span></button>
+</div>
+</aside>
+</div>
+
+<footer style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 16px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted)">
+<span style="display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path d="M5 12l5 5L20 7"></path></svg>Индекс актуален, новые файлы подхватываются сразу</span>
+<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">В индексе: 3 412 документов · 41 870 файлов кода · 18 204 фото · 1 377 аудио · 612 видео · 2,1 млн имён на C:</span>
+<span style="display: flex; gap: 2px">
+<button class="ghost" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14 M15 5v14"></path></svg><span>Пауза</span></button>
+<button class="ghost" aria-label="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
+</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.dark ?? true;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const CAT = [[-14, 0], [-13, -22], [-10, -34], [-7, -40], [-8, -48], [-7.5, -56], [-6, -64], [-3, -58], [3, -58], [6, -64], [7.5, -56], [8, -48], [7, -40], [10, -34], [13, -22], [14, 0]];
+    const cat = (cx, base, s) => 'polygon(' + CAT.map(([x, y]) => (cx + x * s).toFixed(1) + '% ' + (base + y * s).toFixed(1) + '%').join(', ') + ')';
+    const rail = (top, n) => {
+      const pts = ['0 ' + top + '%', '100% ' + top + '%', '100% ' + (top + 4) + '%'];
+      const step = 100 / n;
+      for (let i = n - 1; i >= 0; i--) {
+        const x1 = (i * step + step * 0.7).toFixed(1), x0 = (i * step + step * 0.3).toFixed(1);
+        pts.push(x1 + '% ' + (top + 4) + '%', x1 + '% 100%', x0 + '% 100%', x0 + '% ' + (top + 4) + '%');
+      }
+      pts.push('0 ' + (top + 4) + '%');
+      return 'polygon(' + pts.join(', ') + ')';
+    };
+    const T = [
+      ['IMG_20250612_183044.jpg', '12 июн', '#e7c9a4', '#2b2a2e', 50, 92, 1.0, '#6f5a49', 58, 7],
+      ['IMG_20250612_183051.jpg', '12 июн', '#e2c09a', '#2b2a2e', 38, 92, 0.9, '#6f5a49', 58, 7],
+      ['Барсик утром.jpg', '3 май', '#c9d8e6', '#c27a3a', 56, 90, 1.1, '#e8e4dc', 60, 9],
+      ['IMG_4471.HEIC.jpg', '21 апр', '#b8c6d4', '#6b6f75', 46, 94, 0.8, '#3c4148', 64, 6],
+      ['Скриншот 2025-05-03.png', '3 май', '#d6dde4', '#c27a3a', 62, 96, 0.7, '#9aa3ac', 70, 11],
+      ['IMG_20240830_201502.jpg', '30 авг', '#3d4a66', '#18181c', 44, 90, 1.0, '#58617a', 56, 8],
+      ['Дача, балкон.jpg', '14 июл', '#cfe0d0', '#3a3530', 30, 93, 0.75, '#efefea', 62, 6],
+      ['IMG_3920.jpg', '9 мар', '#dfe3e6', '#f1efe9', 52, 95, 0.9, '#5c646c', 62, 7],
+      ['кот спит.jpg', '28 фев', '#e8d8c8', '#7d7f84', 60, 92, 1.2, '#8f7a68', 66, 5],
+      ['IMG_20231105_093311.jpg', '5 ноя', '#c4ccd4', '#2b2a2e', 70, 94, 0.6, '#4b535c', 58, 10],
+      ['Балкон после ремонта.jpg', '17 окт', '#d3dce5', '', 0, 0, 0, '#5f6770', 54, 8],
+      ['IMG_2210.jpg', '1 сен', '#efd2b0', '#c27a3a', 40, 91, 0.85, '#6f5a49', 60, 7]
+    ];
+    const tiles = T.map(([name, date, c1, c2, cx, base, s, c3, top, n], i) => ({
+      name, date, c1, c2: c2 || 'transparent', p2: c2 ? cat(cx, base, s) : 'polygon(0 0, 0 0, 0 0)', c3, p3: rail(top, n),
+      sel: i === 0, selStyle: i === 0 ? 'background: var(--sel);' : '', ring: i === 0 ? 'box-shadow: 0 0 0 2px var(--accent);' : ''
+    }));
+    const TABS = [['Всё', '32'], ['Документы', '2'], ['Код', '0'], ['Фото', '24'], ['Видео', '6'], ['Аудио', '0'], ['По имени', '0']];
+    const tabs = TABS.map(([label, count]) => ({ label, count, on: label === 'Фото', style: label === 'Фото' ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)' }));
+    return {
+      tiles, tabs, big: tiles[0],
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff'
+    };
+  }
+}
+</script>
+</body>
+</html>

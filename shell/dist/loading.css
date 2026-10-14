@@ -1,0 +1,42 @@
+/* Встроенные страницы оболочки: заставка запуска (design/MainLive, Motion «Запуск программы») и запасное меню трея. */
+:root{color-scheme:light dark;--bg:#f3f3f3;--text:#1a1a1a;--muted:#5c5c5c;--line2:#cfcfcf;--accent:#005fb8;--onAccent:#ffffff;--hover:#ebebeb;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+@media (prefers-color-scheme:dark){:root{--bg:#202020;--text:#f2f2f2;--muted:#bdbdbd;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font:14px/1.45 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;user-select:none;cursor:default}
+button{font:inherit;color:inherit;cursor:default}
+
+/* заставка */
+body.win{background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
+.cap{position:absolute;top:0;left:0;right:0;height:32px;display:flex;justify-content:flex-end;z-index:2}
+.cb{width:46px;height:32px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;transition:background-color .12s}
+.cb:hover{background:var(--hover)}
+.cb.x:hover{background:#c42b1c;color:#ffffff}
+.cb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding-bottom:32px}
+/* показывается, только если запуск дольше 400 мс: появление .3 с с 85% */
+.splash{display:flex;flex-direction:column;align-items:center;gap:16px;animation:splash .3s var(--eo) .4s both}
+@keyframes splash{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.tile{width:72px;height:72px;border-radius:16px;background:var(--accent);color:var(--onAccent);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.lbl{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.spin{flex:none;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{margin:0;min-height:18px;max-width:520px;padding:0 24px;text-align:center;color:var(--muted);font-size:12px}
+
+/* запасное меню трея (пока backend не ответил) — как design/Tray.dc.html */
+body.tray{background:transparent;color:#f2f2f2;overflow:hidden}
+.panel{position:fixed;right:4px;bottom:4px;width:292px;padding:4px;border:1px solid #3f3f3f;border-radius:8px;background:#2c2c2c;box-shadow:0 8px 24px rgba(0,0,0,.45);transform-origin:bottom right;animation:menu .16s var(--eo) both}
+@keyframes menu{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.panel .it{animation:mi .16s var(--eo) both}
+@keyframes mi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.head{display:flex;gap:10px;padding:10px 12px 12px;border-bottom:1px solid #3f3f3f;margin-bottom:4px}
+.logo{flex:none;width:32px;height:32px;border-radius:6px;background:#73a7d8;color:#111111;display:flex;align-items:center;justify-content:center}
+.head .t{font-weight:600}
+.sub{font-size:12px;color:#c8c8c8}
+.mi{display:flex;align-items:center;gap:12px;width:100%;height:36px;padding:0 12px;border:0;border-radius:4px;background:transparent;text-align:left;transition:background-color .12s}
+.mi:hover{background:rgba(255,255,255,.08)}
+.mi:focus-visible{outline:2px solid #73a7d8;outline-offset:-2px}
+.mi .l{flex:1}
+.mi .b{font-weight:600}
+.sep{height:1px;margin:4px 0;background:#3f3f3f}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}}

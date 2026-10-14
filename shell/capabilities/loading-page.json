@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "loading-page",
+  "description": "Bundled placeholder pages (dist/index.html, dist/tray.html) shown until the backend answers.",
+  "windows": ["main", "settings", "tray"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "allow-win-minimize",
+    "allow-win-hide",
+    "allow-show-main",
+    "allow-tray-hide",
+    "allow-quit-app"
+  ]
+}

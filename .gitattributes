@@ -1,0 +1,9 @@
+# В репозитории — LF; скрипты Windows при checkout (и в «Download ZIP» на GitHub) всегда получают CRLF,
+# какой бы core.autocrlf ни стоял у пользователя
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.ico binary

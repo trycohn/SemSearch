@@ -1,0 +1,319 @@
+/* SemSearch — главное окно. Значения 1:1 с design/Main, Photos, Names, Start; движение — design/Motion и MainLive. */
+html,body{margin:0}
+html{background:#f3f3f3}
+html.dark{background:#202020}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--surface2:#fafafa;--hover:#ebebeb;--hover2:#f8f8f8;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--mark:#ffe28a;--sel:color-mix(in srgb,var(--accent) 11%,var(--surface));--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+.win.dark,html.dark .win{--bg:#202020;--surface:#2b2b2b;--surface2:#262626;--hover:#333333;--hover2:#3c3c3c;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--mark:#7a6516}
+.win{position:relative;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.45}
+/* Полоса прокрутки по макету: линия 3 px без стрелок и фона, при наведении 6 px.
+   Нельзя задавать scrollbar-color/scrollbar-width на предках — с ними Chromium игнорирует ::-webkit-scrollbar */
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+.win button{font:inherit;color:inherit;cursor:default;transition:background-color .12s,color .15s,transform .1s cubic-bezier(.2,0,0,1),box-shadow .15s}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.win input::placeholder{color:var(--faint)}
+[hidden]{display:none!important}
+
+/* окно: запуск, показ по клавише, скрытие (Motion: 320 / 160 / 120 мс) */
+.win.w-launch{animation:winin .32s var(--eo) both}
+.win.w-in{animation:winshow .16s var(--eo) both}
+.win.w-out{animation:winhide .12s var(--ei) both;pointer-events:none}
+.win.w-pre{opacity:0}
+@keyframes winin{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes winshow{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes winhide{to{opacity:0;transform:scale(.98)}}
+
+/* заголовок окна */
+.caps{position:absolute;top:0;right:0;display:flex;z-index:3}
+.win .cap{width:46px;height:32px;border:0;background:transparent;display:flex;align-items:center;justify-content:center}
+
+/* строка поиска */
+.sbar{display:flex;align-items:center;gap:8px;padding:14px 156px 10px 16px}
+.sbox{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:46px;padding:0 6px 0 14px;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;transition:opacity .4s var(--eo)}
+.sbox.dim{opacity:.45}
+/* Акцентная линия — нижняя рамка накладки той же формы, что и поле: огибает скруглённые углы,
+   как border-bottom в макете (полоска высотой 2 px скругление 8 px не нарисует — выходит прямой).
+   Рост от центра — через clip-path, чтобы углы не сплющивались во время анимации. */
+.sund{position:absolute;inset:-1px;box-sizing:border-box;border:1px solid transparent;border-bottom:2px solid var(--accent);border-radius:8px;pointer-events:none}
+.w-launch .sund{animation:lund .3s var(--eo) .25s both}
+@keyframes lund{from{clip-path:inset(0 50% 0 50%)}to{clip-path:inset(0 0 0 0)}}
+/* Полоска загрузки — только под прямым участком линии, не заходя под скругления */
+.ibar{position:absolute;left:7px;right:7px;bottom:-2px;height:2px;overflow:hidden;pointer-events:none}
+.ibar i{position:absolute;top:0;bottom:0;width:35%;background:var(--accent);animation:ibar 1.1s var(--eo) infinite}
+@keyframes ibar{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
+.sbox .sico{flex:none;color:var(--accent)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#q{flex:1;min-width:0;height:100%;border:0;outline:none;background:transparent;color:var(--text);font:inherit;font-size:18px}
+.win .clr{flex:none;width:32px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.ssep{flex:none;width:1px;height:22px;background:var(--line)}
+.win .imgb{flex:none;width:36px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.simchip{flex:none;display:inline-flex;align-items:center;gap:6px;height:28px;max-width:45%;padding:0 4px;box-sizing:border-box;border-radius:6px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));font-size:13px}
+.simchip .sim-th{flex:none;width:20px;height:20px;border-radius:4px;background:#c7d3de;object-fit:cover;display:block}
+.simchip .sim-t{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.win .simchip button{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:4px;background:transparent;display:flex;align-items:center;justify-content:center}
+
+/* вкладки: одна полоска едет к выбранной (250 мс) */
+.tabs{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs .tl{position:relative;display:flex;gap:2px;flex:none}
+.win .tab{position:relative;flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;border:0;border-radius:6px 6px 0 0;background:transparent;color:var(--muted)}
+.win .tab[aria-selected="true"]{color:var(--text);font-weight:600}
+.tab .cnt{font-size:12px;font-weight:400;color:var(--faint)}
+.tabs .pill{position:absolute;left:0;bottom:0;width:18px;height:3px;border-radius:2px;background:var(--accent);transition:transform .25s var(--eo),opacity .2s;pointer-events:none}
+.tabs .pill.now{transition:none}
+.metaline{margin-left:auto;padding-left:16px;flex:none;align-self:stretch;display:flex;align-items:center;font-size:12px;color:var(--faint);white-space:nowrap;transition:opacity .2s}
+
+/* тело окна */
+.body{position:relative;flex:1;display:flex;flex-direction:column}
+.main{flex:1;display:flex;flex-wrap:wrap;align-items:stretch}
+.results{flex:999 1 560px;min-width:0;padding:4px 10px 24px;box-sizing:border-box}
+.results.t-grid{padding:10px 12px 24px}
+.results.t-name{padding:8px 10px 24px;overflow-x:auto}
+.results>.old{opacity:.6;transition:opacity .2s}
+
+.sh{display:flex;align-items:baseline;gap:8px;padding:14px 12px 6px}
+.sh h2{margin:0;font-size:13px;font-weight:600}
+.sh .note{font-size:12px;color:var(--faint)}
+.win .sh .more{margin-left:auto;height:26px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:var(--accent);font-size:12px}
+
+/* появление выдачи: 6 px + прозрачность, 180 мс, +25 мс на строку (до 8 строк) */
+.rs{animation:rs .18s var(--eo) both}
+@keyframes rs{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fadein{animation:fadein .22s var(--eo) both}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.pop{animation:pop .2s var(--eo) both}
+.mark{animation:pop .25s var(--eo) both}
+@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.th-in{animation:th .24s var(--eo) both}
+@keyframes th{from{opacity:0;filter:blur(6px);transform:scale(1.04)}to{opacity:1;filter:none;transform:none}}
+.chk{stroke-dasharray:24;animation:chk .35s var(--eo) .05s both}
+@keyframes chk{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
+.spin{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.list{display:flex;flex-direction:column;gap:2px}
+.win .row{position:relative;display:flex;align-items:flex-start;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:6px;background:transparent;text-align:left;transition:background-color .15s,transform .1s cubic-bezier(.2,0,0,1)}
+.win .row.nm-row{align-items:center;padding:8px 12px}
+.selbar{position:absolute;left:0;top:50%;width:3px;height:18px;margin-top:-9px;border-radius:2px;background:var(--accent);transform:scaleY(0);transition:transform .2s var(--eo)}
+.sel>.selbar{transform:none}
+.row .ico{flex:none;width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--hover);color:var(--muted)}
+.row .bd{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.row .l1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.row .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ext{flex:none;font-size:11px;color:var(--faint);letter-spacing:.04em}
+.row .cr{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .l3{display:flex;gap:8px;align-items:baseline;margin-top:5px;min-width:0}
+.loc{flex:none;font-size:11px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:4px;padding:1px 6px}
+.snip{min-width:0;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mono{font-family:'Cascadia Mono',Consolas,monospace}
+.snip.mono{font-size:12px}
+.row .sd{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:12px;color:var(--muted);white-space:nowrap}
+.row .nico{flex:none;margin:0 9px;color:var(--muted)}
+.row .nb{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px}
+.row .nn{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ncr{flex:1 1 0;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .nsd{flex:none;font-size:12px;color:var(--muted);white-space:nowrap}
+.hl{background:var(--mark);border-radius:3px}
+
+.grid{display:grid;gap:4px;padding:0 2px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.grid.big{padding:0;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.win .tile{display:flex;flex-direction:column;gap:6px;min-width:0;padding:6px;border:0;border-radius:8px;background:transparent;text-align:left}
+.tile .th{position:relative;display:block;width:100%;aspect-ratio:4/3;border-radius:6px;overflow:hidden;background:var(--hover);box-shadow:0 0 0 0 transparent;transition:box-shadow .2s}
+.tile.sel .th{box-shadow:0 0 0 2px var(--accent)}
+.tile .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0}
+.tile .th img.th-in{opacity:1}
+.badge{position:absolute;left:6px;bottom:6px;display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.68);color:#ffffff;font-size:11px;font-weight:600}
+.tile .tn{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .tl{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.tile .tl .tn{min-width:0}
+.tile .tl .td{flex:none;color:var(--muted)}
+.vnote{display:flex;align-items:center;gap:12px;margin:16px 6px 0;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+.vnote>svg{flex:none;color:var(--muted)}
+.vnote .tx{flex:1;min-width:0;font-size:13px;color:var(--muted)}
+.win .vnote .btn2{flex:none;height:30px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:transparent}
+
+/* «По имени» — таблица */
+.ntable{min-width:620px}
+.nhead{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 76px 104px;gap:12px;align-items:center;height:32px;padding:0 12px 0 42px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.nhead .r{text-align:right}
+.nhead .rr{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.nlist{display:flex;flex-direction:column;gap:1px;padding-top:4px}
+.win .nrow{position:relative;display:grid;grid-template-columns:18px minmax(0,1.25fr) minmax(0,1fr) 76px 104px;gap:12px;align-items:center;width:100%;height:36px;padding:0 12px;border:0;border-radius:6px;background:transparent;text-align:left;font-size:13px;transition:background-color .15s}
+.nrow .selbar{height:16px;margin-top:-8px}
+.nrow>svg{color:var(--muted)}
+.nrow .c1{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .c2{min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .c3,.nrow .c4{text-align:right;font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* загрузка: скелетоны с бликом (блик — transform, 1,2 с) */
+.skel{padding:14px 2px 0}
+.skrow{display:flex;gap:12px;padding:10px 12px}
+.skrow .c{flex:1;display:flex;flex-direction:column;gap:8px;padding-top:2px}
+.skgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:6px}
+.shim{position:relative;overflow:hidden;background:var(--line)}
+.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--hover2),transparent);transform:translateX(-100%);animation:shim 1.2s linear infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+
+/* «Ничего не нашлось» и «модель ещё грузится» (MainLive / Motion) */
+.none{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:90px;padding:0 24px;text-align:center}
+.none .ic{width:56px;height:56px;border-radius:28px;background:var(--hover);color:var(--muted);display:flex;align-items:center;justify-content:center}
+.none h2{margin:0;font-size:17px;font-weight:600}
+.none p{margin:0;max-width:420px;font-size:13px;color:var(--muted)}
+.win .none .btn2{height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:4px;background:var(--surface)}
+.mload{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;margin-top:90px;padding:0 24px;text-align:center;font-size:13px;color:var(--muted)}
+.mload .sub{max-width:420px;font-size:12px}
+
+/* панель просмотра */
+/* Панель просмотра (MainLive.dc.html): прокручивается содержимое, кнопки закреплены внизу под линией */
+.pane{flex:1 1 400px;min-width:0;box-sizing:border-box;border-left:1px solid var(--line);background:var(--surface2);display:flex;flex-direction:column}
+.pvbody{flex:1;min-height:0;padding:16px 20px 16px;display:flex;flex-direction:column}
+.pvin{display:flex;flex-direction:column;gap:16px}
+.pvskel{display:flex;flex-direction:column;gap:14px}
+.pvempty{flex:1;min-height:200px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;color:var(--muted)}
+.pvbox{position:relative;height:190px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--line);background:var(--bg);overflow:hidden}
+.pvbox.big{height:264px;border:0}
+.pvbox img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0}
+.pvbox img.th-in{opacity:1}
+.pvbox img.fit{object-fit:contain}
+.pgw{display:flex;flex-direction:column;align-items:center;gap:8px}
+.page{width:128px;height:160px;box-sizing:border-box;padding:14px 12px;background:#ffffff;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.14),0 4px 14px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:5px}
+.page span{display:block;height:4px;border-radius:2px;background:#dddddd;transform-origin:left}
+.page span.t{height:6px;margin-bottom:4px;background:#9e9e9e}
+.page span.h{background:#f5c518}
+.pgl{font-size:12px;color:var(--muted)}
+.codebox{align-self:stretch;flex:1;box-sizing:border-box;padding:14px 16px;background:var(--surface);font-family:'Cascadia Mono',Consolas,monospace;font-size:12px;line-height:1.65;overflow:hidden}
+.codebox span{display:block;white-space:pre;padding:0 4px;border-radius:3px}
+.codebox span.h{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.wvw{display:flex;flex-direction:column;align-items:center;gap:12px}
+.wave{display:flex;align-items:center;gap:3px;height:110px}
+.wave span{display:block;width:4px;border-radius:2px;background:var(--line2)}
+.wave span.on{background:var(--accent)}
+.wvl{font-size:12px;color:var(--muted)}
+.nmbox{display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 32px;text-align:center}
+.nmbox .ib{width:56px;height:56px;border-radius:10px;background:var(--hover);color:var(--muted);display:flex;align-items:center;justify-content:center}
+.nmbox .tx{font-size:13px;color:var(--muted)}
+.tline{margin-top:-4px}
+.tline .bar{position:relative;height:6px;border-radius:3px;background:var(--line2)}
+.tline .mk{position:absolute;top:-3px;width:4px;height:12px;margin-left:-2px;border-radius:2px;background:var(--accent)}
+.tline .lab{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted)}
+.pvn{margin:0;font-size:16px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.pvp{display:flex;align-items:flex-start;gap:6px;margin-top:4px}
+.pvp .p{flex:1;min-width:0;padding-top:4px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.win .copyb{flex:none;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.metas{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.metas>div{display:flex;gap:12px}
+.metas .k{flex:none;width:96px;color:var(--muted)}
+.metas .v{min-width:0}
+.hits h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--muted)}
+.hitl{display:flex;flex-direction:column;gap:6px}
+.hit{display:flex;gap:10px;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+.hit .hlc{flex:none;min-width:48px;font-size:12px;font-weight:600;color:var(--accent)}
+.hit .hlt{min-width:0;font-size:13px;overflow-wrap:anywhere}
+.hit .hlt.mono{font-size:12px;white-space:pre-wrap}
+.dupes{display:flex;gap:10px;padding:10px 12px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.dupes>svg{flex:none;margin-top:2px;color:var(--accent)}
+.acts{flex:none;display:flex;flex-direction:column;gap:6px;padding:12px 20px 16px;border-top:1px solid var(--line);background:var(--surface2)}
+.win .prim{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 12px;border:0;border-radius:6px;background:var(--accent);color:var(--onAccent);font-weight:600}
+.prim .k{font-size:12px;font-weight:400;opacity:.85}
+.win .act{display:flex;align-items:center;justify-content:space-between;width:100%;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.act .k{font-size:12px;color:var(--muted)}
+
+/* пустой запрос (Start.dc.html) */
+.start{flex:1;padding:32px 24px 28px}
+.start-in{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+/* «Первая индексация» и «Клавиши» — две карточки рядом, одной высоты (Start.dc.html) */
+.srow{display:flex;flex-wrap:wrap;align-items:stretch;gap:16px}
+.hero{display:flex;flex-direction:column;gap:12px}
+.hero h1{margin:0;font-size:22px;font-weight:600;line-height:1.3}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.win .chip{height:32px;padding:0 12px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.hero p{margin:0;font-size:13px;color:var(--muted)}
+.fix{flex:1 1 560px;min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.fix-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px 10px}
+.fix-h h2{margin:0;font-size:15px;font-weight:600}
+.fix-h span{font-size:12px;color:var(--muted)}
+.fix-row{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(0,1.2fr) 120px;gap:12px;align-items:center;min-height:40px;padding:4px 16px;border-top:1px solid var(--line);font-size:13px}
+.fix-row>svg{color:var(--muted)}
+.kbar{position:relative;display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.kbar>span{display:block;height:100%;border-radius:2px;background:var(--accent);transform-origin:left;transition:transform .4s cubic-bezier(.4,0,.2,1),background-color .3s}
+.kbar>span.done{background:var(--muted)}
+.kbar>span.indet{width:30%;animation:indet 1.4s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.fix-n{text-align:right;font-size:12px;white-space:nowrap;color:var(--muted)}
+.fix-n.on{color:var(--text);font-weight:600}
+.fix>p{margin:auto 0 0;padding:12px 16px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.keys{flex:0 1 330px;min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.fix[hidden]+.keys{flex:1 1 auto}  /* индексация закончена — клавиши на всю ширину */
+.kgrid{flex:1;display:flex;flex-direction:column;font-size:13px}
+.krow{flex:1;display:flex;align-items:center;gap:12px;min-height:40px;padding:4px 16px;border-top:1px solid var(--line)}
+.kcaps{display:flex;gap:4px;flex:none;min-width:112px}
+kbd.kc{display:inline-flex;align-items:center;height:22px;padding:0 6px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:inherit;font-size:12px}
+.krow .w{color:var(--muted)}
+
+/* подвал: статус меняется наплывом (200 мс), полоса догоняет значение (400 мс) */
+.ft{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;min-height:36px;padding:4px 8px 4px 16px;box-sizing:border-box;border-top:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--muted)}
+.ft .st{position:relative;display:flex;align-items:center;min-height:22px;color:var(--text);white-space:nowrap}
+.stl{display:flex;align-items:center;gap:8px;white-space:nowrap;transition:opacity .2s,transform .2s var(--eo)}
+.stl.enter{animation:stin .2s var(--eo) both}
+@keyframes stin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.stl.leave{position:absolute;left:0;top:0;bottom:0;opacity:0;transform:translateY(-6px);pointer-events:none}
+.stl>svg{flex:none;color:var(--accent)}
+.dot{position:relative;flex:none;width:8px;height:8px;border-radius:4px;background:var(--accent)}
+.dot.idle{background:var(--muted)}
+.dot.pulse::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--accent);opacity:.5;animation:pulse 1.6s var(--eo) infinite}
+@keyframes pulse{from{opacity:.5;transform:scale(1)}to{opacity:0;transform:scale(2.75)}}
+.pbar{position:relative;flex:none;display:block;width:72px;height:4px;border-radius:2px;background:var(--line2);overflow:hidden}
+.pbar>span{display:block;height:100%;background:var(--accent);transform-origin:left;transition:transform .4s cubic-bezier(.4,0,.2,1)}
+.ft .mid{flex:1 1 260px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ft .fb{display:flex;gap:2px}
+.win .pausebtn{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:4px;background:transparent}
+.pico{position:relative;flex:none;width:14px;height:14px}
+.pico svg{position:absolute;inset:0;transition:opacity .2s,transform .25s var(--eo)}
+.pico .ip2{opacity:0;transform:rotate(90deg) scale(.6)}
+.paused .pico .ip1{opacity:0;transform:rotate(-90deg) scale(.6)}
+.paused .pico .ip2{opacity:1;transform:none}
+.win .setb{width:32px;height:28px;border:0;border-radius:4px;background:transparent;display:flex;align-items:center;justify-content:center}
+
+/* подсказка: вход 200 мс, показ 1,6 с, выход 150 мс */
+.toast{position:fixed;left:50%;bottom:52px;z-index:20;display:flex;align-items:center;justify-content:center;gap:8px;min-width:220px;height:36px;padding:0 16px;box-sizing:border-box;border-radius:6px;background:var(--text);color:var(--bg);font-size:13px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.2);pointer-events:none;transform:translateX(-50%);animation:toastin .2s var(--eo) both}
+.toast.out{animation:toastout .15s var(--ei) both}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastout{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,4px)}}
+
+/* картинку тащат в окно */
+.dropovl{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--accent) 14%,transparent);animation:fadein .15s var(--eo) both;pointer-events:none}
+.dropovl .frame{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:10px;animation:breathe 1.1s ease-in-out infinite alternate}
+@keyframes breathe{from{transform:scale(.985)}to{transform:none}}
+.dropovl .dc{display:flex;flex-direction:column;align-items:center;gap:14px}
+.dropovl .fly{position:relative;width:120px;height:90px;border-radius:6px;border:3px solid #ffffff;box-shadow:0 10px 24px rgba(0,0,0,.25);background:#c7d3de;overflow:hidden;animation:fly .9s var(--eo) both}
+.dropovl .fly>span{position:absolute;inset:0;background:#56606b;clip-path:polygon(0 100%,0 72%,50% 32%,100% 72%,100% 100%)}
+@keyframes fly{from{opacity:0;transform:translate(-260px,220px) rotate(-10deg)}to{opacity:1;transform:rotate(-3deg)}}
+.dropovl .dt{font-size:18px;font-weight:600;color:var(--accent)}
+
+/* наведение и нажатие — после базовых правил, выделение — после наведения */
+.win .row:hover,.win .tile:hover,.win .tab:hover,.win .ghost:hover,.win .cap:hover,.win .btn2:hover,.win .chip:hover,.win .nrow:hover,.win .clr:hover,.win .imgb:hover,.win .copyb:hover,.win .pausebtn:hover,.win .setb:hover,.win .sh .more:hover,.win .act:hover,.win .simchip button:hover{background:var(--hover)}
+.win .btn2:active,.win .prim:active,.win .act:active,.win .chip:active,.win .tile:active,.win .row:active,.win .clr:active,.win .imgb:active,.win .copyb:active,.win .pausebtn:active,.win .setb:active,.win .sh .more:active{transform:scale(.98)}
+.win .cap.x:hover{background:#c42b1c;color:#ffffff}
+.win .prim:hover{filter:brightness(1.08)}
+.win .row.sel,.win .tile.sel,.win .nrow.sel{background:var(--sel)}
+
+/* смена темы — цвета перетекают за 300 мс */
+html.theming .win,html.theming .win *{transition:background-color .3s var(--eo),border-color .3s var(--eo),color .3s var(--eo)!important}
+/* окно спрятано — никакой анимации */
+html.doc-hidden *,html.doc-hidden *::before,html.doc-hidden *::after{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}
+}
+
+@media (max-width:760px){.pane{border-left:0!important;border-top:1px solid var(--line)}.sbar{padding-right:16px!important;padding-top:40px!important}}
+/* приложение: шапка и подвал на месте, прокручиваются колонки (если панель не перенеслась вниз) */
+@media (min-width:961px){
+  html,body{overflow:hidden}
+  .win{height:100vh}
+  .body,.main{min-height:0}
+  .main{flex-wrap:nowrap}
+  .results,.pvbody{overflow-y:auto}
+  .pane{overflow:hidden}
+  .start{min-height:0;overflow-y:auto}
+}
+/* то же для проверки в браузере: #rm в адресе */
+html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}

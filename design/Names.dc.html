@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — по имени</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--surface2:#fafafa;--hover:#ebebeb;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--mark:#ffe28a;--sel:color-mix(in srgb,var(--accent) 11%,var(--surface))}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--surface2:#262626;--hover:#333333;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--mark:#7a6516}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.nrow:hover,.tab:hover,.ghost:hover,.cap:hover,.btn2:hover{background:var(--hover)}
+.cap.x:hover{background:#c42b1c;color:#ffffff}
+.prim:hover{filter:brightness(1.08)}
+@media (max-width:760px){.pane{border-left:0!important;border-top:1px solid var(--line)}.sbar{padding-right:16px!important;padding-top:40px!important}}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="position: absolute; top: 0; right: 0; display: flex; z-index: 2">
+<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="Развернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" aria-label="Скрыть в трей" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+
+<div class="sbar" style="display: flex; align-items: center; gap: 8px; padding: 14px 156px 10px 16px">
+<div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex: none; color: var(--accent)"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<label for="q3" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Запрос</label>
+<input id="q3" type="text" autocomplete="off" defaultValue="смета" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
+<button class="ghost" aria-label="Очистить запрос" style="flex: none; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+<span aria-hidden="true" style="flex: none; width: 1px; height: 22px; background: var(--line)"></span>
+<button class="ghost" aria-label="Искать по картинке" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
+</div>
+</div>
+
+<div role="tablist" aria-label="Что искать" style="display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+<button class="tab" role="tab" aria-selected="{{t.on}}" style="position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 6px 6px 0 0; background: transparent; {{t.style}}"><span>{{t.label}}</span><span style="font-size: 12px; font-weight: 400; color: var(--faint)">{{t.count}}</span><sc-if value="{{t.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if></button>
+</sc-for>
+<span style="margin-left: auto; padding-left: 16px; flex: none; font-size: 12px; color: var(--faint); white-space: nowrap">12 файлов на диске C: · 4 мс</span>
+</div>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+<div style="flex: 999 1 560px; min-width: 0; padding: 8px 10px 24px; box-sizing: border-box; overflow-x: auto">
+<div style="min-width: 620px">
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 76px 104px; gap: 12px; align-items: center; height: 32px; padding: 0 12px 0 42px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line)">
+<span>Имя</span><span>Папка</span><span style="text-align: right">Размер</span><span style="display: flex; align-items: center; justify-content: flex-end; gap: 4px">Изменён</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 1px; padding-top: 4px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+<button class="nrow" aria-pressed="{{r.sel}}" style="position: relative; display: grid; grid-template-columns: 18px minmax(0, 1.25fr) minmax(0, 1fr) 76px 104px; gap: 12px; align-items: center; width: 100%; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; text-align: left; font-size: 13px; {{r.selStyle}}">
+<sc-if value="{{r.sel}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent)"></span></sc-if>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted)"><path d="{{r.icon}}"></path></svg>
+<span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><sc-for list="{{r.parts}}" as="pt" hint-placeholder-count="2"><span style="{{pt.style}}">{{pt.t}}</span></sc-for></span>
+<span style="min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.crumbs}}</span>
+<span style="text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap">{{r.size}}</span>
+<span style="text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap">{{r.date}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+<aside class="pane" aria-label="Просмотр файла" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 20px 20px; border-left: 1px solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 16px">
+<div style="height: 210px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg)">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div style="width: 128px; height: 160px; box-sizing: border-box; padding: 14px 12px; background: #ffffff; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.14), 0 4px 14px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 5px">
+<sc-for list="{{lines}}" as="l" hint-placeholder-count="14"><span style="display: block; height: 4px; border-radius: 2px; {{l.style}}"></span></sc-for>
+</div>
+<span style="font-size: 12px; color: var(--muted)">первая страница</span>
+</div>
+</div>
+<div>
+<h2 style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere">Смета_кровля_v3.docx</h2>
+<div style="display: flex; align-items: flex-start; gap: 6px; margin-top: 4px">
+<span style="flex: 1; min-width: 0; padding-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere">C:\Users\1337\Documents\Дом\Ремонт крыши\Смета_кровля_v3.docx</span>
+<button class="ghost" aria-label="Копировать путь" style="flex: none; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9z M5 15H4V4h11v1"></path></svg></button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Тип</span><span>Документ Word</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Размер</span><span>86 КБ</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Изменён</span><span>9 марта 2026, 11:02</span></div>
+<div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">Создан</span><span>27 февраля 2026, 19:15</span></div>
+</div>
+<div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; color: var(--muted)">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" style="flex: none; margin-top: 2px; color: var(--accent)"><path d="M12 8v5 M12 16.5h.01 M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"></path></svg>
+<span>Ещё 2 копии с таким же именем: на рабочем столе и в автосохранении Word.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: auto">
+<button class="prim" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--accent); color: var(--onAccent); font-weight: 600"><span>Открыть</span><span style="font-size: 12px; font-weight: 400; opacity: .85">Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Показать в папке</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Копировать путь</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Shift+C</span></button>
+</div>
+</aside>
+</div>
+
+<footer style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 16px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted)">
+<span style="display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path d="M5 12l5 5L20 7"></path></svg>Имена: 2 104 377 файлов на C:, обновлено только что</span>
+<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">По имени ищется весь диск, включая AppData и Program Files</span>
+<span style="display: flex; gap: 2px">
+<button class="ghost" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14 M15 5v14"></path></svg><span>Пауза</span></button>
+<button class="ghost" aria-label="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
+</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const doc = 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9 13h6 M9 17h4';
+    const sheet = 'M5 3h14v18H5z M5 9h14 M5 15h14 M11 9v12';
+    const file = 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5';
+    const R = [
+      ['Смета_кровля_v3.docx', 'Документы › Дом › Ремонт крыши', '86 КБ', '9 мар 2026', doc],
+      ['Смета_кровля_v2.docx', 'Документы › Дом › Ремонт крыши', '84 КБ', '4 мар 2026', doc],
+      ['Смета_кровля.xlsx', 'Документы › Дом › Ремонт крыши', '31 КБ', '2 мар 2026', sheet],
+      ['Смета_кровля_v3.docx', 'Рабочий стол › Отправить прорабу', '86 КБ', '9 мар 2026', doc],
+      ['Смета на окна ПВХ.pdf', 'Загрузки', '412 КБ', '18 янв 2026', doc],
+      ['Смета электрика.xlsx', 'Документы › Дом › Кухня', '22 КБ', '11 ноя 2025', sheet],
+      ['смета-кухня-2025.pdf', 'Документы › Дом › Кухня', '1,3 МБ', '2 ноя 2025', doc],
+      ['смета_материалы.txt', 'Рабочий стол', '2 КБ', '28 окт 2025', doc],
+      ['Смета_ванная_финал.xlsx', 'Документы › Дом › Ванная', '27 КБ', '14 авг 2025', sheet],
+      ['СМЕТА ремонт офиса (копия).docx', 'OneDrive › Работа', '64 КБ', '30 мая 2025', doc],
+      ['Автокопия Смета_кровля_v3.asd', 'AppData › Roaming › Microsoft › Word', '91 КБ', '9 мар 2026', file],
+      ['Шаблон сметы.dotx', 'Документы › Шаблоны Office', '40 КБ', '12 янв 2024', file]
+    ];
+    const parts = s => s.split(/(смета)/i).filter(Boolean).map(t => ({ t, style: t.toLowerCase() === 'смета' ? 'background: var(--mark); border-radius: 3px' : '' }));
+    const rows = R.map(([name, crumbs, size, date, icon], i) => ({
+      parts: parts(name), crumbs, size, date, icon,
+      sel: i === 0, selStyle: i === 0 ? 'background: var(--sel);' : ''
+    }));
+    const lines = Array.from({ length: 14 }, (_, i) => {
+      const w = [48, 100, 96, 100, 64, 100, 92, 100, 72, 100, 94, 98, 86, 44][i];
+      return { style: 'width: ' + w + '%; background: ' + (i === 0 ? '#9e9e9e; height: 6px; margin-bottom: 4px' : '#dddddd') };
+    });
+    const TABS = [['Всё', '9'], ['Документы', '6'], ['Код', '0'], ['Фото', '1'], ['Видео', '0'], ['Аудио', '0'], ['По имени', '12']];
+    const tabs = TABS.map(([label, count]) => ({ label, count, on: label === 'По имени', style: label === 'По имени' ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)' }));
+    return {
+      rows, lines, tabs,
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff'
+    };
+  }
+}
+</script>
+</body>
+</html>

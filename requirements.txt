@@ -1,0 +1,13 @@
+sentence-transformers>=6.1
+transformers>=5.19
+numpy
+pillow
+pypdf
+python-docx
+av
+fastapi
+uvicorn
+python-multipart
+psutil
+watchdog
+nvidia-ml-py

@@ -1,0 +1,164 @@
+/* SemSearch — окно настроек: вид 1:1 с design/Settings.dc.html, поведение элементов — design/Controls.dc.html */
+html,body{margin:0}
+html{background:#f3f3f3}
+html.dark{background:#202020}
+a{color:#005fb8}a:hover{color:#003e7a}
+html.dark a{color:#60b8ff}html.dark a:hover{color:#ffffff}
+.win{--bg:#f3f3f3;--surface:#ffffff;--hover:#f5f5f5;--line:#e5e5e5;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--knob:#5c5c5c;--err:#c42b1c;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+.win.dark,html.dark .win{--bg:#202020;--surface:#2b2b2b;--hover:#323232;--line:#383838;--line2:#555555;--text:#f2f2f2;--muted:#bdbdbd;--knob:#cfcfcf;--err:#ff99a4}
+.win{position:relative;min-height:100vh;background:var(--bg);color:var(--text);font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.45}
+/* Полоса прокрутки по макету (без scrollbar-color на предках — иначе Chromium игнорирует ::-webkit-scrollbar) */
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+.win button{font:inherit;color:inherit;cursor:default;transition:background-color .12s,border-color .15s,color .15s,transform .1s cubic-bezier(.2,0,0,1)}
+.win button:focus-visible,.win input:focus-visible,.win textarea:focus-visible,.win a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+[hidden]{display:none!important}
+
+.tbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;height:40px;padding-left:16px;background:var(--bg)}
+.tbar>svg{color:var(--accent)}
+.tbar .ttl{margin-left:10px;font-size:12px}
+.tbar .caps{margin-left:auto;align-self:flex-start;display:flex}
+.win .cap{width:46px;height:32px;border:0;background:transparent;display:flex;align-items:center;justify-content:center}
+
+.page{max-width:800px;margin:0 auto;padding:12px 24px 40px;display:flex;flex-direction:column;gap:28px}
+.page h1{margin:0;font-size:26px;font-weight:600}
+.sec{display:flex;flex-direction:column;gap:4px}
+.sec>h2{margin:0 0 6px;font-size:14px;font-weight:600}
+.card{padding:14px 16px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.crow{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.crow.top{align-items:flex-start}
+.crow.nowrap{flex-wrap:nowrap}
+.desc{font-size:12px;color:var(--muted)}
+.win .btn2{height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:4px;background:var(--surface)}
+
+/* одноразовые входы и выходы */
+.rowin{animation:rowin .26s var(--eo) both}
+@keyframes rowin{from{opacity:0;transform:translateY(-6px);max-height:0}to{opacity:1;transform:none;max-height:60px}}
+.rowout{animation:rowout .2s var(--ei) both;pointer-events:none}
+@keyframes rowout{from{opacity:1;max-height:60px}to{opacity:0;transform:translateX(12px);max-height:0;padding-top:0;padding-bottom:0}}
+.pop{animation:pop .22s var(--eo) both}
+@keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+.shrink{animation:shrink .18s var(--ei) both;pointer-events:none}
+@keyframes shrink{to{opacity:0;transform:scale(.6)}}
+.fadein{animation:fadein .2s var(--eo) both}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.chk{stroke-dasharray:24;animation:chk .3s var(--eo) .05s both}
+@keyframes chk{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
+.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.roots{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.roots:empty{display:none}
+.root{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;background:var(--bg);overflow:hidden}
+.root>svg{color:var(--muted);flex:none}
+.root .p{flex:1;min-width:0;overflow-wrap:anywhere}
+.root .n{font-size:12px;color:var(--muted);white-space:nowrap}
+.win .xb{width:28px;height:28px;border:0;border-radius:4px;background:transparent;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+
+/* диски: рамка и фон перетекают 150 мс, галочка «выпрыгивает» с 70% */
+.drives{display:flex;gap:6px;flex-wrap:wrap}
+.win .chip{display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;border:1px solid var(--line2);border-radius:16px;background:var(--surface)}
+.win .chip[aria-pressed="true"]{border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));font-weight:600}
+.chip>svg{color:var(--accent)}
+
+.excl{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;font-size:12px}
+.excl span{padding:2px 8px;border-radius:4px;background:var(--bg);font-family:'Cascadia Mono',Consolas,monospace}
+.excl span.more{background:transparent;color:var(--muted);font-family:inherit}
+
+/* горячая клавиша: запись — поле пульсирует (кольцо прозрачностью), красная точка мигает */
+.hk{display:flex;align-items:center;gap:8px}
+.hk .keys{display:flex;gap:4px}
+kbd.kb{display:inline-flex;align-items:center;height:26px;padding:0 8px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;background:var(--surface);font:inherit;font-size:13px}
+.rec{position:relative;display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;box-sizing:border-box;border:1px solid var(--accent);border-radius:4px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));font-size:13px;white-space:nowrap;animation:fadein .2s var(--eo) both}
+.rec::after{content:'';position:absolute;inset:-1px;border-radius:5px;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 15%,transparent);opacity:0;animation:rec 1.2s ease-in-out infinite;pointer-events:none}
+@keyframes rec{50%{opacity:1}}
+.rec .dot{flex:none;width:8px;height:8px;border-radius:4px;background:#c42b1c;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.err{margin-top:8px;font-size:12px;color:var(--err)}
+
+/* тумблер: кружок переезжает за 200 мс и растёт 10 → 12 px, при нажатии вытягивается */
+.win .sw{flex:none;position:relative;width:40px;height:20px;padding:0;border:1px solid var(--knob);border-radius:10px;background:transparent;transition:background-color .2s,border-color .2s,transform .1s cubic-bezier(.2,0,0,1)}
+.sw>span{position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:6px;background:var(--knob);transform:translateX(1px) scale(.84);transition:transform .2s var(--eo),background-color .2s,width .15s}
+.win .sw[aria-checked="true"]{border-color:var(--accent);background:var(--accent)}
+.sw[aria-checked="true"]>span{background:var(--onAccent);transform:translateX(20px)}
+.sw:active>span{width:15px}
+.sw[aria-checked="true"]:active>span{transform:translateX(17px)}
+.win .sw:disabled{opacity:.5}
+
+/* выпадающий список: раскрывается за 160 мс с 97%, закрывается за 120 мс, стрелка поворачивается */
+.dd{position:relative;z-index:2}
+.win .ddb{display:flex;align-items:center;justify-content:space-between;gap:24px;min-width:170px;height:32px;padding:0 10px 0 12px;border:1px solid var(--line2);border-radius:4px;background:var(--surface)}
+.ddb>svg{transition:transform .2s var(--eo)}
+.ddb[aria-expanded="true"]>svg{transform:rotate(180deg)}
+.menu{position:absolute;left:0;top:36px;width:170px;padding:4px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.16);transform-origin:top center;animation:dropin .16s var(--eo) both}
+.menu.closing{animation:dropout .12s var(--ei) both;pointer-events:none}
+@keyframes dropin{from{opacity:0;transform:translateY(-4px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes dropout{to{opacity:0;transform:translateY(-4px) scale(.97)}}
+.win .opt{position:relative;display:flex;align-items:center;width:100%;height:32px;padding:0 12px;border:0;border-radius:4px;background:transparent;text-align:left;white-space:nowrap}
+.win .opt[aria-selected="true"]{font-weight:600}
+.opt .bar{position:absolute;left:0;top:50%;width:3px;height:16px;margin-top:-8px;border-radius:2px;background:var(--accent)}
+
+.procs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.proc{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 4px 0 10px;border-radius:4px;background:var(--bg);font-family:'Cascadia Mono',Consolas,monospace;font-size:12px}
+.win .proc button{width:22px;height:22px;padding:0;border:0;border-radius:3px;background:transparent;display:flex;align-items:center;justify-content:center}
+
+.media{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 24px;padding:14px 16px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px}
+.media label{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.media input{width:64px;height:30px;box-sizing:border-box;padding:0 8px;border:1px solid var(--line2);border-bottom:1px solid var(--muted);border-radius:4px;background:var(--surface);color:var(--text);font:inherit;transition:border-color .15s}
+.media input:focus{outline:none!important;border-bottom:2px solid var(--accent)!important}
+
+.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 24px;font-size:13px}
+.info .k{color:var(--muted);font-size:12px}
+.ibtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.win .btn2.danger{color:#b3261e}
+.win .btn2.long{display:flex;align-items:center;gap:8px}
+.btn2.long>svg{color:var(--accent)}
+
+/* диалоги: фон затемняется 200 мс, окно растёт с 96%; закрытие быстрее — 120 мс */
+.ovl{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.32);animation:fadein .2s var(--eo) both}
+.ovl.closing{animation:fadeout .15s var(--ei) both;pointer-events:none}
+@keyframes fadeout{to{opacity:0}}
+.dlg{width:100%;max-width:360px;max-height:calc(100vh - 48px);display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--surface);box-shadow:0 16px 48px rgba(0,0,0,.3);animation:dlg .2s var(--eo) both}
+.dlg.wide{max-width:520px}
+.closing .dlg{animation:dlgout .12s var(--ei) both}
+@keyframes dlg{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes dlgout{to{opacity:0;transform:scale(.98)}}
+.dlg .hd{padding:14px 18px 12px}
+.dlg h3{margin:0;font-size:15px;font-weight:600}
+.dlg .hd p{margin:6px 0 0;font-size:12px;color:var(--muted)}
+.dlg .bd{padding:0 18px 14px;overflow:auto;font-size:13px}
+.dlg .fbtns{display:flex;gap:8px;padding:10px 18px;background:var(--bg);border-top:1px solid var(--line)}
+.win .dlg .fbtns button{flex:1;height:30px;border-radius:4px}
+.win .dlg .fbtns .btn2{border:1px solid var(--line2);background:var(--surface);padding:0 12px}
+.win .prim{border:0;background:var(--accent);color:var(--onAccent);font-weight:600}
+.win .prim.danger{background:#b3261e;color:#ffffff;font-weight:400}
+.dlg textarea,.dlg input[type=text]{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line2);border-bottom:1px solid var(--muted);border-radius:4px;background:var(--surface);color:var(--text);font:inherit;transition:border-color .15s}
+.dlg textarea:focus,.dlg input[type=text]:focus{outline:none!important;border-bottom:2px solid var(--accent)!important}
+.dlg textarea{height:240px;resize:vertical;font-family:'Cascadia Mono',Consolas,monospace;font-size:12px}
+.plist{display:flex;flex-direction:column;gap:2px;margin-top:8px;max-height:260px;overflow:auto}
+.plist p{margin:6px 0;color:var(--muted)}
+.win .plist button{display:flex;align-items:center;height:32px;padding:0 10px;border:0;border-radius:4px;background:transparent;text-align:left;font-family:'Cascadia Mono',Consolas,monospace;font-size:12px}
+.flist{display:flex;flex-direction:column;gap:6px}
+.flist>div{padding:6px 10px;border-radius:4px;background:var(--bg)}
+.flist .fp{overflow-wrap:anywhere}
+.flist .fe{font-size:12px;color:var(--muted)}
+.flist p{margin:0;color:var(--muted)}
+
+/* подсказка «Сохранено»: 200 мс вход, 1,6 с показ, 150 мс выход */
+.toast{position:fixed;left:50%;bottom:16px;z-index:60;display:flex;align-items:center;justify-content:center;gap:8px;min-width:140px;height:34px;padding:0 14px;box-sizing:border-box;border-radius:6px;background:var(--text);color:var(--bg);font-size:13px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.2);pointer-events:none;transform:translateX(-50%);animation:toastin .2s var(--eo) both}
+.toast.out{animation:toastout .15s var(--ei) both}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastout{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,4px)}}
+
+/* наведение — 120 мс, нажатие — 97% */
+.win .btn2:hover,.win .cap:hover,.win .chip:not([aria-pressed="true"]):hover,.win .xb:hover,.win .ddb:hover,.win .opt:hover,.win .proc button:hover,.win .plist button:hover{background:var(--hover)}
+.win .btn2:active,.win .chip:active,.win .sw:active,.win .ddb:active,.win .prim:active,.win .xb:active{transform:scale(.97)}
+.win .cap.x:hover{background:#c42b1c;color:#ffffff}
+.win .prim:hover{filter:brightness(1.08)}
+
+html.theming .win,html.theming .win *{transition:background-color .3s var(--eo),border-color .3s var(--eo),color .3s var(--eo)!important}
+html.doc-hidden *,html.doc-hidden *::before,html.doc-hidden *::after{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}
+}
+/* то же для проверки в браузере: #rm в адресе */
+html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}

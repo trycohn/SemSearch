@@ -1,0 +1,40 @@
+[package]
+name = "semsearch-shell"
+version = "0.1.0"
+edition = "2021"
+description = "SemSearch desktop shell (Tauri v2): frameless windows, tray, hotkey, autostart, backend supervisor"
+publish = false
+
+[[bin]]
+name = "SemSearch"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# same versions as tauri-runtime-wry uses: needed to switch off WebView2's browser accelerator keys
+webview2-com = "0.39"
+windows-core = "0.62"
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+] }
+
+[profile.release]
+strip = true
+lto = "thin"

@@ -1,0 +1,144 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Controls.dc.html": {
+      "expand": "fill",
+      "h": 1720,
+      "is_interactive": true,
+      "title": "Элементы управления · кликабельно",
+      "w": 1280,
+      "x": 1360,
+      "y": 2960
+    },
+    "Logo2C.dc.html": {
+      "h": 600,
+      "title": "Капля · «Видит суть»",
+      "w": 800,
+      "x": 1760,
+      "y": 4780
+    },
+    "Logo2D.dc.html": {
+      "h": 600,
+      "title": "Лабиринт · «Прямо к сути»",
+      "w": 800,
+      "x": 2640,
+      "y": 4780
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "is_interactive": true,
+      "title": "Поиск · Всё (кликабельно)",
+      "w": 1280,
+      "x": 0,
+      "y": 0
+    },
+    "MainLive.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "is_interactive": true,
+      "title": "Главный экран · живой, со всеми анимациями",
+      "w": 1280,
+      "x": 2720,
+      "y": 2960
+    },
+    "Motion.dc.html": {
+      "expand": "fill",
+      "h": 2700,
+      "is_interactive": true,
+      "title": "Анимации · все переходы и загрузки",
+      "w": 1280,
+      "x": 0,
+      "y": 2960
+    },
+    "Names.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "title": "По имени · весь диск",
+      "w": 1280,
+      "x": 2720,
+      "y": 0
+    },
+    "Photos.dc.html": {
+      "expand": "fill",
+      "h": 960,
+      "title": "Фото и видео · тёмная тема",
+      "w": 1280,
+      "x": 1360,
+      "y": 0
+    },
+    "Settings.dc.html": {
+      "expand": "fill",
+      "h": 1180,
+      "title": "Настройки",
+      "w": 1280,
+      "x": 1360,
+      "y": 1480
+    },
+    "Start.dc.html": {
+      "expand": "fill",
+      "h": 900,
+      "title": "Пустое окно и первая индексация",
+      "w": 1280,
+      "x": 0,
+      "y": 1480
+    },
+    "Tray.dc.html": {
+      "h": 520,
+      "title": "Меню в трее",
+      "w": 400,
+      "x": 2720,
+      "y": 1480
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-14T12:45:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "row1": {
+      "kind": "title1",
+      "maxW": 4000,
+      "text": "Окно поиска",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 4000,
+      "text": "Старт, настройки, трей",
+      "w": 240,
+      "x": 0,
+      "y": 1180
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 4000,
+      "text": "Анимации, элементы управления и живой главный экран",
+      "w": 240,
+      "x": 0,
+      "y": 2660
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Photos.dc.html",
+    "Names.dc.html",
+    "Start.dc.html",
+    "Settings.dc.html",
+    "Tray.dc.html",
+    "Logo2C.dc.html",
+    "Logo2D.dc.html",
+    "Motion.dc.html",
+    "Controls.dc.html",
+    "MainLive.dc.html"
+  ],
+  "pages": [],
+  "title": "SemSearch Desktop"
+}

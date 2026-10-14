@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — элементы управления</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--hover:#f2f2f2;--line:#e5e5e5;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--knob:#5c5c5c;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--hover:#333333;--line:#383838;--line2:#555555;--text:#f2f2f2;--muted:#bdbdbd;--knob:#cfcfcf}
+.win button{font:inherit;color:inherit;cursor:default;transition:background-color .12s,border-color .15s,color .15s,transform .1s cubic-bezier(.2,0,0,1)}
+.win button:focus-visible,.win input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn2:hover,.chip:hover,.opt:hover{background:var(--hover)!important}
+.btn2:active,.chip:active,.sw:active{transform:scale(.97)}
+.num{transition:border-color .15s}
+.num:focus{outline:none!important;border-bottom:2px solid var(--accent)!important}
+.sw .knob{transition:transform .2s cubic-bezier(.2,0,0,1),background-color .2s,width .15s}
+.sw:active .knob{width:15px!important}
+.rowin{animation:rowin .26s var(--eo) both}
+@keyframes rowin{from{opacity:0;transform:translateY(-6px);max-height:0}to{opacity:1;transform:none;max-height:60px}}
+.rowout{animation:rowout .2s var(--ei) both}
+@keyframes rowout{from{opacity:1;max-height:60px}to{opacity:0;transform:translateX(12px);max-height:0;padding-top:0;padding-bottom:0}}
+.pop{animation:pop .22s var(--eo) both}
+@keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+.shrink{animation:shrink .18s var(--ei) both}
+@keyframes shrink{to{opacity:0;transform:scale(.6)}}
+.dropin{transform-origin:top center;animation:dropin .16s var(--eo) both}
+@keyframes dropin{from{opacity:0;transform:translateY(-4px) scale(.97)}to{opacity:1;transform:none}}
+.rec{animation:rec 1.2s ease-in-out infinite}
+@keyframes rec{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 40%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 15%,transparent)}}
+.blink{animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fade{animation:fade .2s var(--eo) both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.fadeout{animation:fadeout .15s var(--ei) both}
+@keyframes fadeout{to{opacity:0}}
+.dlg{animation:dlg .2s var(--eo) both}
+@keyframes dlg{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.dlgout{animation:dlgout .12s var(--ei) both}
+@keyframes dlgout{to{opacity:0;transform:scale(.98)}}
+.toast{animation:toast 1.9s both}
+@keyframes toast{0%{opacity:0;transform:translateY(12px);animation-timing-function:cubic-bezier(.2,0,0,1)}11%,84%{opacity:1;transform:none;animation-timing-function:cubic-bezier(.3,0,1,1)}100%{opacity:0;transform:translateY(4px)}}
+.chk{stroke-dasharray:24;animation:chk .3s var(--eo) .05s both}
+@keyframes chk{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
+.mini{transition:background-color .3s cubic-bezier(.2,0,0,1),border-color .3s,color .3s}
+.mini *{transition:background-color .3s cubic-bezier(.2,0,0,1),border-color .3s}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+<div style="max-width: 1200px; margin: 0 auto; padding: 36px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Элементы управления</h1>
+<p style="margin: 0; max-width: 760px; color: var(--muted)">Всё здесь можно нажимать. Тумблеры, списки, кнопки, диалоги — каждый со своей анимацией; тайминги — в таблице на артборде «Анимации».</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 16px">
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; flex-direction: column; justify-content: center; gap: 12px">
+<sc-for list="{{switches}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<span id="{{s.id}}" style="font-size: 13px">{{s.title}}</span>
+<button class="sw" role="switch" aria-checked="{{s.on}}" aria-labelledby="{{s.id}}" onClick="{{s.toggle}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border-radius: 10px; border: 1px solid; transition-duration: .2s; {{s.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{s.knob}}"></span></button>
+</div>
+</sc-for>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Тумблер</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Кружок переезжает за 200 мс и растёт с 10 до 12 px, дорожка заливается цветом. Зажмите — кружок вытянется, как в Windows 11.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center; gap: 8px">
+<sc-for list="{{drives}}" as="d" hint-placeholder-count="3">
+<button class="chip" onClick="{{d.toggle}}" aria-pressed="{{d.on}}" style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 16px; {{d.style}}"><sc-if value="{{d.on}}" hint-placeholder-val="{{true}}"><svg class="pop" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path d="M5 12l5 5L20 7"></path></svg></sc-if>{{d.label}}</button>
+</sc-for>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Выбор дисков (метки-переключатели)</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Рамка и фон перетекают за 150 мс, галочка «выпрыгивает» с 70%. Используется в «Поиск по имени».</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; flex-direction: column; justify-content: center; gap: 4px">
+<sc-for list="{{folders}}" as="f" hint-placeholder-count="1">
+<div class="{{f.cls}}" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); overflow: hidden">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted)"><path d="M3 6h6l2 2h10v11H3z"></path></svg>
+<span style="flex: 1; min-width: 0; font-size: 13px">{{f.path}}</span><span style="font-size: 12px; color: var(--muted); white-space: nowrap">{{f.note}}</span>
+<button class="btn2" onClick="{{f.remove}}" aria-label="Убрать папку {{f.path}}" style="width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+</sc-for>
+<button class="btn2" onClick="{{addFolder}}" style="align-self: flex-start; margin-top: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Добавить папку</button>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Список папок</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Новая строка разъезжается по высоте и проявляется за 260 мс; убранная уезжает вправо и схлопывается за 200 мс — соседи не прыгают.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; flex-direction: column; justify-content: center; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+<sc-for list="{{procs}}" as="p" hint-placeholder-count="2">
+<span class="{{p.cls}}" style="display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px">{{p.name}}<button class="btn2" onClick="{{p.remove}}" aria-label="Убрать {{p.name}}" style="width: 22px; height: 22px; border: 0; border-radius: 3px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></span>
+</sc-for>
+</div>
+<button class="btn2" onClick="{{addProc}}" style="align-self: flex-start; height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Добавить процесс</button>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Метки (процессы, исключения)</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Новая метка «выпрыгивает» с 70% за 220 мс, убранная сжимается и гаснет за 180 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px">
+<sc-if value="{{recording}}" hint-placeholder-val="{{false}}">
+<span class="rec fade" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); font-size: 13px"><span class="blink" style="width: 8px; height: 8px; border-radius: 4px; background: #c42b1c"></span>Нажмите сочетание…</span>
+</sc-if>
+<sc-if value="{{notRecording}}" hint-placeholder-val="{{true}}">
+<span style="display: flex; gap: 4px"><sc-for list="{{keys}}" as="k" hint-placeholder-count="3"><kbd class="pop" style="display: inline-flex; align-items: center; height: 28px; padding: 0 9px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 13px; animation-delay: {{k.d}}">{{k.t}}</kbd></sc-for></span>
+</sc-if>
+<button class="btn2" onClick="{{recordKey}}" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">{{recLabel}}</button>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Запись горячей клавиши</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">«Изменить» → поле пульсирует, красная точка мигает. Здесь сочетание «нажимается» само через 1,7 с, клавиши появляются по одной с шагом 50 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center; gap: 24px">
+<div class="mini" aria-hidden="true" style="width: 120px; height: 84px; border-radius: 6px; border: 1px solid; overflow: hidden; {{miniWin}}"><div style="height: 14px; margin: 8px; border-radius: 3px; border: 1px solid; {{miniField}}"></div><div style="height: 5px; width: 70%; margin: 8px; border-radius: 3px; {{miniLine}}"></div><div style="height: 5px; width: 50%; margin: 8px; border-radius: 3px; {{miniLine}}"></div></div>
+<div style="position: relative; z-index: 2">
+<button class="btn2" onClick="{{toggleMenu}}" aria-haspopup="listbox" aria-expanded="{{menuOpen}}" style="display: flex; align-items: center; justify-content: space-between; gap: 24px; min-width: 170px; height: 32px; padding: 0 10px 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)"><span>{{themeLabel}}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .2s cubic-bezier(.2,0,0,1); {{chevron}}"><path d="M6 9l6 6 6-6"></path></svg></button>
+<sc-if value="{{menuOpen}}" hint-placeholder-val="{{false}}">
+<div class="dropin" role="listbox" aria-label="Тема" style="position: absolute; left: 0; top: 36px; width: 170px; padding: 4px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.16)">
+<sc-for list="{{themes}}" as="o" hint-placeholder-count="3">
+<button class="opt" role="option" aria-selected="{{o.on}}" onClick="{{o.pick}}" style="position: relative; display: flex; align-items: center; width: 100%; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; text-align: left; {{o.style}}"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent)"></span></sc-if>{{o.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Выпадающий список и смена темы</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Список раскрывается от кнопки за 160 мс, стрелка поворачивается. Выберите тему — мини-окно слева перетекает в неё за 300 мс, без мигания.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center">
+<button class="btn2" onClick="{{rescan}}" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">
+<sc-if value="{{scanBusy}}" hint-placeholder-val="{{false}}"><svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="color: var(--accent)"><path d="M12 3a9 9 0 0 1 9 9"></path></svg></sc-if>
+<sc-if value="{{scanDone}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg></sc-if>
+<span>{{scanLabel}}</span></button>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Кнопка с долгим действием</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">«Пересканировать сейчас»: спиннер и «Сканирую…», затем дорисовывается галочка с итогом, через 2 с кнопка возвращается.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center; overflow: hidden">
+<button class="btn2" onClick="{{openDlg}}" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); color: #b3261e">Собрать индекс заново…</button>
+<sc-if value="{{dlg}}" hint-placeholder-val="{{false}}">
+<div class="{{dlgBackCls}}" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0,0,0,.32)">
+<div class="{{dlgCls}}" role="dialog" aria-modal="true" aria-labelledby="dlg-t" style="width: 100%; max-width: 360px; border-radius: 8px; overflow: hidden; background: var(--surface); box-shadow: 0 16px 48px rgba(0,0,0,.3)">
+<div style="padding: 14px 18px 12px"><h3 id="dlg-t" style="margin: 0; font-size: 15px; font-weight: 600">Собрать индекс заново?</h3><p style="margin: 6px 0 0; font-size: 12px; color: var(--muted)">Текущий индекс удалится и соберётся с нуля.</p></div>
+<div style="display: flex; gap: 8px; padding: 10px 18px; background: var(--bg); border-top: 1px solid var(--line)">
+<button onClick="{{closeDlg}}" style="flex: 1; height: 30px; border: 0; border-radius: 4px; background: #b3261e; color: #ffffff">Собрать заново</button>
+<button class="btn2" onClick="{{closeDlg}}" style="flex: 1; height: 30px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Отмена</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Диалог подтверждения</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Фон затемняется, окно вырастает с 96% за 200 мс. Закрывается быстрее — за 120 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; align-items: center; justify-content: center; overflow: hidden">
+<button class="btn2" onClick="{{showToast}}" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Изменить настройку</button>
+<sc-if value="{{toast}}" hint-placeholder-val="{{false}}">
+<div class="toast" role="status" style="position: absolute; left: 50%; bottom: 16px; margin-left: -70px; width: 140px; height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.2)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk" d="M5 12l5 5L20 7"></path></svg>Сохранено</div>
+</sc-if>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Подсказка «Сохранено»</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Настройки применяются сразу, поэтому после изменения снизу всплывает подсказка: 200 мс вход, 1,6 с показ, 150 мс выход.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="min-height: 180px; padding: 20px 24px; box-sizing: border-box; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px">
+<button class="btn2" style="height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">Обычная кнопка</button>
+<button style="height: 32px; padding: 0 14px; border: 0; border-radius: 4px; background: var(--accent); color: var(--onAccent); font-weight: 600">Открыть</button>
+<label style="display: flex; align-items: center; gap: 10px; font-size: 13px">Кадр каждые, с<input class="num" type="number" defaultValue="10" style="width: 64px; height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line2); border-bottom: 1px solid var(--muted); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit"></label>
+</div>
+<div style="padding: 12px 16px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Кнопки и поля</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Наведение — фон за 120 мс, нажатие — кнопка сжимается до 97%, поле в фокусе — снизу полоса цвета акцента.</p></div>
+</div>
+
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":1720}}'>
+class Component extends DCLogic {
+  later(fn, ms) { setTimeout(() => fn(), ms); }
+  renderVals() {
+    const st = this.state || {};
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const sw = Object.assign({ auto: true, full: true, batt: false }, st.sw || {});
+    const mkSwitch = (id, title) => ({
+      id: 'c-' + id, title, on: sw[id],
+      track: sw[id] ? 'border-color: var(--accent); background: var(--accent)' : 'border-color: var(--knob); background: transparent',
+      knob: sw[id] ? 'transform: translateX(20px); background: var(--onAccent)' : 'transform: translateX(1px) scale(.84); background: var(--knob)',
+      toggle: () => this.setState({ sw: Object.assign({}, sw, { [id]: !sw[id] }) })
+    });
+    const removeWithAnim = (key, list, name) => {
+      this.setState({ [key + 'Out']: name });
+      this.later(() => this.setState({ [key]: list.filter(n => n !== name), [key + 'Out']: null }), 200);
+    };
+    const folderList = st.folders || ['C:\\Users\\1337', 'D:\\Проекты'];
+    const folders = folderList.map(p => ({
+      path: p, note: p === 'C:\\Users\\1337' ? '65 475 файлов' : (st.foldersNew === p ? 'считаю файлы…' : '8 102 файла'),
+      cls: st.foldersOut === p ? 'rowout' : (st.foldersNew === p ? 'rowin' : ''),
+      remove: () => removeWithAnim('folders', folderList, p)
+    }));
+    const drv = Object.assign({ c: true, d: false, e: false }, st.drv || {});
+    const drives = [['c', 'C:\\'], ['d', 'D:\\'], ['e', 'E:\\']].map(([k, label]) => ({
+      label, on: drv[k],
+      style: drv[k] ? 'border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight: 600' : 'border: 1px solid var(--line2); background: var(--surface)',
+      toggle: () => this.setState({ drv: Object.assign({}, drv, { [k]: !drv[k] }) })
+    }));
+    const procList = st.procs || ['cs2.exe', 'node_modules'];
+    const procs = procList.map(n => ({ name: n, cls: st.procsOut === n ? 'shrink' : (st.procNew === n ? 'pop' : ''), remove: () => removeWithAnim('procs', procList, n) }));
+    const combo = st.combo || ['Ctrl', 'Alt', 'S'];
+    const recording = !!st.recording;
+    const THEMES = [['light', 'Светлая'], ['dark', 'Тёмная'], ['system', 'Как в Windows']];
+    const theme = st.theme || 'light';
+    const miniDark = theme === 'dark';
+    const menuOpen = !!st.menu;
+    const scan = st.scan || 'idle';
+    const dlg = st.dlg || 'closed';
+    return {
+      switches: [mkSwitch('auto', 'Запускать вместе с Windows'), mkSwitch('full', 'Пауза при полноэкранных приложениях'), mkSwitch('batt', 'Пауза от батареи')],
+      drives, folders, procs,
+      addFolder: () => {
+        const cand = ['D:\\Проекты', 'D:\\Фото', 'E:\\Архив'].find(p => !folderList.includes(p));
+        if (cand) this.setState({ folders: folderList.concat(cand), foldersNew: cand });
+      },
+      addProc: () => {
+        const cand = ['eldenring.exe', 'r5apex.exe', 'Overwatch.exe', 'venv'].find(p => !procList.includes(p));
+        if (cand) this.setState({ procs: procList.concat(cand), procNew: cand });
+      },
+      recording, notRecording: !recording,
+      keys: combo.map((t, i) => ({ t, d: (i * 0.05) + 's' })),
+      recLabel: recording ? 'Отмена' : 'Изменить',
+      recordKey: () => {
+        if (recording) { this.setState({ recording: false }); return; }
+        this.setState({ recording: true });
+        this.later(() => {
+          if (!(this.state || {}).recording) return;
+          const next = combo.join('+') === 'Ctrl+Alt+S' ? ['Ctrl', 'Shift', 'Space'] : ['Ctrl', 'Alt', 'S'];
+          this.setState({ recording: false, combo: next });
+        }, 1700);
+      },
+      menuOpen,
+      themeLabel: THEMES.find(t => t[0] === theme)[1],
+      chevron: menuOpen ? 'transform: rotate(180deg)' : 'transform: none',
+      toggleMenu: () => this.setState({ menu: !menuOpen }),
+      themes: THEMES.map(([k, label]) => ({ label, on: k === theme, style: k === theme ? 'font-weight: 600' : '', pick: () => this.setState({ theme: k, menu: false }) })),
+      miniWin: miniDark ? 'background: #202020; border-color: #383838' : 'background: #f3f3f3; border-color: #d6d6d6',
+      miniField: miniDark ? 'background: #2b2b2b; border-color: #444444' : 'background: #ffffff; border-color: #dddddd',
+      miniLine: miniDark ? 'background: #4a4a4a' : 'background: #cfcfcf',
+      scanBusy: scan === 'busy', scanDone: scan === 'done',
+      scanLabel: scan === 'busy' ? 'Сканирую…' : scan === 'done' ? 'Готово, новых файлов: 12' : 'Пересканировать сейчас',
+      rescan: () => {
+        if (scan !== 'idle') return;
+        this.setState({ scan: 'busy' });
+        this.later(() => this.setState({ scan: 'done' }), 1800);
+        this.later(() => this.setState({ scan: 'idle' }), 3800);
+      },
+      dlg: dlg !== 'closed',
+      dlgBackCls: dlg === 'closing' ? 'fadeout' : 'fade',
+      dlgCls: dlg === 'closing' ? 'dlgout' : 'dlg',
+      openDlg: () => this.setState({ dlg: 'open' }),
+      closeDlg: () => { this.setState({ dlg: 'closing' }); this.later(() => this.setState({ dlg: 'closed' }), 130); },
+      toast: !!st.toast,
+      showToast: () => {
+        this.setState({ toast: false });
+        clearTimeout(this._toastT);
+        this.later(() => this.setState({ toast: true }), 20);
+        this._toastT = setTimeout(() => this.setState({ toast: false }), 1950);
+      },
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff'
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-hotkey"
+description = "Enables the get_hotkey command without any pre-configured scope."
+commands.allow = ["get_hotkey"]
+
+[[permission]]
+identifier = "deny-get-hotkey"
+description = "Denies the get_hotkey command without any pre-configured scope."
+commands.deny = ["get_hotkey"]

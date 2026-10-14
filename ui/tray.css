@@ -1,0 +1,35 @@
+/* SemSearch — попап трея (design/Tray.dc.html, только панель 292 px). Окно прозрачное 300×340. */
+html,body{margin:0;background:transparent;overflow:hidden}
+/* Полоса прокрутки по макету (общая для всех экранов SemSearch) */
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#60b8ff}a:hover{color:#ffffff}
+.tray{position:fixed;right:4px;bottom:4px;width:292px;box-sizing:border-box;padding:4px;border:1px solid #3f3f3f;border-radius:8px;background:#2c2c2c;box-shadow:0 8px 24px rgba(0,0,0,.45);color:#f2f2f2;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.45;user-select:none}
+.tray button{font:inherit;color:inherit;cursor:default}
+.tray button:focus-visible{outline:2px solid #73a7d8;outline-offset:-2px}
+[hidden]{display:none!important}
+.head{display:flex;gap:10px;padding:10px 12px 12px;border-bottom:1px solid #3f3f3f;margin-bottom:4px}
+.logo{flex:none;width:32px;height:32px;border-radius:6px;background:var(--acc,#73a7d8);color:#111111;display:flex;align-items:center;justify-content:center}
+.hb{flex:1;min-width:0}
+.hb .t{font-weight:600}
+.hb .s{font-size:12px;color:#c8c8c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{margin-top:6px;height:3px;border-radius:2px;background:#4a4a4a;overflow:hidden}
+.bar>div{height:100%;background:var(--acc,#73a7d8);transform-origin:left;transition:transform .4s cubic-bezier(.4,0,.2,1)}
+.mi{display:flex;align-items:center;gap:12px;width:100%;height:36px;padding:0 12px;border:0;border-radius:4px;background:transparent;text-align:left}
+.mi .l{flex:1}
+.mi .l.b{font-weight:600}
+.mi .k{font-size:12px;color:#c8c8c8}
+.sep{height:1px;margin:4px 0;background:#3f3f3f}
+.mi:hover{background:rgba(255,255,255,.08)}
+.tray{transform-origin:bottom right}
+.mi{transition:background-color .12s}
+/* меню поднимается от значка на 8 px за 160 мс, пункты — следом с шагом 40 мс; уходит быстрее */
+.tray.in{animation:menu .16s cubic-bezier(.2,0,0,1) both}
+.tray.in .st{animation:mi .16s cubic-bezier(.2,0,0,1) both}
+.tray.out{animation:menuout .1s cubic-bezier(.3,0,1,1) both;pointer-events:none}
+@keyframes menu{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes mi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes menuout{to{opacity:0;transform:translateY(4px)}}
+html.doc-hidden *{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;transition-duration:1ms!important}}
+/* то же для проверки в браузере: #rm в адресе */
+html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}

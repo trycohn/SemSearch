@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — пустое окно</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--surface2:#fafafa;--hover:#ebebeb;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--surface2:#262626;--hover:#333333;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.chip:hover,.tab:hover,.ghost:hover,.cap:hover{background:var(--hover)}
+.cap.x:hover{background:#c42b1c;color:#ffffff}
+.win input::placeholder{color:var(--faint)}
+@media (max-width:760px){.sbar{padding-right:16px!important;padding-top:40px!important}}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="position: absolute; top: 0; right: 0; display: flex; z-index: 2">
+<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="Развернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" aria-label="Скрыть в трей" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+
+<div class="sbar" style="display: flex; align-items: center; gap: 8px; padding: 14px 156px 10px 16px">
+<div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex: none; color: var(--accent)"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<label for="q4" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Запрос</label>
+<input id="q4" type="text" autocomplete="off" placeholder="Что ищем? Опишите файл своими словами" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
+<button class="ghost" aria-label="Искать по картинке" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
+</div>
+</div>
+
+<div style="flex: 1; padding: 32px 24px 28px">
+<div style="max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">Ищите так, как описали бы файл человеку</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button class="chip" style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface)">договор про крышу</button>
+<button class="chip" style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface)">кот на балконе</button>
+<button class="chip" style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface)">где парсил JSON с ретраями</button>
+<button class="chip" style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface)">скриншот с ошибкой CUDA</button>
+</div>
+<p style="margin: 0; font-size: 13px; color: var(--muted)">По-русски или по-английски. Картинку можно перетащить в окно или вставить через Ctrl+V — найдутся похожие фото и кадры из видео.</p>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: stretch; gap: 16px">
+<section aria-labelledby="first-ix" style="flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px 10px">
+<h2 id="first-ix" style="margin: 0; font-size: 15px; font-weight: 600">Первая индексация</h2>
+<span style="font-size: 12px; color: var(--muted)">осталось около 35 минут</span>
+</div>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{kinds}}" as="k" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1.2fr) 120px; gap: 12px; align-items: center; min-height: 40px; padding: 4px 16px; border-top: 1px solid var(--line); font-size: 13px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted)"><path d="{{k.icon}}"></path></svg>
+<span>{{k.label}}</span>
+<span role="progressbar" aria-label="{{k.label}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{k.pct}}" style="display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden"><span style="display: block; height: 100%; border-radius: 2px; {{k.bar}}"></span></span>
+<span style="text-align: right; font-size: 12px; white-space: nowrap; {{k.noteStyle}}">{{k.note}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: auto 0 0; padding: 12px 16px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted)">Искать уже можно — найдётся всё, что успело проиндексироваться. Пока запущена игра или фильм на весь экран, индексация сама встаёт на паузу.</p>
+</section>
+
+<section aria-labelledby="keys" style="flex: 0 1 330px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px 10px">
+<h2 id="keys" style="margin: 0; font-size: 15px; font-weight: 600">Клавиши</h2>
+<span style="font-size: 12px; color: var(--muted)">меняются в настройках</span>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; font-size: 13px">
+<sc-for list="{{keys}}" as="kk" hint-placeholder-count="6">
+<div style="flex: 1; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 4px 16px; border-top: 1px solid var(--line)"><span style="display: flex; gap: 4px; flex: none; min-width: 112px"><sc-for list="{{kk.caps}}" as="c" hint-placeholder-count="2"><kbd style="display: inline-flex; align-items: center; height: 22px; padding: 0 6px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: inherit; font-size: 12px">{{c}}</kbd></sc-for></span><span style="color: var(--muted)">{{kk.what}}</span></div>
+</sc-for>
+</div>
+</section>
+</div>
+
+</div>
+</div>
+
+<footer style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 16px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted)">
+<span style="display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap"><span role="progressbar" aria-label="Индексация фото" aria-valuemin="0" aria-valuemax="18204" aria-valuenow="11280" style="display: block; width: 72px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; width: 62%; height: 100%; background: var(--accent)"></span></span>Индексирую фото: 11 280 из 18 204</span>
+<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Модель работает на видеокарте</span>
+<span style="display: flex; gap: 2px">
+<button class="ghost" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14 M15 5v14"></path></svg><span>Пауза</span></button>
+<button class="ghost" aria-label="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
+</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const K = [
+      ['Документы', 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9 13h6 M9 17h4', 100, 'готово · 3 412'],
+      ['Код', 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 5l-3 14', 100, 'готово · 41 870'],
+      ['Фото', 'M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01', 62, '11 280 из 18 204'],
+      ['Аудио', 'M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 11v2', 0, 'в очереди · 1 377'],
+      ['Видео', 'M3 6h12v12H3z M15 10l6-3v10l-6-3', 0, 'в очереди · 612'],
+      ['Имена файлов на C:', 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5', 100, 'готово · 2,1 млн']
+    ];
+    const kinds = K.map(([label, icon, pct, note]) => ({
+      label, icon, pct, note,
+      bar: 'width: ' + pct + '%; background: ' + (pct === 100 ? 'var(--muted)' : 'var(--accent)'),
+      noteStyle: pct > 0 && pct < 100 ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)'
+    }));
+    const keys = [
+      { caps: ['Ctrl', 'Alt', 'S'], what: 'открыть окно из любой программы' },
+      { caps: ['Enter'], what: 'открыть файл' },
+      { caps: ['Ctrl', 'Enter'], what: 'показать в папке' },
+      { caps: ['↑', '↓'], what: 'выбрать результат' },
+      { caps: ['Ctrl', '1…7'], what: 'вкладки: всё, документы, код…' },
+      { caps: ['Esc'], what: 'спрятать окно в трей' }
+    ];
+    return {
+      kinds, keys,
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent
+    };
+  }
+}
+</script>
+</body>
+</html>

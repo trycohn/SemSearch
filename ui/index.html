@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="semsearch-token" content="__SEMSEARCH_TOKEN__">
+<title>SemSearch — поиск</title>
+<link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/ui/main.css">
+<script src="/ui/common.js"></script>
+<script src="/ui/render.js" defer></script>
+<script src="/ui/main.js" defer></script>
+</head>
+<body>
+<div class="win w-launch" id="win">
+
+<div class="caps" id="caps" hidden>
+<button class="cap" id="capMin" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" id="capMax" aria-label="Развернуть"><svg id="icoMax" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg><svg id="icoRestore" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" hidden><path d="M2.5 2.5V2A1.5 1.5 0 0 1 4 .5h4A1.5 1.5 0 0 1 9.5 2v4A1.5 1.5 0 0 1 8 7.5h-.5" fill="none" stroke="currentColor" stroke-width="1"></path><rect x="0.5" y="2.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" id="capHide" aria-label="Скрыть в трей" title="Скрыть в трей (Esc)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+
+<div class="sbar" data-tauri-drag-region="deep">
+<div class="sbox" id="sbox">
+<span class="sund" aria-hidden="true"></span>
+<span class="ibar" id="ibar" aria-hidden="true" hidden><i></i></span>
+<svg class="sico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
+<span class="simchip" id="simchip" hidden></span>
+<label for="q" class="sr">Запрос</label>
+<input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Что ищем? Опишите файл своими словами">
+<button class="clr" id="clr" aria-label="Очистить запрос" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+<span class="ssep" id="ssep" aria-hidden="true" hidden></span>
+<button class="imgb" id="imgb" aria-label="Искать по картинке" title="Искать по картинке — или перетащите её в окно, или Ctrl+V"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
+<input type="file" id="imgfile" accept="image/*" hidden>
+</div>
+</div>
+
+<div class="tabs" id="tabs" hidden data-tauri-drag-region="deep"></div>
+
+<div class="body" id="body">
+<div class="main" id="main" hidden>
+<div class="results" id="results"></div>
+<aside class="pane" id="pane" aria-label="Просмотр файла" hidden></aside>
+</div>
+
+<div class="start" id="start">
+<div class="start-in">
+<div class="hero">
+<h1>Ищите так, как описали бы файл человеку</h1>
+<div class="chips" id="chips">
+<button class="chip">договор про крышу</button>
+<button class="chip">кот на балконе</button>
+<button class="chip">где парсил JSON с ретраями</button>
+<button class="chip">скриншот с ошибкой CUDA</button>
+</div>
+<p>По-русски или по-английски. Картинку можно перетащить в окно или вставить через Ctrl+V — найдутся похожие фото и кадры из видео.</p>
+</div>
+
+<div class="srow">
+<section class="fix" id="fix" aria-labelledby="first-ix" hidden>
+<div class="fix-h"><h2 id="first-ix">Первая индексация</h2><span id="eta"></span></div>
+<div id="fixRows"></div>
+<p>Искать уже можно — найдётся всё, что успело проиндексироваться. Пока запущена игра или фильм на весь экран, индексация сама встаёт на паузу.</p>
+</section>
+
+<section class="keys" aria-labelledby="keys-h">
+<div class="fix-h"><h2 id="keys-h">Клавиши</h2><span>меняются в настройках</span></div>
+<div class="kgrid" id="kgrid"></div>
+</section>
+</div>
+</div>
+</div>
+
+<div class="dropovl" id="dropovl" hidden><span class="frame" aria-hidden="true"></span><div class="dc"><span class="fly" aria-hidden="true"><span></span></span><span class="dt">Отпустите — найду похожие фото и кадры</span></div></div>
+</div>
+
+<footer class="ft" id="ft">
+<span class="st" id="st"></span>
+<span class="mid" id="mid"></span>
+<span class="fb">
+<button class="pausebtn" id="pauseb" hidden><span class="pico" aria-hidden="true"><svg class="ip1" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5v14 M15 5v14"></path></svg><svg class="ip2" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"></path></svg></span><span id="pauseLbl">Пауза</span></button>
+<button class="setb" id="setb" aria-label="Настройки" title="Настройки"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
+</span>
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — поиск</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}::-webkit-scrollbar-thumb:active{background-color:rgba(128,128,128,.72);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.win{--bg:#f3f3f3;--surface:#ffffff;--surface2:#fafafa;--hover:#ebebeb;--line:#e1e1e1;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--mark:#ffe28a;--sel:color-mix(in srgb,var(--accent) 11%,var(--surface))}
+.win.dark{--bg:#202020;--surface:#2b2b2b;--surface2:#262626;--hover:#333333;--line:#383838;--line2:#4a4a4a;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--mark:#7a6516}
+.win button{font:inherit;color:inherit;cursor:default}
+.win button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.row:hover,.tile:hover,.tab:hover,.ghost:hover,.cap:hover,.btn2:hover{background:var(--hover)}
+.cap.x:hover{background:#c42b1c;color:#ffffff}
+.prim:hover{filter:brightness(1.08)}
+@media (max-width:760px){.pane{border-left:0!important;border-top:1px solid var(--line)}.sbar{padding-right:16px!important;padding-top:40px!important}}
+</style>
+</helmet>
+<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="position: absolute; top: 0; right: 0; display: flex; z-index: 2">
+<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="Развернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" aria-label="Скрыть в трей" title="Скрыть в трей (Esc)" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+
+<div class="sbar" style="display: flex; align-items: center; gap: 8px; padding: 14px 156px 10px 16px">
+<div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex: none; color: var(--accent)"><path d="{{ic.search}}"></path></svg>
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Запрос</label>
+<input id="q" type="text" autocomplete="off" value="{{q}}" onChange="{{onQ}}" placeholder="Что ищем? Опишите файл своими словами" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
+<button class="ghost" aria-label="Очистить запрос" onClick="{{clearQ}}" style="flex: none; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.x}}"></path></svg></button>
+<span aria-hidden="true" style="flex: none; width: 1px; height: 22px; background: var(--line)"></span>
+<button class="ghost" aria-label="Искать по картинке" title="Искать по картинке — или перетащите её в окно, или Ctrl+V" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.image}}"></path></svg></button>
+</div>
+</div>
+
+<div role="tablist" aria-label="Что искать" style="display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
+<button class="tab" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 6px 6px 0 0; background: transparent; {{t.style}}"><span>{{t.label}}</span><span style="font-size: 12px; font-weight: 400; color: var(--faint)">{{t.count}}</span><sc-if value="{{t.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if></button>
+</sc-for>
+<span style="margin-left: auto; padding-left: 16px; flex: none; font-size: 12px; color: var(--faint); white-space: nowrap">{{metaLine}}</span>
+</div>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+<div style="flex: 999 1 560px; min-width: 0; padding: 4px 10px 24px; box-sizing: border-box">
+<sc-for list="{{sections}}" as="s" hint-placeholder-count="3">
+<div>
+<sc-if value="{{s.title}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: baseline; gap: 8px; padding: 14px 12px 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600">{{s.title}}</h2>
+<span style="font-size: 12px; color: var(--faint)">{{s.note}}</span>
+<sc-if value="{{s.more}}" hint-placeholder-val="{{false}}"><button class="ghost" onClick="{{s.morePick}}" style="margin-left: auto; height: 26px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--accent); font-size: 12px">{{s.more}}</button></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{s.rows}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{s.items}}" as="r" hint-placeholder-count="3">
+<button class="row" onClick="{{r.pick}}" aria-pressed="{{r.sel}}" style="position: relative; display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 6px; background: transparent; text-align: left; {{r.selStyle}}">
+<sc-if value="{{r.sel}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 18px; margin-top: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if>
+<span style="flex: none; width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--hover); color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{r.icon}}"></path></svg></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="display: flex; align-items: baseline; gap: 8px; min-width: 0"><span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span><span style="flex: none; font-size: 11px; color: var(--faint); letter-spacing: .04em">{{r.ext}}</span></span>
+<span style="font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.crumbs}}</span>
+<span style="display: flex; gap: 8px; align-items: baseline; margin-top: 5px; min-width: 0"><span style="flex: none; font-size: 11px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; padding: 1px 6px">{{r.loc}}</span><span style="min-width: 0; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; {{r.snipFont}}">{{r.snip}}</span></span>
+</span>
+<span style="flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 12px; color: var(--muted); white-space: nowrap"><span>{{r.date}}</span><span>{{r.size}}</span></span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{s.grid}}" hint-placeholder-val="{{false}}">
+<div style="display: grid; gap: 4px; padding: 0 2px; {{s.gridStyle}}">
+<sc-for list="{{s.items}}" as="m" hint-placeholder-count="5">
+<button class="tile" onClick="{{m.pick}}" aria-pressed="{{m.sel}}" style="display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 6px; border: 0; border-radius: 8px; background: transparent; text-align: left; {{m.selStyle}}">
+<span style="position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; overflow: hidden; background: {{m.art.c1}}; {{m.ring}}">
+<span aria-hidden="true" style="position: absolute; inset: 0; background: {{m.art.c2}}; clip-path: {{m.art.p2}}"></span>
+<span aria-hidden="true" style="position: absolute; inset: 0; background: {{m.art.c3}}; clip-path: {{m.art.p3}}"></span>
+<sc-if value="{{m.isVideo}}" hint-placeholder-val="{{false}}"><span style="position: absolute; left: 6px; bottom: 6px; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,.68); color: #ffffff; font-size: 11px; font-weight: 600"><svg width="8" height="8" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z" fill="currentColor"></path></svg>{{m.loc}}</span></sc-if>
+</span>
+<span style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.name}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{s.names}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{s.items}}" as="n" hint-placeholder-count="2">
+<button class="row" onClick="{{n.pick}}" aria-pressed="{{n.sel}}" style="position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; text-align: left; {{n.selStyle}}">
+<sc-if value="{{n.sel}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 18px; margin-top: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin: 0 9px; color: var(--muted)"><path d="{{n.icon}}"></path></svg>
+<span style="flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px">
+<span style="flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><sc-for list="{{n.parts}}" as="pt" hint-placeholder-count="3"><span style="{{pt.style}}">{{pt.t}}</span></sc-for></span>
+<span style="flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{n.crumbs}}</span>
+</span>
+<span style="flex: none; font-size: 12px; color: var(--muted); white-space: nowrap">{{n.size}} · {{n.date}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<sc-if value="{{showPreview}}" hint-placeholder-val="{{true}}">
+<aside class="pane" aria-label="Просмотр файла" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 20px 20px; border-left: 1px solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 16px">
+<div style="position: relative; height: 210px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); overflow: hidden">
+<sc-if value="{{pv.isText}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div style="width: 128px; height: 160px; box-sizing: border-box; padding: 14px 12px; background: #ffffff; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.14), 0 4px 14px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 5px">
+<sc-for list="{{pv.lines}}" as="l" hint-placeholder-count="14"><span style="display: block; height: 4px; border-radius: 2px; {{l.style}}"></span></sc-for>
+</div>
+<span style="font-size: 12px; color: var(--muted)">{{pv.pageLabel}}</span>
+</div>
+</sc-if>
+<sc-if value="{{pv.isCode}}" hint-placeholder-val="{{false}}">
+<div style="align-self: stretch; flex: 1; box-sizing: border-box; padding: 14px 16px; background: var(--surface); font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px; line-height: 1.65; overflow: hidden">
+<sc-for list="{{pv.code}}" as="l" hint-placeholder-count="8"><span style="display: block; white-space: pre; padding: 0 4px; border-radius: 3px; {{l.style}}">{{l.t}}</span></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{pv.isMedia}}" hint-placeholder-val="{{false}}">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: {{pv.art.c1}}">
+<span style="position: absolute; inset: 0; background: {{pv.art.c2}}; clip-path: {{pv.art.p2}}"></span>
+<span style="position: absolute; inset: 0; background: {{pv.art.c3}}; clip-path: {{pv.art.p3}}"></span>
+</div>
+</sc-if>
+<sc-if value="{{pv.isAudio}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px">
+<div aria-hidden="true" style="display: flex; align-items: center; gap: 3px; height: 110px">
+<sc-for list="{{pv.wave}}" as="b" hint-placeholder-count="44"><span style="display: block; width: 4px; border-radius: 2px; {{b.style}}"></span></sc-for>
+</div>
+<span style="font-size: 12px; color: var(--muted)">совпал отрезок 0:30–1:00 из 1:52</span>
+</div>
+</sc-if>
+<sc-if value="{{pv.isName}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 32px; text-align: center">
+<span style="width: 56px; height: 56px; border-radius: 10px; background: var(--hover); color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.file}}"></path></svg></span>
+<span style="font-size: 13px; color: var(--muted)">Найдено по имени. Содержимое файлов {{pv.ext}} не индексируется.</span>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{pv.isVideo}}" hint-placeholder-val="{{false}}">
+<div style="margin-top: -4px">
+<div style="position: relative; height: 6px; border-radius: 3px; background: var(--line2)">
+<sc-for list="{{pv.marks}}" as="k" hint-placeholder-count="3"><span title="{{k.label}}" style="position: absolute; top: -3px; width: 4px; height: 12px; margin-left: -2px; border-radius: 2px; background: var(--accent); left: {{k.left}}"></span></sc-for>
+</div>
+<div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--muted)"><span>0:00</span><span>{{pv.dur}}</span></div>
+</div>
+</sc-if>
+
+<div>
+<h2 style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere">{{pv.name}}</h2>
+<div style="display: flex; align-items: flex-start; gap: 6px; margin-top: 4px">
+<span style="flex: 1; min-width: 0; padding-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{pv.path}}</span>
+<button class="ghost" aria-label="Копировать путь" title="Копировать путь (Ctrl+Shift+C)" style="flex: none; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+<sc-for list="{{pv.meta}}" as="mm" hint-placeholder-count="3"><div style="display: flex; gap: 12px"><span style="flex: none; width: 96px; color: var(--muted)">{{mm.k}}</span><span style="min-width: 0">{{mm.v}}</span></div></sc-for>
+</div>
+
+<sc-if value="{{pv.hasHits}}" hint-placeholder-val="{{true}}">
+<div>
+<h3 style="margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted)">{{pv.hitsTitle}}</h3>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{pv.hits}}" as="h" hint-placeholder-count="2">
+<div style="display: flex; gap: 10px; padding: 8px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line)"><span style="flex: none; min-width: 48px; font-size: 12px; font-weight: 600; color: var(--accent)">{{h.loc}}</span><span style="min-width: 0; font-size: 13px; {{h.font}}">{{h.text}}</span></div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: auto">
+<button class="prim" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--accent); color: var(--onAccent); font-weight: 600"><span>Открыть</span><span style="font-size: 12px; font-weight: 400; opacity: .85">Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Показать в папке</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Enter</span></button>
+<sc-if value="{{pv.canSimilar}}" hint-placeholder-val="{{false}}"><button class="btn2" style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Найти похожие</span><span style="font-size: 12px; color: var(--muted)">Ctrl+F</span></button></sc-if>
+</div>
+</aside>
+</sc-if>
+</div>
+
+<footer style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 16px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted)">
+<span style="display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap">
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}"><span role="progressbar" aria-label="Индексация видео" aria-valuemin="0" aria-valuemax="612" aria-valuenow="482" style="display: block; width: 72px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; width: 79%; height: 100%; background: var(--accent)"></span></span></sc-if>
+<span>{{statusText}}</span>
+</span>
+<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">В индексе: 3 412 документов · 41 870 файлов кода · 18 204 фото · 1 377 аудио · 482 видео · 2,1 млн имён на C:</span>
+<span style="display: flex; gap: 2px">
+<button class="ghost" onClick="{{togglePause}}" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pauseIcon}}"></path></svg><span>{{pauseLabel}}</span></button>
+<button class="ghost" aria-label="Настройки" title="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.sliders}}"></path></svg></button>
+</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"preview":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const tab = st.tab || 'all';
+    const selId = st.sel || 'd1';
+    const paused = !!st.paused;
+    const q = st.q ?? 'договор про крышу';
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const pl = (n, f) => { const a = n % 10, b = n % 100; return f[a === 1 && b !== 11 ? 0 : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 1 : 2]; };
+    const ic = {
+      search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20',
+      x: 'M6 6l12 12M18 6L6 18',
+      image: 'M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01',
+      text: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9 13h6 M9 17h4',
+      code: 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 5l-3 14',
+      audio: 'M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 11v2',
+      file: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5',
+      copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
+      pause: 'M9 5v14 M15 5v14',
+      play: 'M8 5l11 7-11 7z',
+      sliders: 'M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4'
+    };
+    const art = {
+      roof1: { c1: '#c7d3de', c2: '#56606b', p2: 'polygon(0 100%, 0 72%, 50% 32%, 100% 72%, 100% 100%)', c3: '#dccdb9', p3: 'polygon(14% 100%, 14% 84%, 86% 84%, 86% 100%)' },
+      roof2: { c1: '#d5dbe1', c2: '#7b4e3f', p2: 'polygon(0 100%, 0 46%, 100% 16%, 100% 100%)', c3: '#5e3a2f', p3: 'polygon(0 64%, 100% 34%, 100% 38%, 0 68%)' },
+      roof3: { c1: '#e6d8c4', c2: '#3e4650', p2: 'polygon(0 100%, 0 78%, 38% 40%, 76% 78%, 100% 60%, 100% 100%)', c3: '#eea95c', p3: 'circle(9% at 80% 24%)' },
+      drone: { c1: '#a8bccf', c2: '#55604d', p2: 'polygon(0 100%, 0 64%, 30% 56%, 62% 62%, 100% 50%, 100% 100%)', c3: '#5d6670', p3: 'polygon(34% 100%, 34% 78%, 52% 58%, 70% 78%, 70% 100%)' },
+      scan: { c1: '#d6d3cc', c2: '#fbfaf6', p2: 'polygon(18% 8%, 82% 8%, 82% 100%, 18% 100%)', c3: '#bdb9b1', p3: 'polygon(26% 20%, 64% 20%, 64% 24%, 26% 24%)' }
+    };
+    const H = 'C:\\Users\\1337';
+    const roofDir = H + '\\Documents\\Дом\\Ремонт крыши';
+    const D = [
+      { id: 'd1', kind: 'text', ext: 'PDF', name: 'Договор подряда №14 — кровля.pdf', dir: roofDir, crumbs: 'Документы › Дом › Ремонт крыши', size: '2,4 МБ', date: '12 мар', type: 'PDF-документ, 18 страниц', changed: '12 марта 2026, 18:40', page: 'стр. 3 из 18', hl: 5,
+        hits: [{ loc: 'стр. 3', text: '…Подрядчик обязуется выполнить работы по замене кровельного покрытия жилого дома, включая демонтаж старого шифера и монтаж металлочерепицы…' }, { loc: 'стр. 7', text: '…Гарантийный срок на кровельные работы — 5 (пять) лет с даты подписания акта приёмки…' }] },
+      { id: 'd2', kind: 'text', ext: 'DOCX', name: 'Смета_кровля_v3.docx', dir: roofDir, crumbs: 'Документы › Дом › Ремонт крыши', size: '86 КБ', date: '9 мар', type: 'Документ Word', changed: '9 марта 2026, 11:02', page: 'фрагмент 2 из 4', hl: 8,
+        hits: [{ loc: 'фрагм. 2', text: 'Металлочерепица 0,5 мм — 160 м² · водосточная система · монтаж кровли и снегозадержателей по договору…' }] },
+      { id: 'd3', kind: 'text', ext: 'TXT', name: 'Переписка с прорабом.txt', dir: H + '\\Desktop', crumbs: 'Рабочий стол', size: '4 КБ', date: '2 апр', type: 'Текстовый файл', changed: '2 апреля 2026, 21:15', page: 'фрагмент 1 из 1', hl: 2,
+        hits: [{ loc: 'фрагм. 1', text: '…по договору гарантия на крышу пять лет, если потечёт — сразу писать Андрею, он приедет и посмотрит…' }] },
+      { id: 'c1', kind: 'code', ext: 'PY', name: 'contract_parser.py', dir: H + '\\Projects\\docflow', crumbs: 'Projects › docflow', size: '12 КБ', date: '28 фев', type: 'Python', changed: '28 февраля 2026, 02:37',
+        hits: [{ loc: 'фрагм. 3', text: 'def parse_contract(path):\n    """Стороны, сумма и сроки из договора подряда."""' }],
+        code: ['import re', '', 'def parse_contract(path):', '    """Стороны, сумма и сроки из договора подряда."""', '    text = read_pdf(path)', '    parties = re.findall(PARTY_RE, text)', '    total = find_amount(text, "Цена договора")', '    return Contract(parties, total, find_terms(text))'], codeHl: [2, 3] },
+      { id: 'i1', kind: 'image', name: 'IMG_4512.jpg', dir: H + '\\Pictures\\Крыша 2026', crumbs: 'Изображения › Крыша 2026', size: '3,8 МБ', date: '15 мар', type: 'JPEG, 4032 × 3024', changed: '15 марта 2026, 14:06', art: art.roof1 },
+      { id: 'v1', kind: 'video', name: 'Обход крыши.mp4', dir: H + '\\Videos', crumbs: 'Видео', size: '412 МБ', date: '15 мар', type: 'Видео MP4, 1920 × 1080', changed: '15 марта 2026, 14:20', dur: '4:12', loc: '1:20', art: art.drone,
+        hits: [{ loc: '1:20', text: 'кадр совпал с запросом' }, { loc: '2:40', text: 'кадр совпал с запросом' }, { loc: '3:50', text: 'кадр совпал с запросом' }], marks: ['31.7%', '63.5%', '91.3%'] },
+      { id: 'i2', kind: 'image', name: 'Скан договора, стр. 1.jpg', dir: roofDir, crumbs: 'Документы › Дом › Ремонт крыши', size: '1,1 МБ', date: '12 мар', type: 'JPEG, 2480 × 3508', changed: '12 марта 2026, 18:52', art: art.scan },
+      { id: 'i3', kind: 'image', name: 'IMG_4513.jpg', dir: H + '\\Pictures\\Крыша 2026', crumbs: 'Изображения › Крыша 2026', size: '4,0 МБ', date: '15 мар', type: 'JPEG, 4032 × 3024', changed: '15 марта 2026, 14:07', art: art.roof2 },
+      { id: 'i4', kind: 'image', name: 'IMG_4520.jpg', dir: H + '\\Pictures\\Крыша 2026', crumbs: 'Изображения › Крыша 2026', size: '3,5 МБ', date: '15 мар', type: 'JPEG, 4032 × 3024', changed: '15 марта 2026, 18:31', art: art.roof3 },
+      { id: 'a1', kind: 'audio', ext: 'M4A', name: 'Голосовая заметка 14 марта.m4a', dir: H + '\\Documents\\Звукозаписи', crumbs: 'Документы › Звукозаписи', size: '2,1 МБ', date: '14 мар', type: 'Аудио M4A', changed: '14 марта 2026, 09:12', dur: '1:52',
+        hits: [{ loc: '0:30', text: 'отрезок 0:30–1:00 из 1:52' }] },
+      { id: 'n1', kind: 'name', ext: 'ZIP', name: 'Договор про крышу — сканы.zip', dir: H + '\\Downloads', crumbs: 'Загрузки', size: '18,6 МБ', date: '16 мар', type: 'Архив ZIP', changed: '16 марта 2026, 10:44' },
+      { id: 'n2', kind: 'name', ext: 'XLSX', name: 'договор_про_крышу_старый.xlsx', dir: H + '\\Documents\\Архив 2024', crumbs: 'Документы › Архив 2024', size: '31 КБ', date: '3 окт 2024', type: 'Таблица Excel', changed: '3 октября 2024, 16:20' }
+    ];
+    const words = q.toLowerCase().split(/[\s_—-]+/).filter(w => w.length > 1);
+    const esc = w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = s => {
+      if (!words.length) return [{ t: s, style: '' }];
+      const re = new RegExp('(' + words.map(esc).join('|') + ')', 'gi');
+      return s.split(re).filter(Boolean).map(t => ({ t, style: words.includes(t.toLowerCase()) ? 'background: var(--mark); border-radius: 3px' : '' }));
+    };
+    const pick = id => () => this.setState({ sel: id });
+    const items = D.map(d => {
+      const sel = d.id === selId;
+      const isCode = d.kind === 'code';
+      return Object.assign({}, d, {
+        sel, pick: pick(d.id), icon: ic[d.kind === 'name' ? 'file' : d.kind] || ic.file,
+        selStyle: sel ? 'background: var(--sel);' : '',
+        ring: sel ? 'box-shadow: 0 0 0 2px var(--accent);' : '',
+        isVideo: d.kind === 'video',
+        loc: d.loc || (d.hits ? d.hits[0].loc : ''),
+        snip: d.kind === 'audio' ? 'Совпал отрезок 0:30–1:00 · длительность 1:52' : (d.hits ? d.hits[0].text.replace(/\n\s*/g, ' ') : ''),
+        snipFont: isCode ? "font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px;" : '',
+        parts: parts(d.name)
+      });
+    });
+    const of = k => items.filter(i => k === 'all' || i.kind === k);
+    const docs = items.filter(i => i.kind === 'text' || i.kind === 'code');
+    const media = items.filter(i => i.kind === 'image' || i.kind === 'video');
+    const TABS = [['all', 'Всё'], ['text', 'Документы'], ['code', 'Код'], ['image', 'Фото'], ['video', 'Видео'], ['audio', 'Аудио'], ['name', 'По имени']];
+    const tabs = TABS.map(([k, label]) => ({
+      label, on: k === tab, count: String(of(k).length),
+      style: k === tab ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)',
+      pick: () => this.setState({ tab: k, sel: (of(k)[0] || {}).id })
+    }));
+    let sections;
+    if (tab === 'all') {
+      sections = [
+        { title: 'Документы и код', note: String(docs.length), rows: true, items: docs },
+        { title: 'Фото и видео', note: String(media.length), grid: true, items: media.slice(0, 5), gridStyle: 'grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))', more: 'Все фото и видео', morePick: () => this.setState({ tab: 'image', sel: 'i1' }) },
+        { title: 'Аудио', note: '1', rows: true, items: of('audio') },
+        { title: 'Только по имени', note: 'содержимое этих файлов не индексируется', names: true, items: of('name') }
+      ];
+    } else {
+      const list = of(tab);
+      const isGrid = tab === 'image' || tab === 'video';
+      sections = [{ title: '', rows: !isGrid && tab !== 'name', grid: isGrid, names: tab === 'name', items: list, gridStyle: 'grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); padding-top: 8px' }];
+    }
+    const total = tab === 'all' ? items.length : of(tab).length;
+    const s = items.find(i => i.id === selId) || items[0];
+    const k = s.kind;
+    const lines = Array.from({ length: 14 }, (_, i) => {
+      const w = [56, 100, 94, 98, 62, 100, 96, 100, 70, 100, 92, 97, 88, 40][i];
+      const hl = i >= s.hl && i < s.hl + 3;
+      const bg = i === 0 ? '#9e9e9e' : hl ? '#f5c518' : '#dddddd';
+      return { style: 'width: ' + w + '%; background: ' + bg + (i === 0 ? '; height: 6px; margin-bottom: 4px' : '') };
+    });
+    const wave = Array.from({ length: 44 }, (_, i) => {
+      const h = 14 + Math.round(Math.abs(Math.sin(i * 1.7) * 0.6 + Math.sin(i * 0.45) * 0.4) * 82);
+      const on = i >= 12 && i <= 23;
+      return { style: 'height: ' + h + 'px; background: ' + (on ? 'var(--accent)' : 'var(--line2)') };
+    });
+    const meta = [{ k: 'Тип', v: s.type }, { k: 'Размер', v: s.size }, { k: 'Изменён', v: s.changed }];
+    if (s.dur) meta.splice(2, 0, { k: 'Длительность', v: s.dur });
+    const pv = {
+      name: s.name, path: s.dir + '\\' + s.name, ext: '.' + (s.ext || '').toLowerCase(), meta,
+      isText: k === 'text', isCode: k === 'code', isMedia: k === 'image' || k === 'video', isVideo: k === 'video', isAudio: k === 'audio', isName: k === 'name',
+      art: s.art || art.roof1, lines, wave, pageLabel: s.page, dur: s.dur,
+      marks: (s.marks || []).map((left, i) => ({ left, label: s.hits[i].loc })),
+      code: (s.code || []).map((t, i) => ({ t: t || ' ', style: (s.codeHl || []).includes(i) ? 'background: color-mix(in srgb, var(--accent) 16%, transparent)' : '' })),
+      hasHits: !!s.hits,
+      hitsTitle: k === 'video' ? 'Совпавшие моменты' : k === 'audio' ? 'Совпавший отрезок' : 'Где нашлось',
+      hits: (s.hits || []).map(h => ({ loc: h.loc, text: h.text, font: k === 'code' ? "font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px; white-space: pre-wrap" : '' })),
+      canSimilar: k === 'image' || k === 'video'
+    };
+    return {
+      ic, q, tabs, sections, pv,
+      onQ: e => this.setState({ q: e.target.value }),
+      clearQ: () => this.setState({ q: '' }),
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff',
+      showPreview: this.props.preview ?? true,
+      metaLine: total + ' ' + pl(total, ['файл', 'файла', 'файлов']) + ' · ' + (tab === 'all' ? '42' : '31') + ' мс',
+      running: !paused,
+      statusText: paused ? 'Индексация на паузе' : 'Индексирую видео: 482 из 612',
+      pauseLabel: paused ? 'Продолжить' : 'Пауза',
+      pauseIcon: paused ? ic.play : ic.pause,
+      togglePause: () => this.setState({ paused: !paused })
+    };
+  }
+}
+</script>
+</body>
+</html>

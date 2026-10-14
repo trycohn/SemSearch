@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SemSearch</title>
+<link rel="stylesheet" href="loading.css">
+<script src="loading.js" defer></script>
+</head>
+<body class="win" data-tauri-drag-region="deep">
+<header class="cap" data-tauri-drag-region="deep">
+  <button type="button" class="cb" data-cmd="win_minimize" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg></button>
+  <button type="button" class="cb x" data-cmd="win_hide" aria-label="Скрыть в трей"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg></button>
+</header>
+<main class="center" data-tauri-drag-region="deep">
+  <div class="splash">
+    <span class="tile" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 256 256" fill="currentColor"><path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"/><path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"/></svg></span>
+    <span class="lbl"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"/><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"/></svg><span>Запускаю SemSearch…</span></span>
+    <p id="status" class="status" role="status"></p>
+  </div>
+</main>
+</body>
+</html>
