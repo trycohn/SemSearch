@@ -283,13 +283,27 @@ class Indexer(threading.Thread):
         lname = name.lower()
         if mode == "normal" or not (kind == "code" or (kind == "text" and lname.endswith(self.DEV_DOCS))):
             return core.ST_PENDING, 0, None
-        why = self.TAG_REASON.get(tag) or ("сгенерированный файл" if kind == "code" and self.GEN_NAME.search(name)
+        why = self.TAG_REASON.get(tag) or (extract.GENERATED if kind == "code" and self.GEN_NAME.search(name)
                                            else None)
         if why:  # точные признаки: не индексировать (или в конец очереди, если так выбрано)
             return (core.ST_SKIPPED, 0, why) if mode == "skip" else (core.ST_PENDING, 1, None)
         if tag == "foreign" or lname.endswith(".d.ts"):  # неточные признаки — только в конец очереди
             return core.ST_PENDING, 1, None
         return core.ST_PENDING, 0, None
+
+    def _content_verdict(self, kind, old, tag, status, prio, why):
+        """Обход видит только имя и признаки, а run_job решает ещё и по шапке файла: сгенерированный — пропустить
+        (или в конец очереди), баннер библиотеки — в конец. Для неизменённого файла с теми же признаками такое решение
+        остаётся в силе — иначе каждый обход ставил бы файл в очередь заново, а разбор снова его пропускал.
+        old — (id, size, mtime, status, prio, tag, err) из базы. -> (status, prio, причина)"""
+        mode = self.cfg.get("foreign_code", "skip")
+        if kind != "code" or mode == "normal" or tag != old[5] or status == core.ST_SKIPPED:
+            return status, prio, why
+        if old[3] == core.ST_SKIPPED and old[6] == extract.GENERATED and mode == "skip":
+            return core.ST_SKIPPED, old[4] or 0, old[6]
+        if (old[4] or 0) == 1 and prio == 0:
+            return status, 1, why
+        return status, prio, why
 
     def on_engine_event(self, ev):
         """Событие из журнала изменений движка (вместо watchdog): created/modified/deleted/renamed/rescan."""
@@ -306,8 +320,8 @@ class Indexer(threading.Thread):
     def scan_content(self):
         self.full_scan_requested = False  # запрошенный обход — вот он
         self.state.update(phase="scan", current="")
-        known = {p: (i, s, m, st, pr, tg) for i, p, s, m, st, pr, tg in
-                 self.conn.execute("SELECT id, path, size, mtime, status, prio, tag FROM files")}
+        known = {p: (i, s, m, st, pr, tg, er) for i, p, s, m, st, pr, tg, er in
+                 self.conn.execute("SELECT id, path, size, mtime, status, prio, tag, err FROM files")}
         files, tagged = self._content_files()
         seen, new, changed, repol = set(), [], [], []
         for path, name, size, mtime, tag in files:
@@ -323,9 +337,11 @@ class Indexer(threading.Thread):
                 new.append((path, name, kind, size, mtime, status, prio, tag, why))
             elif old[1] != size or abs(old[2] - mtime) > 1:
                 changed.append((old[0], size, mtime, status, prio, tag, why))
-            elif (status == core.ST_SKIPPED) != (old[3] == core.ST_SKIPPED) or (prio, tag) != (old[4] or 0, old[5]):
-                # файл не менялся, но правило для него поменялось (настройка, новый .gitignore, подмодуль)
-                repol.append((old[0], old[3], status, prio, tag, why))
+            else:
+                status, prio, why = self._content_verdict(kind, old, tag, status, prio, why)
+                if (status == core.ST_SKIPPED) != (old[3] == core.ST_SKIPPED) or (prio, tag) != (old[4] or 0, old[5]):
+                    # файл не менялся, но правило для него поменялось (настройка, новый .gitignore, подмодуль)
+                    repol.append((old[0], old[3], status, prio, tag, why))
         if self.stop_flag:
             return
         gone = [v[0] for p, v in known.items() if p not in seen]

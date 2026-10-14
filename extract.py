@@ -49,19 +49,51 @@ def _read_plain(path, cfg):
         return raw.decode(ANSI, errors="replace")
 
 
+def pdf_text(path, max_pages):
+    """Текст первых max_pages страниц ("" — страница не прочиталась). PDFium (pypdfium2) в ~10 раз быстрее pypdf
+    и сам открывает PDF с AES-шифрованием без пароля; нет пакета или файл ему не дался — pypdf. Зовётся только
+    в процессах разбора: PDFium нельзя вызывать из нескольких потоков сразу."""
+    try:
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(path)
+    except Exception:
+        doc = None
+    if doc is not None:
+        try:
+            out = []
+            for i in range(min(len(doc), max_pages)):
+                page = doc[i]
+                try:
+                    tp = page.get_textpage()
+                    out.append(tp.get_text_range().replace("\r\n", "\n"))
+                    tp.close()
+                except Exception:
+                    out.append("")
+                finally:
+                    page.close()
+            return out
+        except Exception:
+            pass
+        finally:
+            doc.close()
+    from pypdf import PdfReader
+
+    out = []
+    for page in PdfReader(path).pages[:max_pages]:
+        try:
+            out.append(page.extract_text() or "")
+        except Exception:
+            out.append("")
+    return out
+
+
 def extract_text(path, cfg):
     name = os.path.basename(path)
     ext = os.path.splitext(path)[1].lower()
     labeled = []
     if ext == ".pdf":
-        from pypdf import PdfReader
-
-        reader = PdfReader(path)
-        for i, page in enumerate(reader.pages[:cfg["max_pdf_pages"]]):
-            try:
-                t = page.extract_text() or ""
-            except Exception:
-                continue
+        for i, t in enumerate(pdf_text(path, cfg["max_pdf_pages"])):
             labeled += [(f"стр. {i + 1}", p) for p in _chunks(t)]
     elif ext == ".docx":
         import docx
@@ -103,6 +135,36 @@ def _ts(sec):
     return f"{sec // 3600}:{sec % 3600 // 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
 
 
+def _scaled(fr, max_side):
+    scale = min(1.0, max_side / max(fr.width, fr.height))
+    w, h = max(2, int(fr.width * scale) // 2 * 2), max(2, int(fr.height * scale) // 2 * 2)
+    return fr.reformat(width=w, height=h, format="rgb24").to_image()
+
+
+def _frame_at(c, s, t, max_side=640):
+    """Кадр в момент t: перемотка к ключевому кадру перед t и декодирование всех кадров до t."""
+    c.seek(int(t / s.time_base), stream=s, backward=True, any_frame=False)
+    for fr in c.decode(s):
+        if fr.time is None or fr.time >= t - 0.05:
+            return _scaled(fr, max_side)
+    return None
+
+
+def _keyframe_near(c, s, t, tolerance, max_side=640):
+    """Ключевой кадр перед t, если он не раньше t - tolerance: декодер пропускает все остальные кадры — в разы быстрее,
+    чем декодировать от ключевого кадра до t. -> (время кадра, PIL.Image) или None."""
+    c.seek(int(t / s.time_base), stream=s, backward=True, any_frame=False)
+    s.codec_context.skip_frame = "NONKEY"
+    try:
+        for fr in c.decode(s):
+            if fr.time is not None and t - tolerance <= fr.time <= t + tolerance:
+                return fr.time, _scaled(fr, max_side)
+            return None
+    finally:
+        s.codec_context.skip_frame = "DEFAULT"
+    return None
+
+
 def video_frame(path, t, max_side=640):
     """Один кадр в момент t (сек) как PIL.Image."""
     import av
@@ -110,16 +172,13 @@ def video_frame(path, t, max_side=640):
     with av.open(path) as c:
         s = c.streams.video[0]
         s.thread_type = "AUTO"
-        c.seek(int(t / s.time_base), stream=s, backward=True, any_frame=False)
-        for fr in c.decode(s):
-            if fr.time is None or fr.time >= t - 0.05:
-                scale = min(1.0, max_side / max(fr.width, fr.height))
-                w, h = max(2, int(fr.width * scale) // 2 * 2), max(2, int(fr.height * scale) // 2 * 2)
-                return fr.reformat(width=w, height=h, format="rgb24").to_image()
-    return None
+        return _frame_at(c, s, t, max_side)
 
 
 def extract_video(path, cfg):
+    """Кадры раз в step секунд. Файл открывается один раз; кадр — ключевой не дальше step/4 от нужного момента
+    (его время и сохраняется), иначе — точный. Если ключевые кадры дважды оказались слишком редкими и ни разу
+    не подошли (запись экрана, длинный GOP), дальше по этому файлу сразу точные кадры."""
     import av
 
     with av.open(path) as c:
@@ -127,19 +186,28 @@ def extract_video(path, cfg):
             raise Skip("нет видеодорожки")
         s = c.streams.video[0]
         dur = c.duration / 1e6 if c.duration else float((s.duration or 0) * s.time_base)
-    if dur <= 0:
-        raise Skip("неизвестная длительность")
-    step = max(cfg["video_frame_every_sec"], dur / cfg["video_max_frames"])
-    times = [min(dur - 0.5, step / 2 + i * step) for i in range(cfg["video_max_frames"]) if step / 2 + i * step < dur]
-    times = times or [dur / 2]
-    items = []
-    for t in times:
-        try:
-            fr = video_frame(path, t)
-        except Exception:
-            fr = None
-        if fr is not None:
-            items.append((t, _ts(t), "", fr))
+        if dur <= 0:
+            raise Skip("неизвестная длительность")
+        step = max(cfg["video_frame_every_sec"], dur / cfg["video_max_frames"])
+        times = [min(dur - 0.5, step / 2 + i * step) for i in range(cfg["video_max_frames"]) if step / 2 + i * step < dur]
+        s.thread_type = "AUTO"
+        items, hits, misses = [], 0, 0
+        for t in times or [dur / 2]:
+            got = None
+            if hits or misses < 2:
+                try:
+                    got = _keyframe_near(c, s, t, step / 4)
+                except Exception:
+                    pass
+                hits, misses = hits + (got is not None), misses + (got is None)
+            if got is None:
+                try:
+                    fr = _frame_at(c, s, t)
+                except Exception:
+                    fr = None
+                got = (t, fr) if fr is not None else None
+            if got is not None:
+                items.append((got[0], _ts(got[0]), "", got[1]))
     if not items:
         raise Skip("не удалось прочитать кадры")
     return items
@@ -220,6 +288,7 @@ def file_hash(path, kind):
 GEN_HEAD = re.compile(rb"auto-?generated|do not edit|@generated|generated by|this file (?:is|was) (?:auto-?)?generated",
                       re.I)
 LIB_BANNER = re.compile(rb"^\s*/\*!|@license|@preserve", re.M)
+GENERATED = "сгенерированный файл"  # причина пропуска; по ней Indexer узнаёт решение, принятое по шапке
 
 
 def run_job(kind, path, cfg, prio=0):
@@ -234,9 +303,9 @@ def run_job(kind, path, cfg, prio=0):
             head = b""
         if GEN_HEAD.search(head):
             if mode == "skip":
-                return None, "сгенерированный файл", "skip"
+                return None, GENERATED, "skip"
             if prio == 0:
-                return None, "сгенерированный файл", "defer"
+                return None, GENERATED, "defer"
         elif prio == 0 and LIB_BANNER.search(head):
             return None, "похоже на чужую библиотеку", "defer"
     try:
