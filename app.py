@@ -1,7 +1,9 @@
 """SemSearch — сервер: страницы интерфейса, поиск, превью, настройки (контракт: docs/API.md).
 Запускается через server.py (pythonw server.py [--no-browser])."""
 import ctypes
+import http.client
 import io
+import json
 import logging
 import os
 import re
@@ -16,23 +18,67 @@ from ctypes import wintypes
 
 import core
 
+_moved = core.migrate_legacy(core.APP_DIR, core.DATA_DIR)  # до журнала, баз и настроек: старая раскладка → папка данных
 core.setup_logging()
 log = logging.getLogger("server")
+for _level, _msg in _moved:
+    log.log(_level, _msg)
+if os.environ.get("SEMSEARCH_DATA_DIR", "").strip() and not core.abs_env("SEMSEARCH_DATA_DIR"):
+    log.warning("SEMSEARCH_DATA_DIR — не абсолютный путь, не учитываю (как shell и движок)")
 cfg = core.load_config()
-PORT = cfg["port"]
-URL = f"http://127.0.0.1:{PORT}/"
 IN_SHELL = os.environ.get("SEMSEARCH_SHELL") == "1"  # запущены из SemSearch.exe: окно, трей и клавишу ведёт он
 
 
-def already_running():
+def _port_state(port):
+    """Кто на 127.0.0.1:port: "free", "semsearch" (наш backend отвечает на /api/ping) или "busy" (чужая программа)."""
     with socket.socket() as s:
-        return s.connect_ex(("127.0.0.1", PORT)) == 0
+        s.settimeout(0.25)  # отказ на loopback Windows приходит только через ~2 с, а слушающий порт отвечает сразу
+        if s.connect_ex(("127.0.0.1", port)) != 0:
+            try:
+                with socket.socket() as b:
+                    b.bind(("127.0.0.1", port))
+                return "free"
+            except OSError:
+                return "busy"
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+    try:
+        conn.request("GET", "/api/ping")
+        r = conn.getresponse()
+        return "semsearch" if r.status == 200 and json.loads(r.read(4096)).get("app") == "semsearch" else "busy"
+    except Exception:
+        return "busy"
+    finally:
+        conn.close()
 
 
-if already_running():  # второй запуск просто открывает окно поиска
-    if not IN_SHELL:
+def _free_port(busy):
+    """Порт вместо занятого чужой программой: busy+1 … busy+20, иначе любой свободный от системы.
+    -> (порт, "free" | "semsearch") — на одном из соседних может уже работать наш backend."""
+    for p in range(busy + 1, min(busy + 21, 65536)):
+        state = _port_state(p)
+        if state != "busy":
+            return p, state
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1], "free"
+
+
+# Порт: SEMSEARCH_PORT (его выбирает и передаёт shell), иначе config.json "port"
+_env_port = os.environ.get("SEMSEARCH_PORT", "").strip()
+PORT = int(_env_port) if _env_port.isdigit() and 0 < int(_env_port) < 65536 else int(cfg["port"])
+_state = _port_state(PORT)
+if _state == "busy" and not IN_SHELL:
+    _busy = PORT
+    PORT, _state = _free_port(PORT)
+    log.warning("порт %d занят другой программой — беру %d", _busy, PORT)
+URL = f"http://127.0.0.1:{PORT}/"
+if _state != "free":
+    if _state == "semsearch" and not IN_SHELL:  # второй запуск просто открывает окно поиска
         webbrowser.open(URL)
-    sys.exit(0)
+    elif _state == "busy":  # порт выбирает shell: он запустит backend заново на другом
+        log.warning("порт %d занят другой программой — выхожу", PORT)
+    sys.exit(0 if _state == "semsearch" else 1)
+log.info("запуск: порт %d, папка данных %s", PORT, core.DATA_DIR)
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
@@ -58,11 +104,10 @@ from names import NamesProvider  # noqa: E402
 
 UI_DIR = os.path.join(core.APP_DIR, "ui")
 THUMB_DIR = os.path.join(core.DATA_DIR, "thumbs")
-os.makedirs(UI_DIR, exist_ok=True)
 os.makedirs(THUMB_DIR, exist_ok=True)
 
 # Токен сессии: без него API не отвечает, так что чужая веб-страница не сможет дёргать localhost (CSRF).
-# В страницы он подставляется при отдаче, shell читает его из data/token.
+# В страницы он подставляется при отдаче, shell читает его из token в папке данных.
 TOKEN = os.environ.get("SEMSEARCH_TOKEN") or secrets.token_urlsafe(32)
 with open(os.path.join(core.DATA_DIR, "token"), "w", encoding="ascii") as _f:
     _f.write(TOKEN)
@@ -162,7 +207,7 @@ async def guard(request: Request, call_next):
     if request.headers.get("host") not in HOSTS:
         return JSONResponse({"detail": "forbidden"}, status_code=403)
     path = request.url.path
-    if path.startswith("/api/") or path.startswith("/thumb/"):
+    if (path.startswith("/api/") and path != "/api/ping") or path.startswith("/thumb/"):
         token = request.headers.get("x-semsearch-token") or request.query_params.get("t") or ""
         if not secrets.compare_digest(token, TOKEN):
             return JSONResponse({"detail": "нет токена"}, status_code=403)
@@ -355,7 +400,10 @@ def search(q: str = "", tab: str = "all"):
     name_total, name_items = _name_items(q, 200 if tab == "name" else 40)
     by_kind = {}
     if STATE["ready"]:
-        by_kind = _semantic(emb.query(q), core.KINDS)
+        try:
+            by_kind = _semantic(emb.query(q), core.KINDS)
+        except Exception:  # сбой модели или видеокарты не должен прятать совпадения по имени
+            log.exception("поиск по смыслу не удался — отдаю только совпадения по имени")
     elif tab != "name":  # имена ищутся и без модели
         _need_ready()
     return _response(q, tab, t0, by_kind, name_total, name_items)
@@ -523,6 +571,12 @@ def _throttle_state():
         return None
 
 
+@app.get("/api/ping")
+def ping():
+    """Без токена: shell и второй запуск проверяют, что на порту именно SemSearch, а не чужая программа."""
+    return {"app": "semsearch", "pid": os.getpid()}
+
+
 @app.get("/api/status")
 def status():
     kinds = {k: {"done": 0, "total": 0, "failed": 0} for k in core.KINDS}
@@ -632,6 +686,8 @@ def _validate(key, value):
             raise HTTPException(400, f"нет такой папки: {bad[0] if bad else '—'}")
         return roots
     if key == "name_drives":
+        if value is None:  # все несъёмные диски — как без ключа в config.json
+            return None
         allowed = {d["drive"] for d in core.fixed_drives()}
         drives = [str(d).upper().rstrip("\\/") for d in value]
         if not drives or any(d not in allowed for d in drives):
