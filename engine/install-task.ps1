@@ -3,18 +3,22 @@
     Installs the SemSearch engine for elevated use and registers the "SemSearch Engine" task.
 
 .DESCRIPTION
-    An elevated task must not run an executable from the user-writable project folder
+    An elevated task must not run an executable from a folder that ordinary users can write to
     (any medium-integrity process could replace it). So this script (self-elevating via UAC):
       1. copies <root>\bin\semsearch-engine.exe to "<Program Files>\SemSearch\semsearch-engine.exe"
-         (the folder inherits Program Files ACLs: administrators write, users read/execute);
+         (the folder inherits Program Files ACLs: administrators write, users read/execute).
+         If the engine already sits in a protected folder (the application was installed into
+         Program Files or Windows, and Users/Everyone cannot write there), it runs in place and
+         nothing is copied;
       2. registers the scheduled task "SemSearch Engine" that runs THAT copy with
          --root "<project root>" at logon of the user, RunLevel Highest, no time limit,
          restart on failure;
       3. asks a running (e.g. non-elevated, backend-started) engine to shut down and starts
          the task, retrying until the elevated engine owns \\.\pipe\semsearch-engine-<session id>.
-    The elevated engine logs to "<Program Files>\SemSearch\logs\engine.log".
-    Refuses (exit 1) when the project folder is inside "<Program Files>\SemSearch", and (exit 2)
-    when the account is not an administrator: reading the MFT needs administrator rights.
+    The elevated engine logs to "<folder of the exe>\logs\engine.log".
+    Refuses (exit 1) when the project folder is inside "<Program Files>\SemSearch" yet the engine in it
+    is writable by ordinary users (there is no safe place to run it from), and (exit 2) when the
+    account is not an administrator: reading the MFT needs administrator rights.
     Start it with install-task.cmd: that also works under the default (Restricted) execution
     policy and for a script from a downloaded ZIP.
 
@@ -95,6 +99,34 @@ function Get-ProgramFiles64 {
     return $env:ProgramFiles
 }
 
+function Test-UserWritable([string]$Path) {
+    # $true when a non-elevated process can modify $Path: Users, Everyone, Authenticated Users, INTERACTIVE or the
+    # task's own account have a write-type Allow rule on it, or that account owns it (an owner may rewrite the ACL).
+    # By SID, so it works in any Windows language. Cannot tell -> $true.
+    $who = @('S-1-5-32-545', 'S-1-1-0', 'S-1-5-11', 'S-1-5-4')
+    try { $who += (New-Object Security.Principal.NTAccount($User)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { return $true }
+    $write = [Security.AccessControl.FileSystemRights]'WriteData, AppendData, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership'
+    try {
+        $acl = Get-Acl -LiteralPath $Path
+        if ($who -contains $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value) { return $true }
+        foreach ($r in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
+            if ($r.AccessControlType -eq 'Allow' -and ($who -contains $r.IdentityReference.Value) -and (($r.FileSystemRights -band $write) -ne 0)) { return $true }
+        }
+        return $false
+    } catch { return $true }
+}
+
+function Test-Protected([string]$File) {
+    # $true when the exe lies in Program Files or the Windows folder and neither it nor its folder is user-writable:
+    # an elevated task can run it where it is, without a copy.
+    $full = [IO.Path]::GetFullPath($File)
+    $inSystem = $false
+    foreach ($b in @($env:ProgramW6432, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:SystemRoot)) {
+        if ($b -and $full.StartsWith($b.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { $inSystem = $true }
+    }
+    return ($inSystem -and -not (Test-UserWritable $File) -and -not (Test-UserWritable (Split-Path -Parent $full)))
+}
+
 function Wait-ProcessGone([string]$ExePath, [int]$Seconds = 10) {
     for ($i = 0; $i -lt ($Seconds * 4); $i++) {
         $procs = @(Get-Process -Name 'semsearch-engine' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -ieq $ExePath) })
@@ -121,21 +153,34 @@ if (-not (Test-Admin)) {
 $code = 0
 try {
     $Root = (Split-Path -Parent $PSScriptRoot).TrimEnd('\')
-    $Src = Join-Path $Root 'bin\semsearch-engine.exe'
-    if (-not (Test-Path -LiteralPath $Src -PathType Leaf)) { throw "Engine not found: $Src (build it with build.cmd in the project folder)" }
+    # Normally <root>\bin\semsearch-engine.exe; an installer may also put the exe next to the scripts or in the root.
+    $Src = $null
+    foreach ($c in @((Join-Path $Root 'bin\semsearch-engine.exe'), (Join-Path $PSScriptRoot 'semsearch-engine.exe'), (Join-Path $Root 'semsearch-engine.exe'))) {
+        if (Test-Path -LiteralPath $c -PathType Leaf) { $Src = $c; break }
+    }
+    if (-not $Src) { throw "Engine not found: $(Join-Path $Root 'bin\semsearch-engine.exe') (build it with build.cmd in the project folder)" }
     $PF = Get-ProgramFiles64
     if (-not $PF -or -not (Test-Path -LiteralPath $PF -PathType Container)) { throw "Program Files folder not found" }
-    $InstallDir = Join-Path $PF 'SemSearch'
-    $Exe = Join-Path $InstallDir 'semsearch-engine.exe'
+    # Already in a folder only administrators can write to (application installed into Program Files): run it in place.
+    $InPlace = Test-Protected $Src
+    if ($InPlace) {
+        $Exe = [IO.Path]::GetFullPath($Src)
+        $InstallDir = Split-Path -Parent $Exe
+    } else {
+        $InstallDir = Join-Path $PF 'SemSearch'
+        $Exe = Join-Path $InstallDir 'semsearch-engine.exe'
+    }
     Write-Host "Project root: $Root"
-    Write-Host "Install to:   $Exe"
+    if ($InPlace) { Write-Host "Engine:       $Exe (protected folder, no copy needed)" } else { Write-Host "Install to:   $Exe" }
     Write-Host "User:         $User"
 
     # The installed copy must live apart from the project (uninstall-task deletes files there).
-    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
-    $instFull = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\') + '\'
-    if ($rootFull.StartsWith($instFull, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "The project folder $Root is inside $InstallDir, where the engine gets installed. Move the project folder elsewhere (for example into Documents) and run install-task.cmd again."
+    if (-not $InPlace) {
+        $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+        $instFull = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\') + '\'
+        if ($rootFull.StartsWith($instFull, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "The project folder $Root is inside $InstallDir, where the engine gets installed, and its engine is writable by ordinary users, so it cannot run elevated from there. Move the project folder elsewhere (for example into Documents) and run install-task.cmd again."
+        }
     }
 
     $isAdmin = Test-AccountAdmin $User
@@ -162,14 +207,16 @@ try {
         $null = Wait-ProcessGone $Exe 5
     }
 
-    # Copy into Program Files; reset the folder ACL to the inherited one (users: read/execute).
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
-    Copy-Item -LiteralPath $Src -Destination $Exe -Force
-    $h1 = (Get-FileHash -LiteralPath $Src -Algorithm SHA256).Hash
-    $h2 = (Get-FileHash -LiteralPath $Exe -Algorithm SHA256).Hash
-    if ($h1 -ne $h2) { throw "Copy verification failed ($h1 vs $h2)" }
-    Write-Host "Copied, SHA256 $h2"
+    if (-not $InPlace) {
+        # Copy into Program Files; reset the folder ACL to the inherited one (users: read/execute).
+        New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+        & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
+        Copy-Item -LiteralPath $Src -Destination $Exe -Force
+        $h1 = (Get-FileHash -LiteralPath $Src -Algorithm SHA256).Hash
+        $h2 = (Get-FileHash -LiteralPath $Exe -Algorithm SHA256).Hash
+        if ($h1 -ne $h2) { throw "Copy verification failed ($h1 vs $h2)" }
+        Write-Host "Copied, SHA256 $h2"
+    }
 
     $arg = "--root `"$Root`""
     $action = New-ScheduledTaskAction -Execute $Exe -Argument $arg -WorkingDirectory $InstallDir

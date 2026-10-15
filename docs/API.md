@@ -41,6 +41,7 @@
 | `SEMSEARCH_SHELL=1` | backend | запущен из shell: окно, трей и горячую клавишу ведёт shell |
 | `SEMSEARCH_ENGINE_PIPE` | backend, `engine_client.py` | канал отладочного движка (`--pipe <имя>`) вместо `semsearch-engine-<SessionId>`, §4 |
 | `SEMSEARCH_ROOT` | shell | папка с `server.py` вместо поиска вверх от exe |
+| `SEMSEARCH_PYTHON` | shell | полный путь к `pythonw.exe` для backend; без неё — `<root>\.venv\Scripts\pythonw.exe`, затем `<root>\runtime\pythonw.exe` |
 | `SEMSEARCH_DEV_URL` | shell | брать страницы с этого адреса (вёрстка с `mock_api.py`) |
 | `SEMSEARCH_NO_BACKEND=1` | shell | не запускать и не останавливать backend |
 | `HF_HUB_CACHE` | backend | свой кэш моделей вместо `D\models` (тогда модель не переносится) |

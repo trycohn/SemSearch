@@ -55,6 +55,7 @@ class LayerGraphs:
         self.graphs = OrderedDict()  # (строк, длина) -> [граф на слой]
         self.buf = self.pool = self.stream = None
         self.off = False
+        self.ooms = 0  # нехватка видеопамяти — не повод отказываться от графов сразу: игра могла занять её на время
         lm.forward = self.forward
 
     def uninstall(self):
@@ -77,10 +78,13 @@ class LayerGraphs:
                 try:
                     return self._run(e, am, bs, n, rows, length)
                 except Exception as ex:
-                    log.warning("CUDA Graphs выключены (%s: %s) — дальше обычным путём", type(ex).__name__,
-                                str(ex)[:300])
+                    oom = isinstance(ex, torch.cuda.OutOfMemoryError)
+                    self.ooms += oom
+                    self.off = not oom or self.ooms >= 3  # при нехватке памяти ещё две попытки
+                    log.warning("CUDA Graphs %s (%s: %s) — %s обычным путём",
+                                "выключены" if self.off else "не поместились", type(ex).__name__, str(ex)[:300],
+                                "дальше" if self.off else "эту порцию")
                     self.reset()
-                    self.off = True
         return self.orig(input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids,
                          inputs_embeds=inputs_embeds, **kw)
 

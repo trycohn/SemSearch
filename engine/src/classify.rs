@@ -245,14 +245,28 @@ impl Identity {
     }
 }
 
-/// Глобальная личность git: %USERPROFILE%\.gitconfig, %XDG_CONFIG_HOME%\git\config,
-/// %USERPROFILE%\.config\git\config.
+/// Глобальная личность git: `.gitconfig` и `.config\git\config` в домашней папке, %XDG_CONFIG_HOME%\git\config.
+/// Домашняя папка, как у Git for Windows: %HOME%, иначе %HOMEDRIVE%%HOMEPATH%, иначе профиль пользователя
+/// (известная папка — переменные окружения у повышенного процесса или задачи Планировщика бывают не теми).
 pub fn global_identity() -> Identity {
     let mut id = Identity::default();
     let mut files = Vec::new();
-    if let Ok(up) = std::env::var("USERPROFILE") {
-        files.push(join(&up, ".gitconfig"));
-        files.push(join(&up, r".config\git\config"));
+    let mut homes: Vec<String> = Vec::new();
+    let env = |k: &str| std::env::var(k).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    homes.extend(env("HOME"));
+    if let (Some(d), Some(p)) = (env("HOMEDRIVE"), env("HOMEPATH")) {
+        homes.push(format!("{d}{p}"));
+    }
+    homes.extend(crate::util::known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_Profile).map(|p| p.to_string_lossy().into_owned()));
+    homes.extend(env("USERPROFILE"));
+    let mut seen: Vec<String> = Vec::new();
+    for h in homes {
+        if !is_abs(&h) || seen.contains(&h.to_lowercase()) {
+            continue;
+        }
+        seen.push(h.to_lowercase());
+        files.push(join(&h, ".gitconfig"));
+        files.push(join(&h, r".config\git\config"));
     }
     if let Ok(x) = std::env::var("XDG_CONFIG_HOME") {
         if !x.trim().is_empty() {

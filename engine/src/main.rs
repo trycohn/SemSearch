@@ -9,6 +9,7 @@
 #[macro_use]
 mod util;
 mod classify;
+mod eject;
 mod engine;
 mod index;
 mod mft;
@@ -58,7 +59,9 @@ fn arg_value(args: &[String], flag: &str) -> Option<String> {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    util::set_error_mode();
+    // args_os: путь с непарным суррогатом (бывает в именах NTFS) не должен ронять процесс до первой строки журнала
+    let args: Vec<String> = std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let has = |f: &str| args.iter().any(|a| a.eq_ignore_ascii_case(f));
     if has("--help") || has("-h") || has("/?") {
         let mut w = util::stdout_writer();
@@ -148,6 +151,8 @@ fn main() {
     for d in &drives {
         eng.start_volume(d);
     }
+    // внешние диски подключают и отключают, BitLocker разблокируют, буквы меняют — без перезапуска движка
+    eng.watch_drives(drives.clone());
     let e2 = eng.clone();
     let _ = std::thread::Builder::new().name("stats".into()).spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(1800));

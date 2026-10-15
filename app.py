@@ -27,7 +27,26 @@ for _level, _msg in _moved:
     log.log(_level, _msg)
 if os.environ.get("SEMSEARCH_DATA_DIR", "").strip() and not core.abs_env("SEMSEARCH_DATA_DIR"):
     log.warning("SEMSEARCH_DATA_DIR — не абсолютный путь, не учитываю (как shell и движок)")
+WORKER_ENV = "SEMSEARCH_WORKER_OF"
+os.environ[WORKER_ENV] = core.APP_DIR  # метка для рабочих процессов разбора: по ней reap_orphans узнаёт своих
 cfg = core.load_config()
+
+
+def _skipped_roots():
+    """Папки поиска из config.json, которые load_config пропустил, потому что их сейчас нет (флешка не вставлена,
+    сетевой диск недоступен). Indexer не стирает из индекса их файлы: после возвращения диска всё на месте."""
+    for p in (core.CONFIG_PATH, core.LEGACY_CONFIG_PATH):
+        if os.path.exists(p):
+            try:
+                with open(p, encoding="utf-8-sig") as f:
+                    saved = json.load(f).get("content_roots") or []
+                return [r for r in saved if isinstance(r, str) and r not in cfg["content_roots"]]
+            except (OSError, ValueError, AttributeError, TypeError):
+                return []
+    return []
+
+
+cfg["content_roots_missing"] = _skipped_roots()
 IN_SHELL = os.environ.get("SEMSEARCH_SHELL") == "1"  # запущены из SemSearch.exe: окно, трей и клавишу ведёт он
 _lang = {"v": i18n.resolve(cfg.get("lang"))}
 
@@ -102,6 +121,7 @@ for _ext, _type in ((".js", "text/javascript"), (".css", "text/css"), (".svg", "
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile  # noqa: E402
+from fastapi.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from PIL import Image  # noqa: E402
@@ -111,6 +131,7 @@ import extract  # noqa: E402
 import meta  # noqa: E402
 import preview  # noqa: E402
 import watcher  # noqa: E402
+import winfs  # noqa: E402
 from engine_client import EngineClient  # noqa: E402
 from indexer import Indexer  # noqa: E402
 from names import NamesProvider  # noqa: E402
@@ -194,15 +215,28 @@ def reap_orphans():
     import psutil
 
     # Дочерние процессы multiprocessing запускаются базовым интерпретатором, а не из .venv, поэтому
-    # свои узнаём по рабочей папке (папка SemSearch) — чужие Python-программы не трогаем.
+    # свои узнаём по рабочей папке (папка SemSearch) или по метке в окружении (backend, запущенный ярлыком
+    # из другой папки) — чужие Python-программы не трогаем.
     home = os.path.normcase(core.APP_DIR)
+
+    def ours(p):
+        try:
+            if os.path.normcase(p.cwd()) == home:
+                return True
+        except (psutil.Error, OSError):
+            pass
+        try:
+            return os.path.normcase(p.environ().get(WORKER_ENV, "")) == home
+        except (psutil.Error, OSError):
+            return False
+
     for p in psutil.process_iter(["pid", "cmdline"]):
         try:
             cmd = " ".join(p.info["cmdline"] or [])
             m = re.search(r"spawn_main\(parent_pid=(\d+)", cmd)
             if not m or psutil.pid_exists(int(m.group(1))):
                 continue
-            if os.path.normcase(p.cwd()) == home:
+            if ours(p):
                 p.terminate()
                 log.info("завершён осиротевший процесс разбора %d", p.pid)
         except (psutil.Error, OSError):
@@ -551,9 +585,9 @@ async def search_image(file: UploadFile = File(...), tab: str = "image"):
 @app.get("/api/preview")
 def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
     row = _rows("SELECT id, kind, status, duration, err, copy_of FROM files WHERE path=?", (path,))
-    if not (row or _known(path)) or not os.path.isfile(path):
+    if not (row or _known(path)) or not os.path.isfile(winfs.long_path(path)):
         raise HTTPException(404, i18n.error("no_file", L()))
-    st = os.stat(path)
+    st = os.stat(winfs.long_path(path))
     name = os.path.basename(path)
     ext = meta.ext_of(name)
     fid, kind, status, dur, err, copy_of = row[0] if row else (None,) * 6
@@ -587,7 +621,9 @@ def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
         if k == "text" and best:
             if ext == "PDF":
                 pages = preview.pdf_pages(path, st.st_mtime)
-                page = int(best[2].split()[-1]) if (best[2] or "").startswith("стр.") else 1
+                label = best[2] or ""
+                num = re.search(r"\d+", label) if label.startswith("стр.") else None  # «стр. 3», «стр. 3 (скан)»
+                page = int(num.group()) if num else 1
                 out["pages"] = pages
                 if pages:
                     out["type"] += ", " + i18n.pages(pages, L())
@@ -653,17 +689,28 @@ def thumb(chunk_id: int, size: int = 360):
     return FileResponse(out, headers={"Cache-Control": "max-age=86400"})
 
 
+def _do_open(path, reveal):
+    # Не в потоке событий: путь на недоступном сетевом диске проверяется десятки секунд и держал бы весь backend
+    if not _known(path) or not os.path.exists(winfs.long_path(path)):
+        raise HTTPException(404, i18n.error("no_file", L()))
+    try:
+        if reveal:
+            # Проводник разбирает аргумент сам: путь с запятой без кавычек он режет по запятой (а Popen с
+            # аргументом-списком кавычит только пути с пробелами). Поэтому строкой и всегда в кавычках.
+            explorer = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "explorer.exe")
+            subprocess.Popen(f'"{explorer}" /select,"{os.path.normpath(path)}"')
+        else:
+            os.startfile(path)
+    except OSError as ex:  # для типа файла нет программы по умолчанию, путь длиннее 259 знаков и т.п.
+        log.warning("не удалось открыть %s: %s", path, ex)
+        raise HTTPException(500, f"{type(ex).__name__}: {ex}")
+    return {"ok": True}
+
+
 @app.post("/api/open")
 async def open_file(request: Request):
     body = await request.json()
-    path = str(body.get("path", ""))
-    if not _known(path) or not os.path.exists(path):
-        raise HTTPException(404, i18n.error("no_file", L()))
-    if body.get("reveal"):
-        subprocess.Popen(["explorer.exe", "/select,", path])
-    else:
-        os.startfile(path)
-    return {"ok": True}
+    return await run_in_threadpool(_do_open, str(body.get("path", "")), bool(body.get("reveal")))
 
 
 # ------------------------------------------------ состояние
@@ -827,8 +874,10 @@ _name_re = re.compile(r"^[^\\/:*?\"<>|]{1,128}$")
 
 def _validate(key, value):
     if key == "content_roots":
-        roots = [os.path.normpath(str(p)) for p in value]
-        bad = [p for p in roots if not os.path.isdir(p)]
+        # "D:" без слэша — это текущая папка на диске D:, а не его корень; пустая строка нормализуется в "."
+        roots = [os.path.normpath(str(p).strip()) for p in value]
+        roots = [p + "\\" if len(p) == 2 and p[1] == ":" else p for p in roots]
+        bad = [p for p in roots if not os.path.isabs(p) or not os.path.isdir(p)]
         if bad or not roots:
             raise HTTPException(400, i18n.error("no_folder", L(), bad[0] if bad else "—"))
         return roots
@@ -889,6 +938,8 @@ async def settings_post(request: Request):
         return {"ok": True, "restart": False}
     core.save_config(changes)
     cfg.update(changes)
+    if "content_roots" in changes:
+        cfg["content_roots_missing"] = []  # список только что сохранён — пропавших папок в нём уже нет
     if "lang" in changes:
         _lang["v"] = i18n.resolve(changes["lang"])
     if indexer:
@@ -923,7 +974,11 @@ def processes():
 
 @app.post("/api/open_log")
 def open_log():
-    os.startfile(os.path.join(core.DATA_DIR, "semsearch.log"))
+    path = os.path.join(core.DATA_DIR, "semsearch.log")
+    try:
+        os.startfile(path)
+    except OSError:  # у .log нет программы по умолчанию (сбросили ассоциации, урезанная сборка Windows)
+        subprocess.Popen(["notepad.exe", path])
     return {"ok": True}
 
 

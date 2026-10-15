@@ -82,12 +82,8 @@ impl Config {
                 .unwrap_or_else(|| default.to_string())
         };
         let lang = text("lang", &|s| matches!(s, "system" | "ru" | "en"), "system");
-        let theme = text("theme", &|s| matches!(s, "system" | "light" | "dark"), "system");
-        let accent = text(
-            "accent",
-            &|s| s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit()),
-            "#005fb8",
-        );
+        let theme = text("theme", &valid_theme, "system");
+        let accent = text("accent", &valid_accent, "#005fb8");
         Config { root, data, data_note, port, dev, no_backend, hotkey, hidden, lang, theme, accent, dev_url, backend }
     }
 
@@ -108,6 +104,21 @@ impl Config {
     pub fn token(&self) -> Option<String> {
         let given = if self.dev { None } else { self.backend.lock().unwrap().1.clone() };
         given.or_else(|| self.file_token())
+    }
+
+    /// "theme" and "accent" from `config.json` as they are now (the settings page changes them while the shell runs);
+    /// the values read at startup if the file cannot be read.
+    pub fn appearance(&self) -> (String, String) {
+        let json = read_config_json(&self.data, &self.root);
+        let text = |key: &str, ok: &dyn Fn(&str) -> bool, default: &str| {
+            json.as_ref()
+                .and_then(|v| v.get(key))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| ok(s))
+                .unwrap_or_else(|| default.to_string())
+        };
+        (text("theme", &valid_theme, &self.theme), text("accent", &valid_accent, &self.accent))
     }
 
     /// `<data>\token`, written by the backend at startup.
@@ -131,6 +142,14 @@ impl Config {
     }
 }
 
+fn valid_theme(s: &str) -> bool {
+    matches!(s, "system" | "light" | "dark")
+}
+
+fn valid_accent(s: &str) -> bool {
+    s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// http://127.0.0.1:<port>/
 pub fn local_url(port: u16) -> Url {
     Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap()
@@ -147,7 +166,8 @@ fn find_root() -> PathBuf {
     let start = exe.parent().map(Path::to_path_buf).unwrap_or_default();
     let mut dir = Some(start.as_path());
     while let Some(d) = dir {
-        if d.join("server.py").is_file() {
+        // server.py alone is not enough: SemSearch.exe may sit below an unrelated project that has its own server.py
+        if d.join("server.py").is_file() && d.join("app.py").is_file() {
             return d.to_path_buf();
         }
         dir = d.parent();
@@ -368,4 +388,71 @@ pub fn small_icon_size() -> i32 {
 pub fn is_foreground(hwnd: isize) -> bool {
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     unsafe { GetForegroundWindow() as isize == hwnd }
+}
+
+/// Per-monitor DPI awareness (v2) before anything is drawn: the native dialogs shown before the first window exists
+/// (WebView2 missing, ...) are otherwise bitmap-scaled and blurry at 125 % and up. tao asks for the same later, which then
+/// fails harmlessly because the awareness cannot be changed twice.
+pub fn set_dpi_aware() {
+    use windows_sys::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+}
+
+/// Native message box: the shell has no console, and before the first window exists no UI of its own.
+/// With `ok_cancel` it has two buttons; returns true when the user pressed OK.
+pub fn message_box(title: &str, text: &str, ok_cancel: bool) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MB_SETFOREGROUND};
+    let (t, x) = (wide(title), wide(text));
+    let flags = MB_ICONERROR | MB_SETFOREGROUND | if ok_cancel { MB_OKCANCEL } else { MB_OK };
+    unsafe { MessageBoxW(std::ptr::null_mut(), x.as_ptr(), t.as_ptr(), flags) == IDOK }
+}
+
+/// Open a web address in the default browser.
+pub fn open_url(url: &str) {
+    use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let (verb, url) = (wide("open"), wide(url));
+    unsafe {
+        // ShellExecute may hand the address to shell extensions that need COM (only used right before the shell exits)
+        CoInitializeEx(std::ptr::null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32);
+        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), url.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
+    }
+}
+
+/// Version of the WebView2 runtime that the windows will use (Evergreen, or WEBVIEW2_BROWSER_EXECUTABLE_FOLDER).
+/// Err(None) = not installed (Windows 10 before 21H1, LTSC and Server editions come without it); Err(Some(hresult)) =
+/// the loader failed for another reason.
+pub fn webview2_version() -> Result<String, Option<i32>> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::GetAvailableCoreWebView2BrowserVersionString;
+    use windows_core::{PCWSTR, PWSTR};
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    const ERROR_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32; // HRESULT_FROM_WIN32
+    const ERROR_PATH_NOT_FOUND: i32 = 0x8007_0003_u32 as i32;
+    let mut v = PWSTR::null();
+    let res = unsafe { GetAvailableCoreWebView2BrowserVersionString(PCWSTR::null(), &mut v) };
+    let text = if !v.is_null() { unsafe { v.to_string() }.ok() } else { None };
+    if !v.is_null() {
+        unsafe { CoTaskMemFree(v.as_ptr() as *const _) };
+    }
+    match res {
+        Ok(()) => text.filter(|s| !s.is_empty()).ok_or(None),
+        Err(e) if e.code().0 == ERROR_FILE_NOT_FOUND || e.code().0 == ERROR_PATH_NOT_FOUND => Err(None),
+        Err(e) => Err(Some(e.code().0)),
+    }
+}
+
+/// Panics of any thread go to shell.log: the release build has no console, and a panicking supervisor thread would
+/// otherwise just stop restarting the backend without a trace.
+pub fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let at = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
+        let payload = info.payload();
+        let what = payload
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        log(&format!("PANIC at {at}: {what}"));
+    }));
 }

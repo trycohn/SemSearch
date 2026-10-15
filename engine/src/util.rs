@@ -11,6 +11,8 @@ use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows_sys::Win32::Security::*;
 use windows_sys::Win32::Storage::FileSystem::*;
 use windows_sys::Win32::System::Console::*;
+use windows_sys::Win32::System::Diagnostics::Debug::{SetErrorMode, SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX};
+use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::ProcessStatus::*;
 use windows_sys::Win32::System::SystemInformation::GetLocalTime;
 use windows_sys::Win32::System::Threading::*;
@@ -341,8 +343,8 @@ pub fn find_data(path: &str) -> Option<(u32, u32)> {
     None
 }
 
-/// Перечислить каталог (FindExInfoBasic + LARGE_FETCH): f(имя, атрибуты, размер, mtime).
-pub fn for_each_dir_entry(dir: &str, mut f: impl FnMut(&str, u32, u64, f64)) -> bool {
+/// Перечислить каталог (FindExInfoBasic + LARGE_FETCH): f(имя, атрибуты, размер, mtime, тег точки повторной обработки или 0).
+pub fn for_each_dir_entry(dir: &str, mut f: impl FnMut(&str, u32, u64, f64, u32)) -> bool {
     let mut pat = long_w(dir);
     pat.pop();
     if pat.last() != Some(&(b'\\' as u16)) {
@@ -359,7 +361,8 @@ pub fn for_each_dir_entry(dir: &str, mut f: impl FnMut(&str, u32, u64, f64)) -> 
         loop {
             let n = fd.cFileName.iter().position(|&c| c == 0).unwrap_or(fd.cFileName.len());
             let name = String::from_utf16_lossy(&fd.cFileName[..n]);
-            f(&name, fd.dwFileAttributes, ((fd.nFileSizeHigh as u64) << 32) | fd.nFileSizeLow as u64, ft_epoch(&fd.ftLastWriteTime));
+            let tag = if fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 { fd.dwReserved0 } else { 0 };
+            f(&name, fd.dwFileAttributes, ((fd.nFileSizeHigh as u64) << 32) | fd.nFileSizeLow as u64, ft_epoch(&fd.ftLastWriteTime), tag);
             if FindNextFileW(h, &mut fd) == 0 {
                 break;
             }
@@ -453,6 +456,14 @@ pub fn cpu_times() -> (f64, f64) {
 pub fn set_below_normal() {
     unsafe {
         SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    }
+}
+
+/// Без системных окон «Вставьте диск» / «Устройство не готово»: у процесса без интерфейса их никто не
+/// закроет, и поток, обратившийся к пустому картридеру или внезапно отключённому диску, завис бы насовсем.
+pub fn set_error_mode() {
+    unsafe {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
     }
 }
 
@@ -555,17 +566,23 @@ pub fn config_path(data: &Path, root: &Path) -> Option<PathBuf> {
 /// config.json — недоверенный ввод (папки данных и проекта доступны пользователю на запись):
 /// читаем не больше 1 МБ, используем только "name_drives". Нет файла — Null (умолчания).
 pub fn read_config(data: &Path, root: &Path) -> serde_json::Value {
+    read_config_checked(data, root).unwrap_or(serde_json::Value::Null)
+}
+
+/// Как read_config, но Some(Null) — файла нет, а None — файл есть, но не прочитался или не разобрался
+/// (например, его как раз переписывают): для сверки дисков это «не знаю», а не «умолчания».
+fn read_config_checked(data: &Path, root: &Path) -> Option<serde_json::Value> {
     use std::io::Read;
     let Some(p) = config_path(data, root) else {
-        return serde_json::Value::Null;
+        return Some(serde_json::Value::Null);
     };
     let mut b = Vec::new();
     let ok = File::open(&p).and_then(|f| f.take(1 << 20).read_to_end(&mut b)).is_ok();
     if !ok || b.len() >= 1 << 20 {
-        return serde_json::Value::Null;
+        return None;
     }
     let b = b.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&b);
-    serde_json::from_slice(b).unwrap_or(serde_json::Value::Null)
+    serde_json::from_slice(b).ok()
 }
 
 /// Диски для индекса имён: config.json "name_drives"; нет ключа (или null) — все несъёмные диски.
@@ -573,6 +590,15 @@ pub fn read_config(data: &Path, root: &Path) -> serde_json::Value {
 /// администратора, иначе обход) или другой (exFAT, FAT32, ReFS — всегда обход).
 pub fn config_drives(data: &Path, root: &Path) -> Vec<String> {
     let cfg = read_config(data, root);
+    drives_from_config(&cfg, true)
+}
+
+/// Для периодической сверки дисков: без записей в журнал и None, если config.json сейчас не читается.
+pub fn config_drives_checked(data: &Path, root: &Path) -> Option<Vec<String>> {
+    read_config_checked(data, root).map(|cfg| drives_from_config(&cfg, false))
+}
+
+fn drives_from_config(cfg: &serde_json::Value, log: bool) -> Vec<String> {
     let valid = fixed_drives();
     let mut out: Vec<String> = Vec::new();
     if let Some(arr) = cfg.get("name_drives").and_then(|v| v.as_array()) {
@@ -584,7 +610,9 @@ pub fn config_drives(data: &Path, root: &Path) -> Vec<String> {
                         out.push(d);
                     }
                 }
-                None => warn!("config.json name_drives: ignoring {:?} (not a fixed drive with a file system)", s.chars().take(16).collect::<String>()),
+                // диск из настроек может быть временно не подключён (внешний диск): это не ошибка
+                None if log => warn!("config.json name_drives: ignoring {:?} (not a fixed drive with a file system)", s.chars().take(16).collect::<String>()),
+                None => {}
             }
         }
         return out;
@@ -592,7 +620,20 @@ pub fn config_drives(data: &Path, root: &Path) -> Vec<String> {
     valid
 }
 
-/// Несъёмные диски (DRIVE_FIXED) с подключённой файловой системой (GetVolumeInformation отвечает).
+/// Буква диска — подстановка SUBST (`subst P: D:\Projects`): та же папка уже есть в индексе своего диска,
+/// второй индекс только удвоил бы файлы в результатах (а в режиме MFT том `\\.\P:` не открывается вовсе).
+fn is_subst(drive: &str) -> bool {
+    let name = wide_z(drive);
+    let mut buf = [0u16; 1024];
+    let n = unsafe { QueryDosDeviceW(name.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
+    // настоящий том: "\Device\HarddiskVolume3"; подстановка: "\??\D:\Projects"
+    n > 4 && buf[..4] == [b'\\' as u16, b'?' as u16, b'?' as u16, b'\\' as u16]
+}
+
+/// Несъёмные диски (DRIVE_FIXED) с подключённой файловой системой (GetVolumeInformation отвечает),
+/// без подстановок SUBST. Внешние диски в корпусе USB обычно тоже DRIVE_FIXED; флешки и картридеры (DRIVE_REMOVABLE),
+/// сетевые и оптические диски в список не попадают. Заблокированный BitLocker том без файловой системы
+/// появится в списке, когда его разблокируют (список пересматривается — Engine::apply_drives).
 pub fn fixed_drives() -> Vec<String> {
     let mut out = Vec::new();
     let mask = unsafe { GetLogicalDrives() };
@@ -605,6 +646,9 @@ pub fn fixed_drives() -> Vec<String> {
         if unsafe { GetDriveTypeW(w.as_ptr()) } != 3 {
             continue; // DRIVE_FIXED
         }
+        if is_subst(&d) {
+            continue;
+        }
         if drive_fs(&d).is_some_and(|fs| !fs.is_empty()) {
             out.push(d);
         }
@@ -612,17 +656,80 @@ pub fn fixed_drives() -> Vec<String> {
     out
 }
 
-pub fn drive_fs(drive: &str) -> Option<String> {
+/// (файловая система, серийный номер тома). Серийный номер меняется, когда под той же буквой
+/// оказывается другой диск или том переформатирован.
+pub fn drive_info(drive: &str) -> Option<(String, u32)> {
     let w = wide_z(&format!("{drive}\\"));
     let mut fs = [0u16; 64];
+    let mut serial = 0u32;
     let ok = unsafe {
-        GetVolumeInformationW(w.as_ptr(), std::ptr::null_mut(), 0, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), fs.as_mut_ptr(), fs.len() as u32)
+        GetVolumeInformationW(w.as_ptr(), std::ptr::null_mut(), 0, &mut serial, std::ptr::null_mut(), std::ptr::null_mut(), fs.as_mut_ptr(), fs.len() as u32)
     };
     if ok == 0 {
         return None;
     }
     let n = fs.iter().position(|&c| c == 0).unwrap_or(fs.len());
-    Some(String::from_utf16_lossy(&fs[..n]))
+    Some((String::from_utf16_lossy(&fs[..n]), serial))
+}
+
+pub fn drive_fs(drive: &str) -> Option<String> {
+    drive_info(drive).map(|x| x.0)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Media {
+    Unknown,
+    Ssd,
+    Hdd,
+}
+
+impl Media {
+    pub fn name(self) -> &'static str {
+        match self {
+            Media::Unknown => "unknown",
+            Media::Ssd => "no seek penalty (SSD)",
+            Media::Hdd => "seek penalty (HDD)",
+        }
+    }
+}
+
+/// Тип носителя тома по StorageDeviceSeekPenaltyProperty (без прав администратора). На HDD параллельный
+/// обход каталогов и чтение MFT в несколько потоков превращаются в беспорядочные перемещения головок и идут
+/// медленнее, чем в один-два потока; на SSD/NVMe — наоборот. Не ответил драйвер (мост USB, виртуальный
+/// диск, составной том) — Unknown.
+pub fn drive_media(drive: &str) -> Media {
+    use windows_sys::Win32::System::Ioctl::{IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, StorageDeviceSeekPenaltyProperty, STORAGE_PROPERTY_QUERY};
+    let w = wide_z(&format!(r"\\.\{drive}"));
+    unsafe {
+        // доступ 0: достаточно для запроса свойств, администратор не нужен
+        let h = CreateFileW(w.as_ptr(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, std::ptr::null(), OPEN_EXISTING, 0, std::ptr::null_mut());
+        if h == INVALID_HANDLE_VALUE {
+            return Media::Unknown;
+        }
+        let h = Handle(h);
+        let q = STORAGE_PROPERTY_QUERY { PropertyId: StorageDeviceSeekPenaltyProperty, QueryType: PropertyStandardQuery, AdditionalParameters: [0] };
+        // DEVICE_SEEK_PENALTY_DESCRIPTOR: Version u32, Size u32, IncursSeekPenalty BOOLEAN
+        let mut out = [0u8; 16];
+        let mut n = 0u32;
+        let ok = DeviceIoControl(
+            h.0,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            &q as *const _ as *const _,
+            std::mem::size_of::<STORAGE_PROPERTY_QUERY>() as u32,
+            out.as_mut_ptr() as *mut _,
+            out.len() as u32,
+            &mut n,
+            std::ptr::null_mut(),
+        );
+        if ok == 0 || n < 9 {
+            return Media::Unknown;
+        }
+        if out[8] != 0 {
+            Media::Hdd
+        } else {
+            Media::Ssd
+        }
+    }
 }
 
 pub fn write_file(path: &Path, data: &[u8]) -> std::io::Result<()> {

@@ -594,13 +594,17 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.isComposing || e.defaultPrevented) return;
-    const ctrl = e.ctrlKey || e.metaKey;
+    /* AltGr (польская, немецкая, чешская… раскладки) приходит как Ctrl+Alt: это набор символа, а не сочетание */
+    const altGr = !!(e.getModifierState && e.getModifierState('AltGraph'));
+    const ctrl = (e.ctrlKey || e.metaKey) && !altGr;
+    const alt = e.altKey && !altGr;
     const code = e.code || '';
     const key = (e.key || '').toLowerCase();
-    const isKey = (latin, cyr) => code === 'Key' + latin.toUpperCase() || key === latin || key === cyr;
+    /* латинская раскладка — по букве на клавише (Dvorak, AZERTY), любая другая (кириллица, греческая…) — по месту клавиши */
+    const isKey = (latin, cyr) => (/^[a-z]$/.test(key) ? key === latin : key === cyr || code === 'Key' + latin.toUpperCase());
     const ae = document.activeElement;
     const digit = /^(Digit|Numpad)[1-7]$/.test(code) ? +code.slice(-1) : /^[1-7]$/.test(key) ? +key : 0;
-    if (ctrl && !e.shiftKey && !e.altKey && digit) {
+    if (ctrl && !e.shiftKey && !alt && digit) {
       e.preventDefault();
       setTab(R.TABS[digit - 1][0]);
       return;
@@ -614,20 +618,20 @@
     if (boot.on) return; /* экран запуска: поле поиска под ним */
     if (isStart()) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      if (e.altKey) return;
+      if (alt) return;
       e.preventDefault();
       move(e.key === 'ArrowDown' ? 1 : -1);
       return;
     }
-    if (e.key === 'Enter' && !e.altKey) {
+    if (e.key === 'Enter' && !alt) {
       if (ae && ae.tagName === 'BUTTON' && !ae.hasAttribute('data-i')) return;
       e.preventDefault();
       act(ctrl ? 'reveal' : 'open');
       return;
     }
-    if (ctrl && e.shiftKey && !e.altKey && isKey('c', 'с')) { e.preventDefault(); act('copy'); return; }
-    if (ctrl && !e.shiftKey && !e.altKey && isKey('f', 'а')) { e.preventDefault(); act('similar'); return; }
-    if (!ctrl && !e.altKey && e.key.length === 1 && e.key !== ' ' && ae !== el.q && (!ae || ae.tagName !== 'INPUT')) el.q.focus();
+    if (ctrl && e.shiftKey && !alt && isKey('c', 'с')) { e.preventDefault(); act('copy'); return; }
+    if (ctrl && !e.shiftKey && !alt && isKey('f', 'а')) { e.preventDefault(); act('similar'); return; }
+    if (!ctrl && !alt && e.key.length === 1 && e.key !== ' ' && ae !== el.q && (!ae || ae.tagName !== 'INPUT')) el.q.focus();
   });
 
   /* картинка: перетаскивание (подсветка + «дышащая» рамка) и Ctrl+V.

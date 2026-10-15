@@ -599,12 +599,25 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> ListOut {
         unsafe { Vec::from_raw_parts(z.as_mut_ptr() as *mut AtomicU8, z.len(), z.capacity()) }
     };
     let marks = if spec.smart { Some(crate::classify::SmartMarks::build(v)) } else { None };
+    // Каталог — точка повторной обработки: папку OneDrive с данными на диске (облачный тег) обходим — в ней обычные
+    // локальные файлы (на Windows 11 так лежат Документы и Рабочий стол при резервном копировании); junction, symlink
+    // и папки-заглушки (данных нет) — нет. Тега в индексе нет (в записях USN-журнала его не бывает), спрашиваем диск;
+    // результат запоминает dir_state, поэтому запрос — по разу на каталог, где лежат подходящие файлы.
+    let cloud_dir_blocked = |flags: u16, x: u32| -> bool {
+        if flags & F_CLOUD != 0 {
+            return true;
+        }
+        match find_data(&v.path(x)) {
+            Some((a, tag)) => a & A_CLOUD != 0 || (a & A_REPARSE != 0 && !is_cloud_tag(tag)),
+            None => true,
+        }
+    };
     let user_excluded = |x: u32| -> bool {
         let e = v.ents[x as usize];
         if e.flags & HIDE != 0 {
             return true;
         }
-        if spec.skip_cloud && e.flags & F_REPARSE != 0 {
+        if spec.skip_cloud && e.flags & (F_REPARSE | F_CLOUD) != 0 && cloud_dir_blocked(e.flags, x) {
             return true;
         }
         let ln = v.lname(x);
@@ -665,7 +678,9 @@ pub fn list_volume(v: &Volume, spec: &ListSpec) -> ListOut {
                 if e.flags & (HIDE | F_DIR) != 0 {
                     continue;
                 }
-                if spec.skip_cloud && e.flags & (F_CLOUD | F_REPARSE) != 0 {
+                // точки повторной обработки (файлы OneDrive с данными на диске, символические ссылки) решает
+                // проверка на диске по атрибутам и тегу (ops::stat_group); здесь отсекаем только заглушки
+                if spec.skip_cloud && e.flags & F_CLOUD != 0 {
                     continue;
                 }
                 let lname = &v.lnames[e.off as usize..e.off as usize + e.len as usize];
