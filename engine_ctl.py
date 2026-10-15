@@ -6,6 +6,7 @@
 import logging
 import os
 import subprocess
+import threading
 import time
 
 import core
@@ -16,6 +17,7 @@ TASK = "SemSearch Engine"
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 
 _spawned = None  # процесс, если движок запускали мы сами
+_lock = threading.Lock()  # ensure() зовут и на старте запуска, и при подключении индексатора
 
 
 def _client():
@@ -41,6 +43,11 @@ def _wait(client, seconds):
 
 def ensure():
     """Поднимает движок, если он не запущен. -> "running" | "task" | "spawned" | None."""
+    with _lock:
+        return _ensure()
+
+
+def _ensure():
     global _spawned
     client = _client()
     if client is None or not os.path.exists(EXE):

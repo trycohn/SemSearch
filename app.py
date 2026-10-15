@@ -150,10 +150,12 @@ def _attach_engine(ix):
     names._checked = 0.0  # движок мог подняться только что — перепроверить, а не верить кешу
     if not mode or client is None or not client.available():  # готовность не нужна: lister её проверяет сам
         return False
+    # У индексатора свой канал: его долгие запросы к занятому движку не должны держать поиск по имени
+    own = EngineClient()
 
     def lister():
         # Пока движок строит индекс, его список неполный — тогда обходим папки сами (см. Indexer._content_files)
-        if not client.request("status").get("ready"):
+        if not own.request("status").get("ready"):
             raise RuntimeError("движок ещё строит индекс")
         # Список с признаками чужого кода на большом профиле движок собирает десятки секунд: отдельное соединение
         # с запасом по времени, чтобы не держать общий клиент — через него идёт поиск по имени
@@ -174,7 +176,7 @@ def _attach_engine(ix):
 
     def ready():
         try:
-            return bool(client.request("status").get("ready"))
+            return bool(own.request("status").get("ready"))
         except Exception:
             return False
 
@@ -225,6 +227,13 @@ def _watch_download(attempt):
         time.sleep(0.5)
 
 
+def _engine_early():
+    try:
+        engine_ctl.ensure()
+    except Exception:
+        log.exception("не удалось запустить движок имён")
+
+
 def boot():
     global emb, store, indexer
     BOOT.update(step="index", download=None, gpu_note=None, chunks=None, error_kind=None, attempt=BOOT["attempt"] + 1)
@@ -233,6 +242,9 @@ def boot():
         reap_orphans()
     except Exception:
         log.exception("не удалось проверить осиротевшие процессы")
+
+    # Движок имён — сразу, параллельно с моделью: поиск по имени обещан уже на экране запуска
+    threading.Thread(target=_engine_early, name="engine-start", daemon=True).start()
 
     def downloading():
         BOOT.update(step="download", first_run=True)
@@ -732,6 +744,8 @@ def status():
     if p is names.local:
         n_names, n_kind, n_ready, n_updated = ix.get("names", 0), "python", ix.get("names_scan") is None, \
             ix.get("names_updated")
+        if indexer is None:  # запуск: индексатора ещё нет, а запасной индекс уже ищет — его размер и дата
+            n_names, n_updated = names.local.quick_info()
         if ix.get("names_scan") is not None:  # прогресс пересборки — относительно прошлого числа файлов
             n_progress = round(min(ix["names_scan"] / max(n_names, 1), 0.99), 3) if n_names else None
     else:
