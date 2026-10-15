@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="semsearch-token" content="__SEMSEARCH_TOKEN__">
-<title>SemSearch — настройки</title>
+<title data-i18n="title.settings">SemSearch — настройки</title>
 <link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/ui/settings.css">
+<script src="/ui/i18n.js"></script>
 <script src="/ui/common.js"></script>
 <script src="/ui/settings.js" defer></script>
 </head>
@@ -15,110 +16,116 @@
 
 <div class="tbar" data-tauri-drag-region="deep">
 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
-<span class="ttl">Настройки SemSearch</span>
+<span class="ttl" data-i18n="set.win">Настройки SemSearch</span>
 <div class="caps" id="caps" hidden>
-<button class="cap" id="capMin" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
-<button class="cap x" id="capClose" aria-label="Закрыть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" id="capMin" data-i18n-attr="aria-label:win.min" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap x" id="capClose" data-i18n-attr="aria-label:win.close" aria-label="Закрыть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
 </div>
 </div>
 
 <div class="page">
-<h1>Настройки</h1>
+<h1 data-i18n="set.h1">Настройки</h1>
 
 <section class="sec" aria-labelledby="s-where">
-<h2 id="s-where">Где искать</h2>
+<h2 id="s-where" data-i18n="set.where">Где искать</h2>
 <div class="card">
 <div class="crow top">
-<div><div>Поиск по смыслу</div><div class="desc">Документы, код, фото, аудио и видео в этих папках</div></div>
-<button class="btn2" id="addRoot">Добавить папку</button>
+<div><div data-i18n="set.sem">Поиск по смыслу</div><div class="desc" data-i18n="set.semNote">Документы, код, фото, аудио и видео в этих папках</div></div>
+<button class="btn2" id="addRoot" data-i18n="set.addFolder">Добавить папку</button>
 </div>
 <div class="roots" id="roots"></div>
 </div>
 <div class="card crow">
-<div><div>Поиск по имени</div><div class="desc">Имена всех файлов на выбранных дисках, включая системные папки</div></div>
+<div><div data-i18n="set.name">Поиск по имени</div><div class="desc" data-i18n="set.nameNote">Имена всех файлов на выбранных дисках, включая системные папки</div></div>
 <div class="drives" id="drives"></div>
 </div>
 <div class="card">
 <div class="crow top">
-<div><div>Не индексировать</div><div class="desc">Папки с такими именами пропускаются везде. Скрытые папки с точкой (.ssh, .aws) — всегда.</div></div>
-<button class="btn2" id="editExcl">Изменить</button>
+<div><div data-i18n="set.excl">Не индексировать</div><div class="desc" data-i18n="set.exclNote">Папки с такими именами пропускаются везде. Скрытые папки с точкой (.ssh, .aws) — всегда.</div></div>
+<button class="btn2" id="editExcl" data-i18n="set.edit">Изменить</button>
 </div>
 <div class="excl" id="excl"></div>
 </div>
 <div class="card crow">
-<div><div id="l-foreign">Чужой код и библиотеки</div><div class="desc">Git-подмодули, скачанные архивы исходников, сборки и зависимости, сгенерированные файлы. Ваш код и документы не трогаются.</div></div>
+<div><div id="l-foreign" data-i18n="set.foreign">Чужой код и библиотеки</div><div class="desc" data-i18n="set.foreignNote">Git-подмодули, скачанные архивы исходников, сборки и зависимости, сгенерированные файлы. Ваш код и документы не трогаются.</div></div>
 <div class="dd" id="foreignDd">
-<button class="ddb" id="foreignBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-foreign foreignLbl"><span id="foreignLbl">Не индексировать</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+<button class="ddb" id="foreignBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-foreign foreignLbl"><span id="foreignLbl" data-i18n="set.f.skip">Не индексировать</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
 </div>
 </div>
 </section>
 
 <section class="sec" aria-labelledby="s-win">
-<h2 id="s-win">Окно и запуск</h2>
+<h2 id="s-win" data-i18n="set.winSec">Окно и запуск</h2>
+<div class="card crow">
+<div class="lrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M3.5 9h17 M3.5 15h17 M12 3c-2.5 2.6-3.6 5.6-3.6 9s1.1 6.4 3.6 9 M12 3c2.5 2.6 3.6 5.6 3.6 9s-1.1 6.4-3.6 9"></path></svg><div><div id="l-lang" data-i18n="set.lang">Язык</div><div class="desc" data-i18n="set.langNote">Язык окна, меню в трее и подсказок</div></div></div>
+<div class="dd" id="langDd">
+<button class="ddb" id="langBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-lang langLbl"><span id="langLbl" data-i18n="set.l.system">Как в Windows</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+</div>
 <div class="card">
 <div class="crow">
-<div><div>Горячая клавиша</div><div class="desc">Открывает окно поиска из любой программы</div></div>
+<div><div data-i18n="set.hotkey">Горячая клавиша</div><div class="desc" data-i18n="set.hotkeyNote">Открывает окно поиска из любой программы</div></div>
 <div class="hk" id="hk">
 <span class="keys" id="hkKeys"></span>
-<button class="btn2" id="hkBtn">Изменить</button>
+<button class="btn2" id="hkBtn" data-i18n="set.edit">Изменить</button>
 </div>
 </div>
 <div class="err" id="hkErr" role="alert" hidden></div>
 </div>
 <div class="card crow nowrap">
-<div><div id="l-auto">Запускать вместе с Windows</div><div class="desc">Работает в трее, окно открывается по горячей клавише</div></div>
+<div><div id="l-auto" data-i18n="set.auto">Запускать вместе с Windows</div><div class="desc" data-i18n="set.autoNote">Работает в трее, окно открывается по горячей клавише</div></div>
 <button class="sw" id="swAuto" role="switch" aria-checked="false" aria-labelledby="l-auto"><span></span></button>
 </div>
 <div class="card crow">
-<div><div id="l-theme">Тема</div><div class="desc">Светлая, тёмная или как в Windows</div></div>
-<div class="dd">
-<button class="ddb" id="themeBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-theme themeLbl"><span id="themeLbl">Как в Windows</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+<div><div id="l-theme" data-i18n="set.theme">Тема</div><div class="desc" data-i18n="set.themeNote">Светлая, тёмная или как в Windows</div></div>
+<div class="dd" id="themeDd">
+<button class="ddb" id="themeBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="l-theme themeLbl"><span id="themeLbl" data-i18n="set.t.system">Как в Windows</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
 </div>
 </div>
 </section>
 
 <section class="sec" aria-labelledby="s-games">
-<h2 id="s-games">Игры и нагрузка</h2>
+<h2 id="s-games" data-i18n="set.games">Игры и нагрузка</h2>
 <div class="card crow nowrap">
-<div><div id="l-full">Пауза при полноэкранных приложениях</div><div class="desc">Игры, фильмы, презентации — и окна без рамки на весь экран. Видеопамять отдаётся игре.</div></div>
+<div><div id="l-full" data-i18n="set.full">Пауза при полноэкранных приложениях</div><div class="desc" data-i18n="set.fullNote">Игры, фильмы, презентации — и окна без рамки на весь экран. Видеопамять отдаётся игре.</div></div>
 <button class="sw" id="swFull" role="switch" aria-checked="false" aria-labelledby="l-full"><span></span></button>
 </div>
 <div class="card crow">
-<div><div>Пауза, пока запущены</div><div class="desc">Например, игры в окне</div></div>
-<div class="procs" id="procs"><button class="btn2" id="addProc">Добавить процесс</button></div>
+<div><div data-i18n="set.procs">Пауза, пока запущены</div><div class="desc" data-i18n="set.procsNote">Например, игры в окне</div></div>
+<div class="procs" id="procs"><button class="btn2" id="addProc" data-i18n="set.addProc">Добавить процесс</button></div>
 </div>
 <div class="card crow nowrap">
-<div><div id="l-batt">Пауза от батареи</div><div class="desc">На ноутбуке без зарядки индексация ждёт</div></div>
+<div><div id="l-batt" data-i18n="set.batt">Пауза от батареи</div><div class="desc" data-i18n="set.battNote">На ноутбуке без зарядки индексация ждёт</div></div>
 <button class="sw" id="swBatt" role="switch" aria-checked="false" aria-labelledby="l-batt"><span></span></button>
 </div>
 </section>
 
 <section class="sec" aria-labelledby="s-media">
-<h2 id="s-media">Видео, аудио и большие файлы</h2>
+<h2 id="s-media" data-i18n="set.media">Видео, аудио и большие файлы</h2>
 <div class="media">
-<label>Кадр из видео каждые, с<input type="number" min="1" step="1" data-key="video_frame_every_sec"></label>
-<label>Кадров на видео, не больше<input type="number" min="1" step="1" data-key="video_max_frames"></label>
-<label>Отрезок аудио, с<input type="number" min="1" step="1" data-key="audio_segment_sec"></label>
-<label>Отрезков, не больше<input type="number" min="1" step="1" data-key="audio_max_segments"></label>
-<label>Текст больше, МБ — пропуск<input type="number" min="1" step="1" data-key="max_text_mb"></label>
-<label>Страниц PDF, не больше<input type="number" min="1" step="1" data-key="max_pdf_pages"></label>
+<label><span data-i18n="set.m.frame">Кадр из видео каждые, с</span><input type="number" min="1" step="1" data-key="video_frame_every_sec"></label>
+<label><span data-i18n="set.m.frames">Кадров на видео, не больше</span><input type="number" min="1" step="1" data-key="video_max_frames"></label>
+<label><span data-i18n="set.m.seg">Отрезок аудио, с</span><input type="number" min="1" step="1" data-key="audio_segment_sec"></label>
+<label><span data-i18n="set.m.segs">Отрезков, не больше</span><input type="number" min="1" step="1" data-key="audio_max_segments"></label>
+<label><span data-i18n="set.m.text">Текст больше, МБ — пропуск</span><input type="number" min="1" step="1" data-key="max_text_mb"></label>
+<label><span data-i18n="set.m.pdf">Страниц PDF, не больше</span><input type="number" min="1" step="1" data-key="max_pdf_pages"></label>
 </div>
 </section>
 
 <section class="sec" aria-labelledby="s-index">
-<h2 id="s-index">Индекс</h2>
+<h2 id="s-index" data-i18n="set.index">Индекс</h2>
 <div class="card">
 <div class="info">
-<div><div class="k">Модель</div><div id="iModel"></div></div>
-<div><div class="k">Размер на диске</div><div id="iSize"></div></div>
-<div><div class="k">Проверка всего диска</div><div id="iRescan"></div></div>
-<div><div class="k">Не удалось прочитать</div><div id="iFailed"></div></div>
-<div><div class="k">Чужой код и копии</div><div id="iForeign"></div></div>
+<div><div class="k" data-i18n="set.i.model">Модель</div><div id="iModel"></div></div>
+<div><div class="k" data-i18n="set.i.size">Размер на диске</div><div id="iSize"></div></div>
+<div><div class="k" data-i18n="set.i.rescan">Проверка всего диска</div><div id="iRescan"></div></div>
+<div><div class="k" data-i18n="set.i.failed">Не удалось прочитать</div><div id="iFailed"></div></div>
+<div><div class="k" data-i18n="set.i.foreign">Чужой код и копии</div><div id="iForeign"></div></div>
 </div>
 <div class="ibtns">
-<button class="btn2 long" id="bRescan"><span id="bRescanL">Пересканировать сейчас</span></button>
-<button class="btn2" id="bLog">Открыть журнал</button>
-<button class="btn2 danger" id="bRebuild">Собрать индекс заново…</button>
+<button class="btn2 long" id="bRescan"><span id="bRescanL" data-i18n="set.rescan">Пересканировать сейчас</span></button>
+<button class="btn2" id="bLog" data-i18n="set.log">Открыть журнал</button>
+<button class="btn2 danger" id="bRebuild" data-i18n="set.rebuild">Собрать индекс заново…</button>
 </div>
 </div>
 </section>

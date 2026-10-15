@@ -787,7 +787,7 @@ def settings_get():
     skipped = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_SKIPPED,))[0][0]
     copies = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_COPY,))[0][0]
     return {"content_roots": roots, "drives": {"available": core.fixed_drives(), "selected": cfg["name_drives"]},
-            **{k: cfg[k] for k in keys},
+            **{k: cfg[k] for k in keys}, "lang_system": i18n.system_lang(),
             "info": {"model": "EmbeddingGemma 2", "device": emb.device if emb else None,
                      "index_bytes": _index_bytes(), "rescan_minutes": cfg["rescan_minutes"],
                      "name_rescan_minutes": cfg["name_rescan_minutes"], "failed": failed,

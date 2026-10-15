@@ -5,8 +5,12 @@
   const $ = (id) => document.getElementById(id);
   let S = null;
   let fresh = '';          // только что добавленная папка («считаю файлы…»)
-  // правило «чужого кода» (config foreign_code)
-  const FOREIGN = { skip: 'Не индексировать', last: 'В последнюю очередь', normal: 'Как обычный код' };
+  // правило «чужого кода» (config foreign_code): ключ -> подпись на языке интерфейса
+  const FOREIGN_KEYS = ['skip', 'last', 'normal'];
+  const foreignLabel = (k) => SS.t('set.f.' + (FOREIGN_KEYS.indexOf(k) >= 0 ? k : 'skip'));
+  // язык интерфейса (config lang): названия языков — на самих языках
+  const LANGS = [['ru', 'Русский'], ['en', 'English'], ['system', null]];
+  const langLabel = (k) => { const l = LANGS.find((x) => x[0] === k); return l && l[1] ? l[1] : SS.t('set.l.system'); };
 
   /* ---------- сохранение: применяется сразу, внизу — «Сохранено» ---------- */
   async function save(patch, okText) {
@@ -16,10 +20,10 @@
         if (k === 'content_roots' || k === 'drives') return;
         S[k] = patch[k];
       });
-      SS.toast(r && r.restart ? 'Применится после перезапуска' : okText || 'Сохранено');
+      SS.toast(r && r.restart ? SS.t('toast.restart') : okText || SS.t('toast.saved'));
       return true;
     } catch (e) {
-      SS.toast('Не удалось сохранить: ' + (e.detail || 'SemSearch не отвечает'));
+      SS.toast(SS.t('set.saveFail', { e: e.detail || SS.t('set.noAnswer') }));
       return false;
     }
   }
@@ -35,11 +39,12 @@
     try {
       S = await SS.api('/api/settings');
     } catch (e) {
-      SS.toast('Не удалось загрузить настройки');
+      SS.toast(SS.t('set.loadFail'));
       pageReady();
       return;
     }
     SS.applyTheme(S.theme, S.accent);
+    SS.setLang(S.lang, S.lang_system);
     render();
     pageReady();
   }
@@ -47,13 +52,13 @@
   /* ---------- отрисовка ---------- */
   const xIcon = (size) => svg(ic.x, { s: size || 14, sw: size === 12 ? 2 : 1.8 });
   const chkIcon = () => svg(ic.check, { s: 12, sw: 2.6, join: true, cls: 'pop' });
-  const filesNote = (r) => (r.path === fresh && !r.files ? 'считаю файлы…' : SS.num(r.files || 0) + ' ' + SS.pl(r.files || 0, ['файл', 'файла', 'файлов']));
+  const filesNote = (r) => (r.path === fresh && !r.files ? SS.t('set.countingFiles') : SS.tn('set.files', r.files || 0));
   function rootRow(r, anim) {
     return h('div.root' + (anim ? '.rowin' : ''), { 'data-path': r.path },
       svg(ic.folder, { s: 16, sw: 1.6, cap: false, join: true }),
       h('span.p', { text: r.path }),
       h('span.n', { text: filesNote(r) }),
-      h('button.xb', { type: 'button', 'aria-label': 'Убрать папку ' + r.path, 'data-root': r.path }, xIcon(14)));
+      h('button.xb', { type: 'button', 'aria-label': SS.t('set.removeFolder', { p: r.path }), 'data-root': r.path }, xIcon(14)));
   }
   function render() {
     // папки: существующие строки обновляются на месте, новая — разъезжается по высоте
@@ -62,7 +67,12 @@
     const list = S.content_roots || [];
     list.forEach((r) => {
       const n = have.get(r.path);
-      if (n) { n.querySelector('.n').textContent = filesNote(r); have.delete(r.path); roots.appendChild(n); }
+      if (n) {
+        n.querySelector('.n').textContent = filesNote(r);
+        n.querySelector('.xb').setAttribute('aria-label', SS.t('set.removeFolder', { p: r.path }));
+        have.delete(r.path);
+        roots.appendChild(n);
+      }
       else roots.appendChild(rootRow(r, r.path === fresh));
     });
     have.forEach((n) => { if (!n.classList.contains('rowout')) n.remove(); });
@@ -77,8 +87,8 @@
     });
     renderExcl([]);
     hotkeyCaps(S.hotkey);
-    const names = { system: 'Как в Windows', light: 'Светлая', dark: 'Тёмная' };
-    $('themeLbl').textContent = names[S.theme] || names.system;
+    $('themeLbl').textContent = SS.t('set.t.' + (['light', 'dark'].indexOf(S.theme) >= 0 ? S.theme : 'system'));
+    $('langLbl').textContent = langLabel(S.lang || 'system');
     sw($('swFull'), !!S.pause_on_fullscreen);
     sw($('swBatt'), !!S.pause_on_battery);
     renderProcs('');
@@ -86,39 +96,39 @@
       if (document.activeElement !== inp) inp.value = S[inp.getAttribute('data-key')] != null ? S[inp.getAttribute('data-key')] : '';
     });
     const i = S.info || {};
-    $('iModel').textContent = (i.model || 'модель') + ' · ' + (i.device === 'cuda' ? 'на видеокарте' : i.device === 'cpu' ? 'на процессоре' : 'загружается');
+    $('iModel').textContent = (i.model || SS.t('set.model')) + ' · ' + SS.t(i.device === 'cuda' ? 'set.onGpu' : i.device === 'cpu' ? 'set.onCpu' : 'set.loading');
     $('iSize').textContent = i.index_bytes != null ? SS.size(i.index_bytes) : '—';
-    $('iRescan').textContent = every(i.rescan_minutes) + ', имена — ' + every(i.name_rescan_minutes);
-    $('foreignLbl').textContent = FOREIGN[S.foreign_code || 'skip'] || FOREIGN.skip;
-    $('iForeign').textContent = 'пропущено ' + SS.num(i.foreign_skipped || 0) + ' · копий ' + SS.num(i.copies || 0);
+    $('iRescan').textContent = SS.t('set.rescanEvery', { a: every(i.rescan_minutes), b: every(i.name_rescan_minutes) });
+    $('foreignLbl').textContent = foreignLabel(S.foreign_code || 'skip');
+    $('iForeign').textContent = SS.t('set.foreignInfo', { a: SS.num(i.foreign_skipped || 0), b: SS.num(i.copies || 0) });
     const f = $('iFailed');
     f.textContent = '';
     if (i.failed) {
-      f.append(SS.num(i.failed) + ' ' + SS.pl(i.failed, ['файл', 'файла', 'файлов']) + ' · ');
-      f.appendChild(h('a', { href: '#log', id: 'why' }, 'почему'));
-    } else f.textContent = 'нет';
+      f.append(SS.tn('set.failedN', i.failed) + ' · ');
+      f.appendChild(h('a', { href: '#log', id: 'why' }, SS.t('set.why')));
+    } else f.textContent = SS.t('set.no');
   }
   function renderExcl(fresh2) {
     const ex = $('excl');
     ex.textContent = '';
     const list = S.exclude_dirs || [];
     list.slice(0, 8).forEach((x) => ex.appendChild(h('span' + (fresh2.indexOf(x) >= 0 ? '.pop' : ''), { text: x })));
-    if (list.length > 8) ex.appendChild(h('span.more', { text: 'и ещё ' + (list.length - 8) }));
+    if (list.length > 8) ex.appendChild(h('span.more', { text: SS.t('set.moreN', { n: list.length - 8 }) }));
   }
   function renderProcs(added) {
     const procs = $('procs');
     procs.querySelectorAll('.proc').forEach((n) => n.remove());
     (S.pause_processes || []).forEach((p) => {
       procs.insertBefore(h('span.proc' + (p === added ? '.pop' : ''), { 'data-name': p }, p,
-        h('button', { type: 'button', 'aria-label': 'Убрать ' + p, 'data-proc': p }, xIcon(12))), $('addProc'));
+        h('button', { type: 'button', 'aria-label': SS.t('set.removeProc', { p: p }), 'data-proc': p }, xIcon(12))), $('addProc'));
     });
   }
   const every = (m) => {
     m = +m || 0;
-    if (!m) return 'вручную';
-    if (m % 1440 === 0) return m === 1440 ? 'раз в сутки' : 'каждые ' + m / 1440 + ' дн.';
-    if (m % 60 === 0) return m === 60 ? 'каждый час' : 'каждые ' + m / 60 + ' ч';
-    return 'каждые ' + m + ' мин';
+    if (!m) return SS.t('set.manual');
+    if (m % 1440 === 0) return m === 1440 ? SS.t('set.daily') : SS.t('set.everyDays', { n: m / 1440 });
+    if (m % 60 === 0) return m === 60 ? SS.t('set.hourly') : SS.t('set.everyHours', { n: m / 60 });
+    return SS.t('set.everyMin', { n: m });
   };
   const sw = (b, on) => b.setAttribute('aria-checked', on ? 'true' : 'false');
   function hotkeyCaps(accel, stagger) {
@@ -167,10 +177,10 @@
     let p = null;
     if (SS.tauri) {
       try { p = await SS.invoke('pick_folder'); } catch (e) { p = null; }
-    } else p = window.prompt('Папка для поиска по смыслу:', '');
+    } else p = window.prompt(SS.t('set.folderPrompt'), '');
     if (!p) return;
     const cur = (S.content_roots || []).map((r) => r.path);
-    if (cur.some((x) => x.toLowerCase() === p.toLowerCase())) { SS.toast('Эта папка уже в списке'); return; }
+    if (cur.some((x) => x.toLowerCase() === p.toLowerCase())) { SS.toast(SS.t('set.folderDup')); return; }
     fresh = p;
     if (await save({ content_roots: cur.concat([p]) })) {
       S.content_roots = (S.content_roots || []).concat([{ path: p, files: 0 }]);
@@ -198,7 +208,7 @@
     const d = b.getAttribute('data-drive');
     let sel = ((S.drives && S.drives.selected) || []).slice();
     const on = sel.indexOf(d) < 0;
-    if (!on && sel.length === 1) { SS.toast('Нужен хотя бы один диск'); return; }
+    if (!on && sel.length === 1) { SS.toast(SS.t('set.needDrive')); return; }
     sel = on ? sel.concat([d]) : sel.filter((x) => x !== d);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     const old = b.querySelector('svg');
@@ -210,16 +220,16 @@
 
   /* ---------- исключения ---------- */
   $('editExcl').addEventListener('click', () => {
-    const ta = h('textarea', { spellcheck: 'false', 'aria-label': 'Папки, по одной в строке' });
+    const ta = h('textarea', { spellcheck: 'false', 'aria-label': SS.t('set.exclLabel') });
     ta.value = (S.exclude_dirs || []).join('\n');
-    dialog({ title: 'Не индексировать', text: 'По одному имени папки в строке. Такие папки пропускаются на любой глубине.', body: ta, wide: true,
-      buttons: [{ label: 'Сохранить', primary: true, onClick: async () => {
+    dialog({ title: SS.t('set.excl'), text: SS.t('set.exclText'), body: ta, wide: true,
+      buttons: [{ label: SS.t('set.save'), primary: true, onClick: async () => {
         const seen = new Set();
         const list = ta.value.split(/\r?\n/).map((x) => x.trim()).filter((x) => x && !seen.has(x) && seen.add(x));
         const before = new Set(S.exclude_dirs || []);
         if (!(await save({ exclude_dirs: list }))) return false;
         renderExcl(list.filter((x) => !before.has(x)));
-      } }, { label: 'Отмена' }] });
+      } }, { label: SS.t('set.cancel') }] });
   });
 
   /* ---------- горячая клавиша: запись ---------- */
@@ -232,7 +242,7 @@
   }
   function stopCapture(accel, stagger) {
     capturing = false;
-    $('hkBtn').textContent = 'Изменить';
+    $('hkBtn').textContent = SS.t('set.edit');
     document.removeEventListener('keydown', onCaptureKey, true);
     hotkeyCaps(accel || S.hotkey, stagger);
   }
@@ -253,10 +263,10 @@
     if (e.altKey) mods.push('alt');
     if (e.shiftKey) mods.push('shift');
     if (e.metaKey) mods.push('win');
-    if (MODS.indexOf(e.key) >= 0) { recField(mods.length ? SS.caps(mods.join('+')).join(' + ') + ' + …' : 'Нажмите сочетание…'); return; }
+    if (MODS.indexOf(e.key) >= 0) { recField(mods.length ? SS.caps(mods.join('+')).join(' + ') + ' + …' : SS.t('set.hkPress')); return; }
     const k = keyName(e);
     if (!k || !(e.ctrlKey || e.altKey || e.metaKey)) {
-      $('hkErr').textContent = 'Нужно сочетание с Ctrl, Alt или Win — например, Ctrl+Alt+S';
+      $('hkErr').textContent = SS.t('set.hkNeedMod');
       $('hkErr').hidden = false;
       return;
     }
@@ -264,10 +274,10 @@
     document.removeEventListener('keydown', onCaptureKey, true);
     let err = null;
     if (SS.tauri) {
-      try { err = await SS.invoke('set_hotkey', { accel }); } catch (x) { err = String(x || 'не удалось назначить'); }
+      try { err = await SS.invoke('set_hotkey', { accel }); } catch (x) { err = String(x || SS.t('set.hkFailAny')); }
     }
     if (err) {
-      $('hkErr').textContent = 'Не получилось назначить ' + SS.caps(accel).join('+') + ': ' + err;
+      $('hkErr').textContent = SS.t('set.hkFail', { k: SS.caps(accel).join('+'), e: err });
       $('hkErr').hidden = false;
       stopCapture();
       return;
@@ -280,8 +290,8 @@
     if (capturing) { stopCapture(); return; }
     capturing = true;
     $('hkErr').hidden = true;
-    $('hkBtn').textContent = 'Отмена';
-    recField('Нажмите сочетание…');
+    $('hkBtn').textContent = SS.t('set.cancel');
+    recField(SS.t('set.hkPress'));
     document.addEventListener('keydown', onCaptureKey, true);
   });
 
@@ -291,16 +301,16 @@
   auto.addEventListener('click', async () => {
     const want = auto.getAttribute('aria-checked') !== 'true';
     sw(auto, want);
-    if (!SS.tauri) { SS.toast('Сохранено'); return; }
+    if (!SS.tauri) { SS.toast(SS.t('toast.saved')); return; }
     auto.disabled = true;
     try {
       await SS.invoke('set_autostart', { enabled: want });
       const v = !!(await SS.invoke('get_autostart'));
       sw(auto, v);
-      SS.toast(v === want ? 'Сохранено' : 'Не удалось изменить автозапуск');
+      SS.toast(v === want ? SS.t('toast.saved') : SS.t('set.autoFail'));
     } catch (e) {
       sw(auto, !want);
-      SS.toast('Не удалось изменить автозапуск');
+      SS.toast(SS.t('set.autoFail'));
     } finally {
       auto.disabled = false;
     }
@@ -310,8 +320,8 @@
   const tbtn = $('themeBtn'), dd = tbtn.parentNode;
   let menuEl = null;
   function openMenu() {
-    menuEl = h('div.menu', { role: 'listbox', 'aria-label': 'Тема' });
-    [['light', 'Светлая'], ['dark', 'Тёмная'], ['system', 'Как в Windows']].forEach(([k, label]) => {
+    menuEl = h('div.menu', { role: 'listbox', 'aria-label': SS.t('set.theme') });
+    [['light', SS.t('set.t.light')], ['dark', SS.t('set.t.dark')], ['system', SS.t('set.t.system')]].forEach(([k, label]) => {
       const on = (S.theme || 'system') === k;
       menuEl.appendChild(h('button.opt', { type: 'button', role: 'option', 'aria-selected': on ? 'true' : 'false', 'data-theme': k },
         on ? h('span.bar', { 'aria-hidden': 'true' }) : null, label));
@@ -357,11 +367,11 @@
   const fbtn = $('foreignBtn'), fdd = $('foreignDd');
   let fmenu = null;
   function openFMenu() {
-    fmenu = h('div.menu', { role: 'listbox', 'aria-label': 'Чужой код и библиотеки' });
-    Object.keys(FOREIGN).forEach((k) => {
+    fmenu = h('div.menu', { role: 'listbox', 'aria-label': SS.t('set.foreign') });
+    FOREIGN_KEYS.forEach((k) => {
       const on = (S.foreign_code || 'skip') === k;
       fmenu.appendChild(h('button.opt', { type: 'button', role: 'option', 'aria-selected': on ? 'true' : 'false', 'data-foreign': k },
-        on ? h('span.bar', { 'aria-hidden': 'true' }) : null, FOREIGN[k]));
+        on ? h('span.bar', { 'aria-hidden': 'true' }) : null, foreignLabel(k)));
     });
     fdd.appendChild(fmenu);
     fbtn.setAttribute('aria-expanded', 'true');
@@ -400,6 +410,58 @@
   });
   document.addEventListener('mousedown', (e) => { if (fmenu && !(e.target.closest && e.target.closest('#foreignDd'))) closeFMenu(); });
 
+  /* ---------- язык: такой же список; применяется сразу во всех окнах (i18n.js) и в оболочке ---------- */
+  const lbtn = $('langBtn'), ldd = $('langDd');
+  let lmenu = null;
+  function openLMenu() {
+    lmenu = h('div.menu', { role: 'listbox', 'aria-label': SS.t('set.lang') });
+    LANGS.forEach(([k]) => {
+      const on = (S.lang || 'system') === k;
+      lmenu.appendChild(h('button.opt', { type: 'button', role: 'option', 'aria-selected': on ? 'true' : 'false', 'data-lang': k,
+        lang: k === 'system' ? null : k }, on ? h('span.bar', { 'aria-hidden': 'true' }) : null, langLabel(k)));
+    });
+    ldd.appendChild(lmenu);
+    lbtn.setAttribute('aria-expanded', 'true');
+    (lmenu.querySelector('[aria-selected="true"]') || lmenu.querySelector('button')).focus();
+  }
+  function closeLMenu(focusBtn) {
+    if (!lmenu) return;
+    const m = lmenu;
+    lmenu = null;
+    lbtn.setAttribute('aria-expanded', 'false');
+    m.classList.add('closing');
+    SS.after(m, 120, () => m.remove());
+    if (focusBtn) lbtn.focus();
+  }
+  lbtn.addEventListener('click', () => (lmenu ? closeLMenu() : openLMenu()));
+  ldd.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-lang]');
+    if (!b || !lmenu) return;
+    const v = b.getAttribute('data-lang');
+    closeLMenu(true);
+    if (v === (S.lang || 'system')) return;
+    SS.setLang(v);
+    if (await save({ lang: v })) {
+      render();
+      if (SS.tauri) SS.invoke('set_lang', { lang: SS.lang() }).catch(() => {});
+    } else { SS.setLang(S.lang || 'system'); render(); }
+  });
+  ldd.addEventListener('keydown', (e) => {
+    if (!lmenu) return;
+    const items = Array.from(lmenu.querySelectorAll('button'));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeLMenu(true);
+    }
+  });
+  document.addEventListener('mousedown', (e) => { if (lmenu && !(e.target.closest && e.target.closest('#langDd'))) closeLMenu(); });
+  SS.onLang(() => { if (S) render(); if (!capturing) $('hkBtn').textContent = SS.t('set.edit'); });
+
   /* ---------- паузы и процессы ---------- */
   $('swFull').addEventListener('click', async () => {
     const v = $('swFull').getAttribute('aria-checked') !== 'true';
@@ -422,8 +484,8 @@
     if (!(await save({ pause_processes: rest }))) renderProcs('');
   });
   $('addProc').addEventListener('click', async () => {
-    const inp = h('input', { type: 'text', placeholder: 'Имя процесса, например game.exe', spellcheck: 'false', 'aria-label': 'Имя процесса' });
-    const list = h('div.plist', h('p', { text: 'Загружаю список запущенных программ…' }));
+    const inp = h('input', { type: 'text', placeholder: SS.t('set.procPh'), spellcheck: 'false', 'aria-label': SS.t('set.procLabel') });
+    const list = h('div.plist', h('p', { text: SS.t('set.procLoading') }));
     const add = async (name) => {
       name = String(name || '').trim();
       if (!name) return false;
@@ -441,7 +503,7 @@
       list.textContent = '';
       const shown = all.filter((p) => !have.has(p.toLowerCase()) && (!f || p.toLowerCase().indexOf(f) >= 0));
       shown.slice(0, 200).forEach((p) => list.appendChild(h('button', { type: 'button', 'data-p': p }, p)));
-      if (!shown.length) list.appendChild(h('p', { text: f ? 'Нажмите «Добавить», чтобы добавить «' + inp.value.trim() + '».' : 'Запущенных программ не нашлось.' }));
+      if (!shown.length) list.appendChild(h('p', { text: f ? SS.t('set.procAddHint', { p: inp.value.trim() }) : SS.t('set.procNone') }));
     };
     list.addEventListener('click', async (e) => {
       const b = e.target.closest('[data-p]');
@@ -451,8 +513,8 @@
     inp.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') { e.preventDefault(); if (await add(inp.value)) closeDialog(); }
     });
-    dialog({ title: 'Пауза, пока запущен процесс', text: 'Выберите запущенную программу или впишите имя .exe.', body: [inp, list], wide: true,
-      buttons: [{ label: 'Добавить', primary: true, onClick: () => add(inp.value) }, { label: 'Отмена' }] });
+    dialog({ title: SS.t('set.procTitle'), text: SS.t('set.procText'), body: [inp, list], wide: true,
+      buttons: [{ label: SS.t('set.add'), primary: true, onClick: () => add(inp.value) }, { label: SS.t('set.cancel') }] });
     try {
       const r = await SS.api('/api/processes');
       all = Array.from(new Set((r.items || []).map(String))).sort((a, b) => a.localeCompare(b));
@@ -490,7 +552,7 @@
   bScan.addEventListener('click', async () => {
     if (scanBusy) return;
     scanBusy = true;
-    scanState('busy', 'Сканирую…');
+    scanState('busy', SS.t('set.scanning'));
     const t0 = Date.now();
     let res = null, ok = true;
     try { res = await SS.api('/api/rescan', { body: {} }); } catch (e) { ok = false; }
@@ -501,32 +563,32 @@
       if (!(st && st.state === 'indexing' && st.phase === 'scan') && Date.now() - t0 > 900) break;
     }
     const n = res && typeof res.new_files === 'number' ? res.new_files : null;
-    scanState(ok ? 'done' : '', ok ? (n === null ? 'Готово' : 'Готово, новых файлов: ' + SS.num(n)) : 'Не удалось запустить');
-    setTimeout(() => { scanState('', 'Пересканировать сейчас'); scanBusy = false; }, 2000);
+    scanState(ok ? 'done' : '', ok ? (n === null ? SS.t('set.scanDone') : SS.t('set.scanNew', { n: SS.num(n) })) : SS.t('set.scanFail'));
+    setTimeout(() => { scanState('', SS.t('set.rescan')); scanBusy = false; }, 2000);
   });
   $('bLog').addEventListener('click', async () => {
-    try { await SS.api('/api/open_log', { body: {} }); } catch (e) { SS.toast('Не удалось открыть журнал'); }
+    try { await SS.api('/api/open_log', { body: {} }); } catch (e) { SS.toast(SS.t('set.logFail')); }
   });
   $('bRebuild').addEventListener('click', () => {
-    dialog({ title: 'Собрать индекс заново?', text: 'Текущий индекс удалится и соберётся с нуля.',
-      buttons: [{ label: 'Собрать заново', danger: true, onClick: async () => {
-        try { await SS.api('/api/rebuild', { body: {} }); SS.toast('Индекс собирается заново'); } catch (e) { SS.toast('Не удалось начать сборку'); return false; }
-      } }, { label: 'Отмена' }] });
+    dialog({ title: SS.t('set.rebuildQ'), text: SS.t('set.rebuildText'),
+      buttons: [{ label: SS.t('set.rebuildGo'), danger: true, onClick: async () => {
+        try { await SS.api('/api/rebuild', { body: {} }); SS.toast(SS.t('set.rebuildOk')); } catch (e) { SS.toast(SS.t('set.rebuildFail')); return false; }
+      } }, { label: SS.t('set.cancel') }] });
   });
   $('iFailed').addEventListener('click', async (e) => {
     if (!e.target.closest('#why')) return;
     e.preventDefault();
-    const box = h('div.flist', h('p', { text: 'Загружаю…' }));
-    const dlg = dialog({ title: 'Не удалось прочитать', text: 'Подробности — в журнале.', body: box, wide: true, buttons: [{ label: 'Закрыть', primary: true }] });
+    const box = h('div.flist', h('p', { text: SS.t('set.loadingDots') }));
+    const dlg = dialog({ title: SS.t('set.failedTitle'), text: SS.t('set.failedLog'), body: box, wide: true, buttons: [{ label: SS.t('set.close'), primary: true }] });
     try {
       const r = await SS.api('/api/failed?limit=200');
-      dlg.querySelector('.hd p').textContent = SS.num(r.total) + ' ' + SS.pl(r.total, ['файл', 'файла', 'файлов']) +
-        (r.total > (r.items || []).length ? ', показаны первые ' + r.items.length : '') + '. Подробности — в журнале.';
+      dlg.querySelector('.hd p').textContent = SS.t('set.failedCount', { files: SS.tn('set.failedN', r.total),
+        shown: r.total > (r.items || []).length ? SS.t('set.failedShown', { n: r.items.length }) : '' });
       box.textContent = '';
       (r.items || []).forEach((x) => box.appendChild(h('div', h('div.fp', { text: x.path }), h('div.fe', { text: x.err }))));
     } catch (x) {
       box.textContent = '';
-      box.appendChild(h('p', { text: 'Не удалось получить список.' }));
+      box.appendChild(h('p', { text: SS.t('set.failedListFail') }));
     }
   });
 
@@ -539,7 +601,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented || capturing) return;
     if (dlgOpen) { e.preventDefault(); closeDialog(); return; }
-    if (menuEl || fmenu) return;
+    if (menuEl || fmenu || lmenu) return;
     if (SS.tauri) SS.invoke('win_hide').catch(() => {});
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !dlgOpen && !capturing) reload(); });

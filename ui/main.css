@@ -317,3 +317,52 @@ html.doc-hidden *,html.doc-hidden *::before,html.doc-hidden *::after{animation-p
 }
 /* то же для проверки в браузере: #rm в адресе */
 html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important}
+
+/* ---------- экран запуска (design/Launch): поверх окна, пока модель не готова ---------- */
+.win .boot{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--bg)}
+.win .boot.pre .bin{visibility:hidden}
+.win .boot.leave{animation:bootout .3s var(--ei) both;pointer-events:none}
+@keyframes bootout{to{opacity:0;transform:translateY(-8px) scale(.98)}}
+.boot .bcenter{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
+.boot .bin{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center}
+.boot .blogo{width:72px;height:72px;display:flex;align-items:center;justify-content:center;color:#005fb8;animation:blogo .45s var(--eo) both}
+.win.dark .boot .blogo{color:#ffffff}
+.boot .blogo svg{overflow:visible}
+@keyframes blogo{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
+.boot .bdot{transform-box:view-box;transform-origin:108.04px 106.54px}
+.boot .bdot.orbit{animation:orbit 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.boot .bdot.settle{animation:settle .5s var(--eo) both}
+@keyframes settle{from{transform:rotate(-50deg)}to{transform:none}}
+.boot .berrico{width:72px;height:72px;display:flex;align-items:center;justify-content:center;color:var(--err);animation:blogo .45s var(--eo) both,shake .4s var(--eo) .1s both}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-4px)}60%{transform:translateX(3px)}}
+.win{--err:#b3261e}
+.win.dark{--err:#ff8a80}
+.boot .btitle{margin:20px 0 0;font-size:22px;font-weight:600;line-height:1.3;text-align:center;animation:benter .4s var(--eo) .08s both}
+.boot .bsub{margin:6px 0 0;min-height:21px;font-size:14px;color:var(--muted);text-align:center;animation:benter .4s var(--eo) .12s both}
+@keyframes benter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.boot .bbar{width:280px;height:4px;margin-top:20px;border-radius:2px;background:var(--line2);overflow:hidden;animation:benter .4s var(--eo) .16s both}
+.boot .bbar>div{height:100%;width:0;border-radius:2px;background:var(--accent);transition:width .45s cubic-bezier(.4,0,.2,1)}
+.boot .bsteps{width:100%;margin-top:28px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden;animation:benter .4s var(--eo) .2s both}
+.boot .bstep{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;box-sizing:border-box;border-top:1px solid var(--line);font-size:13px;color:var(--faint)}
+.boot .bstep:first-child{border-top:0}
+.boot .bstep.rs{animation:rs .25s var(--eo) both}
+.boot .bstep .bi{flex:none;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.boot .bstep .bi .wait{width:6px;height:6px;border-radius:3px;background:var(--line2)}
+.boot .bstep .bl{flex:1;min-width:0}
+.boot .bstep .bn{flex:none;font-size:12px;color:var(--muted);white-space:nowrap}
+.boot .bstep.done{color:var(--muted)}
+.boot .bstep.done .bi{color:var(--accent)}
+.boot .bstep.active{color:var(--text);font-weight:600}
+.boot .bstep.active .bn{font-weight:400}
+.boot .bstep.failed{color:var(--err);font-weight:600}
+.boot .bstep.failed .bi{color:var(--err)}
+.boot .berr{width:100%;display:flex;flex-direction:column;gap:8px;margin-top:20px;animation:benter .4s var(--eo) .25s both}
+.boot .berr .prim{justify-content:center}
+.boot .berr .btn2{height:36px;border:1px solid var(--line2);border-radius:6px;background:var(--surface)}
+.boot .berr p{margin:4px 0 0;font-size:12px;color:var(--muted);text-align:center}
+.boot .bnames{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:10px 12px 10px 16px;box-sizing:border-box;border-radius:8px;background:color-mix(in srgb,var(--accent) 10%,var(--surface));font-size:13px;animation:benter .4s var(--eo) .35s both}
+.boot .bnames .btn2{flex:none;height:30px;padding:0 12px;border:1px solid var(--line2);border-radius:4px;background:var(--surface)}
+.boot .bfoot{display:flex;justify-content:center;gap:12px;padding:0 16px 16px;font-size:12px;color:var(--faint)}
+.boot .bfoot:empty{display:none}
+.win .reveal{animation:winin .32s var(--eo) both}
