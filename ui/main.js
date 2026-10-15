@@ -427,26 +427,35 @@
       setTimeout(() => bootLeave(false), SS.reduced() ? 0 : 900);
     }
   }
-  /* экран запуска уходит вверх (300 мс), под ним проявляется окно поиска */
+  /* экран запуска уходит вверх (300 мс), а окно поиска под ним в это же время проявляется из прозрачного.
+     Пока экран запуска на месте, окно поиска скрыто (.booting): иначе при уходе оно сначала просвечивало бы
+     целиком, а потом его собственная анимация начиналась бы с нуля — двойное мигание. */
+  const under = () => [document.querySelector('.sbar'), $('body'), $('ft')].filter(Boolean);
+  el.win.classList.add('booting');
   function bootLeave(byName) {
     if (!boot.on || boot.leaving) return;
     boot.leaving = true;
+    if (byName) S.tab = 'name';
+    chrome();
     const done = () => {
       boot.on = false;
       el.boot.hidden = true;
       el.boot.classList.remove('leave');
-      [document.querySelector('.sbar'), $('body'), $('ft')].forEach((x) => x && x.classList.add('reveal'));
-      if (byName) S.tab = 'name';
       el.q.focus();
-      chrome();
     };
+    el.win.classList.remove('booting');
     if (SS.reduced()) { done(); return; }
+    under().forEach((x) => {
+      x.classList.add('reveal');
+      SS.after(x, 320, () => x.classList.remove('reveal'));
+    });
     el.boot.classList.add('leave');
     SS.after(el.boot, 300, done);
   }
   function bootSkip() {
     boot.on = false;
     el.boot.hidden = true;
+    el.win.classList.remove('booting');
   }
   el.bByName.addEventListener('click', () => bootLeave(true));
   /* пришли с заставки оболочки (#boot): экран запуска продолжает её кадр, без повторного появления */

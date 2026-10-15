@@ -286,16 +286,32 @@ async def guard(request: Request, call_next):
         origin = request.headers.get("origin")
         if origin and origin not in ORIGINS:
             return JSONResponse({"detail": i18n.error("foreign_origin", L())}, status_code=403)
-    return await call_next(request)
+    response = await call_next(request)
+    # Скрипты и стили интерфейса — всегда сверять с диском (ETag, ответ 304): иначе WebView2 после обновления
+    # SemSearch какое-то время берёт старый main.css из кэша вместе с новым main.js
+    if path.startswith("/ui/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # ------------------------------------------------ страницы
+
+_ASSET = re.compile(r'"(/ui/[\w./-]+\.(?:css|js))"')
+
+
+def _versioned(m):
+    """/ui/main.css -> /ui/main.css?v=<время изменения>: новая версия файла — новый адрес, мимо кэша WebView2."""
+    try:
+        return f'"{m.group(1)}?v={int(os.path.getmtime(os.path.join(UI_DIR, m.group(1)[4:])))}"'
+    except OSError:
+        return m.group(0)
+
 
 def _page(name):
     p = os.path.join(UI_DIR, name)
     if os.path.exists(p):
         with open(p, encoding="utf-8") as f:
-            html = f.read().replace("__SEMSEARCH_TOKEN__", TOKEN)
+            html = _ASSET.sub(_versioned, f.read().replace("__SEMSEARCH_TOKEN__", TOKEN))
     else:
         html = "<!doctype html><meta charset=utf-8><title>SemSearch</title><p>Интерфейс ещё собирается.</p>"
     return HTMLResponse(html, headers={"Cache-Control": "no-store", "Content-Security-Policy": CSP,
