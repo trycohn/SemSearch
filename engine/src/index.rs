@@ -32,6 +32,12 @@ pub const A_DIRECTORY: u32 = 0x10;
 pub const A_REPARSE: u32 = 0x400;
 pub const A_CLOUD: u32 = 0x1000 | 0x40000 | 0x400000; // OFFLINE | RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS
 
+/// Тег точки повторной обработки облачного провайдера (OneDrive и др.): файл или папка, которые синхронизирует
+/// облако; при этом данные могут быть и на диске («всегда хранить на устройстве», уже открывавшиеся файлы).
+pub fn is_cloud_tag(tag: u32) -> bool {
+    (tag & 0xFFFF_0FFF) == 0x9000_001A || tag == 0x8000_0021
+}
+
 pub fn flags_from_attrs(a: u32) -> u16 {
     let mut f = 0;
     if a & A_DIRECTORY != 0 {
@@ -136,13 +142,15 @@ impl Volume {
         v
     }
 
+    /// Заранее выделить буферы. Это только оптимизация: нехватка памяти/файла подкачки на слабой машине здесь не
+    /// ошибка (reserve() в таком случае прервал бы процесс) — буферы вырастут по мере сборки.
     pub fn reserve(&mut self, n: usize, name_bytes: usize) {
-        self.ents.reserve(n);
-        self.nchild.reserve(n);
-        self.names.reserve(name_bytes);
-        self.lnames.reserve(name_bytes);
+        let _ = self.ents.try_reserve(n);
+        let _ = self.nchild.try_reserve(n);
+        let _ = self.names.try_reserve(name_bytes);
+        let _ = self.lnames.try_reserve(name_bytes);
         if self.mft {
-            self.ent_rec.reserve(n);
+            let _ = self.ent_rec.try_reserve(n);
         }
     }
 

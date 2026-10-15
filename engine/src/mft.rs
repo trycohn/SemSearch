@@ -285,9 +285,15 @@ fn enum_range(h: RawH, start: u64, end: u64, root_rec: usize, shared: &std::sync
 /// Полное перечисление MFT в новый индекс. Большой том делится на диапазоны номеров
 /// записей, которые читаются параллельно (FSCTL_ENUM_USN_DATA на одном перекрытом
 /// дескрипторе); при любой ошибке или подозрительном числе «сирот» — повтор одним потоком.
-pub fn enumerate(h: HANDLE, drive: &str, j: &Journal, stop: &AtomicBool) -> Result<(Volume, EnumStats), String> {
+pub fn enumerate(h: HANDLE, drive: &str, j: &Journal, stop: &AtomicBool, media: Media) -> Result<(Volume, EnumStats), String> {
     let total = mft_record_count(h).unwrap_or(0);
-    let par = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    // на HDD несколько читателей MFT мешают друг другу (головки прыгают между диапазонами): один поток
+    let par = match media {
+        Media::Hdd => 1,
+        Media::Unknown => cpus.clamp(1, 4),
+        Media::Ssd => cpus.clamp(1, 8),
+    };
     let threads = if total >= 400_000 { par } else { 1 };
     match enumerate_with(h, drive, j, stop, total, threads) {
         Ok((v, st)) if threads > 1 && st.orphans > 1000 + st.records / 1000 => {
@@ -451,10 +457,24 @@ pub fn link_pass(slot: &VolSlot) -> u64 {
         out
     };
     let drive = slot.drive.clone();
-    let found: Vec<(u32, String)> = cands
-        .par_iter()
-        .flat_map_iter(|(i, p)| hard_links(&drive, p).into_iter().filter(|l| !l.eq_ignore_ascii_case(p)).map(move |l| (*i, l)))
-        .collect();
+    let collect = || -> Vec<(u32, String)> {
+        cands
+            .par_iter()
+            .flat_map_iter(|(i, p)| {
+                // том извлекают или останавливают: не дочитывать остаток
+                let links = if slot.stopped() { Vec::new() } else { hard_links(&drive, p) };
+                links.into_iter().filter(|l| !l.eq_ignore_ascii_case(p)).map(move |l| (*i, l))
+            })
+            .collect()
+    };
+    // имена по номерам MFT читаются вразброс: на HDD всеми ядрами это только лишние перемещения головок
+    let found = match slot.media() {
+        Media::Hdd => match rayon::ThreadPoolBuilder::new().num_threads(2).build() {
+            Ok(pool) => pool.install(collect),
+            Err(_) => collect(),
+        },
+        _ => collect(),
+    };
     let mut added = 0u64;
     {
         let mut v = slot.write();
@@ -665,7 +685,7 @@ fn full_enum(eng: &Engine, slot: &VolSlot, h: HANDLE, rescan: bool) -> Result<Jo
         Err(e) => return Err(format!("FSCTL_QUERY_USN_JOURNAL failed (err {e})")),
     };
     eng.bg_begin();
-    let r = enumerate(h, &slot.drive, &j, &slot.stop);
+    let r = enumerate(h, &slot.drive, &j, &slot.stop, slot.media());
     eng.bg_end();
     let (v, st) = r?;
     let (files, dirs, mem) = (v.files, v.dirs, v.mem_bytes());

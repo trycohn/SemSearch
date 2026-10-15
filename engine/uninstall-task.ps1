@@ -66,6 +66,19 @@ try {
     $Exe = Join-Path $InstallDir 'semsearch-engine.exe'
 
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    # install-task runs the engine in place when the application itself sits in Program Files (--root inside the
+    # install folder): then the engine files belong to the application / its installer, not to install-task.
+    $InPlace = $false
+    $RunExe = $Exe   # the process to wait for: what the task actually runs
+    if ($task) {
+        $act = @($task.Actions)[0]
+        if ($act -and "$($act.Execute)".Trim('"')) { $RunExe = "$($act.Execute)".Trim('"') }
+        if ($act -and "$($act.Arguments)" -match '--root\s+"([^"]+)"') {
+            $rootArg = $Matches[1].TrimEnd('\') + '\'
+            if ($rootArg.StartsWith($InstallDir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { $InPlace = $true }
+        }
+    }
+    if (Test-Path -LiteralPath (Join-Path $InstallDir 'server.py') -PathType Leaf) { $InPlace = $true }
     if ($task) {
         Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -77,14 +90,16 @@ try {
     # Ask the running engine to exit (it never changes anything on disk); make sure the installed copy is gone.
     if (Invoke-Engine '{"id":1,"op":"shutdown"}') { Write-Host 'Running engine asked to shut down.' }
     for ($i = 0; $i -lt 40; $i++) {
-        $procs = @(Get-Process -Name 'semsearch-engine' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -ieq $Exe) })
+        $procs = @(Get-Process -Name 'semsearch-engine' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and (($_.Path -ieq $Exe) -or ($_.Path -ieq $RunExe)) })
         if ($procs.Count -eq 0) { break }
         if ($i -eq 20) { $procs | Stop-Process -Force }
         Start-Sleep -Milliseconds 250
     }
 
     # Remove only what install-task created there (the engine copy, logs\); the folder itself only if then empty.
-    if ((Split-Path -Leaf $InstallDir) -eq 'SemSearch' -and (Split-Path -Parent $InstallDir) -ieq $PF -and (Test-Path -LiteralPath $InstallDir -PathType Container)) {
+    if ($InPlace) {
+        Write-Host "$InstallDir holds the application itself; its files are left in place."
+    } elseif ((Split-Path -Leaf $InstallDir) -eq 'SemSearch' -and (Split-Path -Parent $InstallDir) -ieq $PF -and (Test-Path -LiteralPath $InstallDir -PathType Container)) {
         if (Test-Path -LiteralPath $Exe -PathType Leaf) {
             Remove-Item -LiteralPath $Exe -Force
             Write-Host "Removed $Exe"
