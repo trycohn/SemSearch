@@ -143,7 +143,7 @@ SearchResponse = {
   ```
   { "content_roots": [{ "path": str, "files": int }],
     "drives": { "available": [{ "drive": "C:", "label": str, "fs": "NTFS" }], "selected": ["C:"] },
-    "exclude_dirs": [str], "hotkey": "ctrl+alt+s", "theme": "system"|"light"|"dark", "accent": "#005fb8",
+    "exclude_dirs": [str], "hotkey": "ctrl+alt+s" (или "ctrl+alt+space", если AltGr+S набирает букву), "theme": "system"|"light"|"dark", "accent": "#005fb8",
     "lang": "system"|"ru"|"en",   // язык интерфейса; system — как в Windows (русский → ru, иначе en)
     "lang_system": "ru"|"en",      // только чтение: во что превращается system на этой машине
     "pause_on_fullscreen": bool, "pause_processes": [str], "pause_on_battery": bool,
