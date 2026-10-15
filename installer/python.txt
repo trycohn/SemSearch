@@ -1,0 +1,5 @@
+# Python shipped with SemSearch: python-build-standalone CPython 3.11, install_only, x86_64-pc-windows-msvc
+# (https://github.com/astral-sh/python-build-standalone/releases). build-installer.cmd downloads it into
+# installer\.cache\ and checks the sha256 (from the release's SHA256SUMS). To move to a newer build, change both lines.
+url = https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.11.17%2B20261013-x86_64-pc-windows-msvc-install_only.tar.gz
+sha256 = 7616ab1f74aab975bd91eb0a657a74a092a63a46cac38c5f3f9415c79fd781f5

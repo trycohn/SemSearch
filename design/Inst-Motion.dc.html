@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Установщик — анимации</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}::-webkit-scrollbar-button{display:none;width:0;height:0}::-webkit-scrollbar-thumb{background-color:rgba(128,128,128,.32);border:3.5px solid transparent;border-radius:6px;background-clip:padding-box;min-height:40px}::-webkit-scrollbar-thumb:hover{background-color:rgba(128,128,128,.55);border-width:2px}
+a{color:#005fb8}a:hover{color:#003e7a}
+.wm{--bg:#f3f3f3;--surface:#ffffff;--hover:#f5f5f5;--foot:#ebebeb;--line:#e5e5e5;--line2:#cfcfcf;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--knob:#5c5c5c;--err:#b3261e;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+.wm.dark{--bg:#202020;--surface:#2b2b2b;--hover:#323232;--foot:#1b1b1b;--line:#383838;--line2:#555555;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--knob:#cfcfcf;--err:#ff8a80}
+.wm button{font:inherit;color:inherit;cursor:default;transition:background-color calc(.12s*var(--k)),border-color calc(.15s*var(--k)),color calc(.15s*var(--k)),transform calc(.1s*var(--k)) var(--eo),filter calc(.12s*var(--k))}
+.wm button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wm .btn2:hover,.wm .opt:hover{background:var(--hover)!important}
+.wm .btn2:active,.wm .prim:active,.wm .sw:active{transform:scale(.97)}
+.wm .prim:hover{filter:brightness(1.08)}
+.wm .sw{transition:background-color calc(.2s*var(--k)),border-color calc(.2s*var(--k)),transform calc(.1s*var(--k)) var(--eo)}
+.wm .sw .knob{transition:transform calc(.2s*var(--k)) var(--eo),background-color calc(.2s*var(--k)),width calc(.15s*var(--k))}
+.wm .sw:active .knob{width:15px!important}
+.wm .dot{transition:border-width calc(.15s*var(--k)) var(--eo),border-color calc(.15s*var(--k)),background-color calc(.15s*var(--k))}
+.wm .box{transition:background-color calc(.15s*var(--k)),border-color calc(.15s*var(--k))}
+.orbit{transform-box:view-box;transform-origin:108.04px 106.54px;animation:orbit calc(1.8s*var(--k)) cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.settle{transform-box:view-box;transform-origin:108.04px 106.54px;animation:settle calc(.5s*var(--k)) var(--eo) both}
+@keyframes settle{from{transform:rotate(-50deg)}to{transform:none}}
+.spin{animation:spin calc(.9s*var(--k)) linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.chk{stroke-dasharray:24;animation:chk calc(.35s*var(--k)) var(--eo) both}
+@keyframes chk{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
+.pop{animation:pop calc(.22s*var(--k)) var(--eo) both}
+@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.shake{animation:shake calc(.4s*var(--k)) var(--eo) both}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-4px)}60%{transform:translateX(3px)}}
+.apw{animation:apw calc(4.4s*var(--k)) var(--eo) infinite both}
+@keyframes apw{0%{opacity:0;transform:translateY(8px)}7%,86%{opacity:1;transform:none}89%,100%{opacity:0;transform:scale(.98)}}
+.apl{animation:apl calc(4.4s*var(--k)) var(--eo) infinite both}
+@keyframes apl{0%{opacity:0;transform:scale(.8)}10%,86%{opacity:1;transform:none}89%,100%{opacity:0}}
+.apr{animation:apr calc(4.4s*var(--k)) var(--eo) infinite both}
+@keyframes apr{0%,4%{opacity:0;transform:translateY(6px)}10%,86%{opacity:1;transform:none}89%,100%{opacity:0}}
+.hoa{animation:hoa calc(5.2s*var(--k)) infinite both}
+@keyframes hoa{0%{opacity:0;transform:translateY(8px);animation-timing-function:var(--eo)}6%,44%{opacity:1;transform:none;animation-timing-function:var(--ei)}46.5%,100%{opacity:0;transform:scale(.98)}}
+.hob{animation:hob calc(5.2s*var(--k)) infinite both}
+@keyframes hob{0%,47%{opacity:0;transform:translateY(8px);animation-timing-function:var(--eo)}53%,92%{opacity:1;transform:none}100%{opacity:0}}
+.hoc{animation:hoc calc(5.2s*var(--k)) infinite both}
+@keyframes hoc{0%,40%{transform:none;filter:none}41.5%,43%{transform:scale(.97);filter:brightness(1.08)}44.5%,100%{transform:none;filter:none}}
+.hobar{animation:hobar calc(5.2s*var(--k)) cubic-bezier(.4,0,.2,1) infinite}
+@keyframes hobar{0%,52%{width:4%}70%{width:22%}92%,100%{width:38%}}
+.rmc{animation:rmc calc(4s*var(--k)) infinite both}
+@keyframes rmc{0%,8%{opacity:0;transform:scale(.6);animation-timing-function:var(--eo)}13.5%,88%{opacity:1;transform:none}94%,100%{opacity:0}}
+.rmk{stroke-dasharray:24;animation:rmk calc(4s*var(--k)) var(--eo) infinite both}
+@keyframes rmk{0%,13%{stroke-dashoffset:24}22%,100%{stroke-dashoffset:0}}
+.rmt{animation:rmt calc(4s*var(--k)) var(--eo) infinite both}
+@keyframes rmt{0%,14%{opacity:0;transform:translateY(6px)}22%,88%{opacity:1;transform:none}94%,100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.orbit,.settle,.spin,.apw,.apl,.apr,.hoa,.hob,.hoc,.hobar,.rmc,.rmk,.rmt,.shake{animation:none}.hob{display:none}}
+</style>
+</helmet>
+<div class="wm {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; --k: {{k}}; min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+<div style="max-width: 1200px; margin: 0 auto; padding: 36px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; max-width: 760px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Анимации установщика</h1>
+<p style="margin: 0; color: var(--muted)">Те же правила, что у приложения: коротко и спокойно, ничего не прыгает. Большое окно само проигрывает установку, ролики на карточках крутятся по кругу, а обрыв связи, знак, переключатели и кнопки можно нажимать.</p>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)">
+<div><div id="m-slow" style="font-size: 13px">Замедлить в 4 раза</div><div style="font-size: 12px; color: var(--muted)">Для карточек — рассмотреть кривые</div></div>
+<button class="sw" role="switch" aria-checked="{{slow}}" aria-labelledby="m-slow" onClick="{{toggleSlow}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid; border-radius: 10px; {{slowSw.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{slowSw.knob}}"></span></button>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 16px">
+
+<div style="grid-column: 1 / -1; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 40px; padding: 36px 24px; background: color-mix(in srgb, var(--accent) 8%, var(--bg))">
+<div style="flex: none; position: relative; width: 540px; max-width: 100%; height: 525px; overflow: hidden; border-radius: 8px; box-shadow: 0 16px 48px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06)">
+<div style="width: 720px; height: 700px; transform: scale(.75); transform-origin: 0 0">
+<dc-import name="Installer" autoplay="1" dark="{{dark}}" accent="{{accent}}" on-phase="{{setPhase}}" hint-size="720px,700px"></dc-import>
+</div>
+</div>
+<ol aria-label="Что сейчас происходит" style="flex: 1 1 300px; max-width: 440px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{phases}}" as="p" hint-placeholder-count="3">
+<li style="display: flex; gap: 14px; padding: 12px 14px; border-radius: 8px; transition: background-color .25s, box-shadow .25s; {{p.style}}">
+<span style="flex: none; width: 26px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; transition: background-color .25s, color .25s; {{p.numStyle}}">{{p.n}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600; transition: color .25s; {{p.ts}}">{{p.title}}</span><span style="font-size: 13px; color: var(--muted)">{{p.note}}</span></span>
+</li>
+</sc-for>
+</ol>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Вся установка целиком</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Окно само проходит путь «Приветствие → Установка → Готово» и начинает заново, а справа подсвечено, что сейчас происходит. Это то же окно, что на бордах слева, — его можно нажимать.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: color-mix(in srgb, var(--accent) 8%, var(--bg)); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div class="apw" style="width: 240px; height: 196px; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.14); overflow: hidden">
+<div style="flex: none; height: 16px; display: flex; align-items: center; gap: 5px; padding: 0 8px"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--accent)"></span><span style="width: 56px; height: 3px; border-radius: 2px; background: var(--line2)"></span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 22px 0">
+<span class="apl" style="display: flex; color: {{logoColor}}"><svg width="26" height="26" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></svg></span>
+<span style="margin-top: 7px; width: 72px; height: 6px; border-radius: 3px; background: var(--text); opacity: .8"></span>
+<span style="margin-top: 5px; width: 132px; height: 4px; border-radius: 2px; background: var(--line2)"></span>
+<div style="width: 100%; margin-top: 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); overflow: hidden">
+<div class="apr" style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px"><span style="width: 7px; height: 7px; border-radius: 2px; border: 1px solid var(--muted)"></span><span style="width: 62%; height: 3px; border-radius: 2px; background: var(--line2)"></span></div>
+<div class="apr" style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-top: 1px solid var(--line); animation-delay: calc(60ms*var(--k))"><span style="width: 7px; height: 7px; border-radius: 2px; border: 1px solid var(--muted)"></span><span style="width: 48%; height: 3px; border-radius: 2px; background: var(--line2)"></span></div>
+<div class="apr" style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-top: 1px solid var(--line); animation-delay: calc(120ms*var(--k))"><span style="width: 7px; height: 7px; border-radius: 2px; border: 1px solid var(--muted)"></span><span style="width: 56%; height: 3px; border-radius: 2px; background: var(--line2)"></span></div>
+</div>
+</div>
+<div style="flex: none; height: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 8px; border-top: 1px solid var(--line); background: var(--foot)"><span style="width: 36px; height: 13px; box-sizing: border-box; border-radius: 3px; border: 1px solid var(--line2); background: var(--surface)"></span><span style="width: 46px; height: 13px; border-radius: 3px; background: var(--accent)"></span></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Появление окна</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Окно поднимается на 8 px и проявляется за 320 мс, знак вырастает с 80% за 450 мс, строки карточки выезжают следом с шагом 60 мс. Так же сменяются экраны внутри окна.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 300px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<sc-for list="{{sd.rows}}" as="r" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-top: {{r.border}}; font-size: 13px">
+<span style="flex: none; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{r.done}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg></sc-if>
+<sc-if value="{{r.active}}" hint-placeholder-val="{{false}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg></sc-if>
+<sc-if value="{{r.wait}}" hint-placeholder-val="{{true}}"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line2)"></span></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; {{r.ls}}">{{r.label}}</span>
+</div>
+</sc-for>
+<div style="height: 3px; background: var(--line2)"><div style="height: 100%; background: var(--accent); width: {{sd.w}}; {{sd.tr}}"></div></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Шаги установки</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Серая точка → кольцо крутится (0,9 с на оборот) → галочка дорисовывается за 350 мс. Активный шаг — полужирный, сделанные — приглушены. Полоса под списком догоняет значение за 400 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 300px; padding: 14px 16px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="flex: none; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{dl.done}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg></sc-if>
+<sc-if value="{{dl.run}}" hint-placeholder-val="{{true}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; font-weight: 600">Скачиваю PyTorch с CUDA</span>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums"><span>{{dl.got}}</span><span>{{dl.pct}}</span></div>
+<div style="margin-top: 6px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><div style="height: 100%; border-radius: 2px; background: var(--accent); width: {{dl.w}}; {{dl.tr}}"></div></div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Скачивание</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Куски приходят неровно, но полоса не прыгает: каждый раз догоняет новое значение за 400 мс. Цифры моноширинные, поэтому счётчик не дрожит. В конце кольцо сменяется галочкой.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px">
+<span style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; color: {{logoColor}}"><svg width="72" height="72" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><g class="{{lg.cls}}"><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></g></svg></span>
+<span style="min-height: 18px; font-size: 12px; color: var(--muted)">{{lg.label}}</span>
+<button class="btn2" onClick="{{lg.toggle}}" style="height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px">{{lg.btn}}</button>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Знак во время установки</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Пока идёт установка, точка кружит вокруг кольца: 1,8 с на оборот, с мягким разгоном и торможением. В конце встаёт на место поворотом с −50° за 500 мс — как на экране запуска приложения.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px">
+<span style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{net.fail}}" hint-placeholder-val="{{false}}"><svg class="shake" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--err)"><path d="M12 9v4 M12 16.5h.01 M10.3 3.6L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path></svg></sc-if>
+<sc-if value="{{net.ok}}" hint-placeholder-val="{{true}}"><svg width="32" height="32" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible; color: {{logoColor}}"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><g class="orbit"><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></g></svg></sc-if>
+</span>
+<div style="width: 300px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; font-size: 13px">
+<span style="flex: none; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{net.fail}}" hint-placeholder-val="{{false}}"><svg class="pop" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="color: var(--err)"><path d="M6 6l12 12M18 6L6 18"></path></svg></sc-if>
+<sc-if value="{{net.ok}}" hint-placeholder-val="{{true}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; font-weight: 600; transition: color calc(.2s*var(--k)); color: {{net.lc}}">Скачиваю PyTorch с CUDA</span>
+<span style="flex: none; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; transition: color calc(.2s*var(--k)); color: {{net.rc}}">{{net.right}}</span>
+</div>
+<div style="height: 3px; background: var(--line2)"><div style="width: 43%; height: 100%; transition: background-color calc(.2s*var(--k)); background: {{net.bar}}"></div></div>
+</div>
+<sc-if value="{{net.ok}}" hint-placeholder-val="{{true}}"><button class="btn2" onClick="{{net.toggle}}" style="height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px">Оборвать связь</button></sc-if>
+<sc-if value="{{net.fail}}" hint-placeholder-val="{{false}}"><button class="prim" onClick="{{net.toggle}}" style="height: 30px; min-width: 104px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: var(--onAccent); font-size: 13px; font-weight: 600">Повторить</button></sc-if>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Обрыв связи</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Крестик выпрыгивает с 60% за 220 мс, подпись и полоса краснеют за 200 мс и останавливаются. Треугольник вздрагивает один раз за 400 мс — без мигания и тряски окна.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: color-mix(in srgb, var(--accent) 8%, var(--bg)); overflow: hidden">
+<div class="hoa" style="position: absolute; left: 50%; top: 50%; width: 240px; height: 190px; margin: -95px 0 0 -120px; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.14); overflow: hidden">
+<div style="flex: none; height: 16px; display: flex; align-items: center; gap: 5px; padding: 0 8px"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--accent)"></span><span style="width: 56px; height: 3px; border-radius: 2px; background: var(--line2)"></span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 16px">
+<span style="display: flex; color: {{logoColor}}"><svg width="28" height="28" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></svg></span>
+<span style="font-size: 12px; font-weight: 600">SemSearch установлен</span>
+<span style="width: 140px; height: 4px; border-radius: 2px; background: var(--line2)"></span>
+</div>
+<div style="flex: none; height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-top: 1px solid var(--line); background: var(--foot); font-size: 10px">
+<span style="width: 11px; height: 11px; border-radius: 3px; background: var(--accent); color: var(--onAccent); display: flex; align-items: center; justify-content: center"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>
+<span>Запустить SemSearch</span>
+<span class="hoc" style="margin-left: auto; padding: 2px 10px; border-radius: 3px; background: var(--accent); color: var(--onAccent); font-weight: 600">Готово</span>
+</div>
+</div>
+<div class="hob" style="position: absolute; left: 50%; top: 50%; width: 240px; height: 190px; margin: -95px 0 0 -120px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.14); overflow: hidden">
+<span style="display: flex; color: {{logoColor}}"><svg width="30" height="30" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><g class="orbit"><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></g></svg></span>
+<span style="margin-top: 4px; font-size: 12px; font-weight: 600">SemSearch</span>
+<span style="font-size: 10px; color: var(--muted)">Загружаю модель на видеокарту…</span>
+<span style="width: 120px; height: 3px; margin-top: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span class="hobar" style="display: block; height: 100%; border-radius: 2px; background: var(--accent)"></span></span>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Готово → экран запуска</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">«Готово» коротко вдавливается, установщик уходит за 120 мс (до 98%, с ускорением), и сразу открывается обычный экран запуска с тем же знаком: точка снова кружит, пока модель загружается на видеокарту. Скачивать уже нечего — модель скачал установщик.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 310px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; font-size: 13px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 46px; padding: 0 14px">
+<span id="m-auto">Запускать вместе с Windows</span>
+<button class="sw" role="switch" aria-checked="{{ctl.auto}}" aria-labelledby="m-auto" onClick="{{ctl.tAuto}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid; border-radius: 10px; {{ctl.autoSw.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{ctl.autoSw.knob}}"></span></button>
+</div>
+<div role="radiogroup" aria-label="На чём считать модель" style="border-top: 1px solid var(--line)">
+<button class="opt" role="radio" aria-checked="{{ctl.gpu}}" onClick="{{ctl.pickGpu}}" style="display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 14px; border: 0; background: transparent; text-align: left"><span class="dot" style="flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; {{ctl.gpuDot}}"></span>На видеокарте</button>
+<button class="opt" role="radio" aria-checked="{{ctl.cpu}}" onClick="{{ctl.pickCpu}}" style="display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 14px; border: 0; background: transparent; text-align: left"><span class="dot" style="flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; {{ctl.cpuDot}}"></span>На процессоре</button>
+</div>
+<button class="opt" role="checkbox" aria-checked="{{ctl.launch}}" onClick="{{ctl.tLaunch}}" style="display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 14px; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left">
+<span class="box" style="flex: none; width: 18px; height: 18px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center; {{ctl.launchBox}}"><sc-if value="{{ctl.launch}}" hint-placeholder-val="{{true}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk" d="M5 12l5 5L20 7"></path></svg></sc-if></span>
+Запустить SemSearch
+</button>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Переключатели и выбор</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Кружок тумблера переезжает за 200 мс, зажмите — вытянется. Радиокнопка заливается за 150 мс. Флажок заливается так же, а галочка дорисовывается за 350 мс.</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center">
+<div style="width: 330px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 10px; padding: 14px; font-size: 12px; transition: color calc(.15s*var(--k)); color: {{bt.nc}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 14h18v5H3z M3 14l2.6-8h12.8L21 14 M7 16.5h.01"></path></svg>
+<span>{{bt.note}}</span>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--foot)">
+<button class="btn2" onClick="{{bt.toggle}}" style="height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px">{{bt.alt}}</button>
+<button class="{{bt.cls}}" disabled="{{bt.off}}" style="height: 30px; min-width: 104px; padding: 0 14px; border-radius: 4px; font-size: 13px; font-weight: 600; {{bt.st}}">Установить</button>
+</div>
+</div>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Кнопки</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Наведение — фон за 120 мс, нажатие — кнопка сжимается до 97%. Неактивная «Установить» оживает за 150 мс, как только место нашлось: нажмите «Другая папка».</p></div>
+</div>
+
+<div style="display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="position: relative; height: 240px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+<svg class="rmc" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"></path><path class="rmk" d="M8 12.2l2.8 2.8L16.2 9.5"></path></svg>
+<span class="rmt" style="margin-top: 6px; font-size: 16px; font-weight: 600">SemSearch удалён</span>
+<span class="rmt" style="font-size: 12px; color: var(--muted); animation-delay: calc(60ms*var(--k))">Настройки, индекс и модель остались в папке данных.</span>
+</div>
+<div style="padding: 12px 14px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Удаление</h2><p style="margin: 4px 0 0; font-size: 12px; color: var(--muted)">Кружок выпрыгивает с 60% за 220 мс, галочка внутри дорисовывается за 350 мс, текст выезжает следом. Без лишнего: удаление — не праздник.</p></div>
+</div>
+
+</div>
+
+<section aria-labelledby="ispec" style="border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<h2 id="ispec" style="margin: 0; padding: 14px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--line)">Тайминги для реализации</h2>
+<div style="overflow-x: auto">
+<div style="min-width: 640px">
+<div style="display: grid; grid-template-columns: minmax(0, 1.2fr) 150px minmax(0, 1.6fr); gap: 16px; padding: 8px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line)"><span>Что</span><span>Длительность</span><span>Кривая и детали</span></div>
+<sc-for list="{{spec}}" as="s" hint-placeholder-count="14">
+<div style="display: grid; grid-template-columns: minmax(0, 1.2fr) 150px minmax(0, 1.6fr); gap: 16px; padding: 9px 16px; font-size: 13px; border-bottom: 1px solid var(--line)"><span>{{s.what}}</span><span style="font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px">{{s.ms}}</span><span style="color: var(--muted)">{{s.how}}</span></div>
+</sc-for>
+</div>
+</div>
+<p style="margin: 0; padding: 12px 16px 14px; font-size: 13px; color: var(--muted)">Если в Windows выключены «Эффекты анимации» — остаются только наплывы прозрачности: точка не кружит, кольцо шага стоит, сдвигов и масштаба нет. Анимируются только transform, opacity и цвет, чтобы всё шло ровно, пока установщик качает и распаковывает.</p>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"$preview":{"width":1280,"height":2700}}'>
+class Component extends DCLogic {
+  componentDidMount() { this.loop(1); }
+  componentWillUnmount() { clearInterval(this._iv); }
+  loop(k) {
+    clearInterval(this._iv);
+    this._iv = setInterval(() => this.setState({ tk: ((this.state && this.state.tk) || 0) + 1 }), 400 * k);
+  }
+  renderVals() {
+    const st = this.state || {};
+    const tk = st.tk || 0;
+    const slow = !!st.slow;
+    const dark = !!this.props.dark;
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, t) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const n = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+      return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255);
+    };
+    const fmt = x => x.toFixed(1).replace('.', ',');
+    const tr = on => on ? 'transition: width calc(.4s*var(--k)) cubic-bezier(.4,0,.2,1)' : 'transition: none';
+    const sw = on => ({
+      track: on ? 'border-color: var(--accent); background: var(--accent)' : 'border-color: var(--knob); background: transparent',
+      knob: on ? 'transform: translateX(20px); background: var(--onAccent)' : 'transform: none; background: var(--knob)'
+    });
+    const radio = on => on ? 'border: 5px solid var(--accent); background: var(--onAccent)' : 'border: 1px solid var(--knob); background: transparent';
+
+    const phase = st.phase || 'welcome';
+    const P = [
+      { id: 'welcome', title: 'Окно появляется', note: 'Поднимается на 8 px и проявляется за 320 мс, знак вырастает с 80% за 450 мс, строки выезжают с шагом 60 мс.' },
+      { id: 'progress', title: 'Идёт установка', note: 'Точка кружит вокруг кольца, шаги по очереди отмечаются галочкой, полоса догоняет значение за 400 мс.' },
+      { id: 'done', title: 'Готово', note: 'Точка встаёт на место поворотом за 500 мс, карточка с подсказками выезжает следом.' }
+    ];
+    const phases = P.map((p, i) => {
+      const on = p.id === phase || (p.id === 'done' && phase === 'removed');
+      return {
+        n: i + 1, title: p.title, note: p.note,
+        style: on ? 'background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--line)' : 'background: transparent; box-shadow: none',
+        numStyle: on ? 'background: var(--accent); color: var(--onAccent)' : 'background: var(--line); color: var(--muted)',
+        ts: on ? 'color: var(--text)' : 'color: var(--muted)'
+      };
+    });
+
+    const SL = ['Скачиваю PyTorch с CUDA', 'Ставлю библиотеки', 'Скачиваю модель EmbeddingGemma 2', 'Подключаю быстрый поиск по имени'];
+    const c = tk % 16;
+    const step = c < 12 ? Math.floor(c / 3) : SL.length;
+    const sd = {
+      rows: SL.map((label, i) => ({
+        label, done: i < step, active: i === step, wait: i > step,
+        border: i ? '1px solid var(--line)' : '0',
+        ls: i === step ? 'font-weight: 600' : i < step ? 'color: var(--muted)' : 'color: var(--faint)'
+      })),
+      w: Math.round(Math.min(c, 12) / 12 * 100) + '%', tr: tr(c !== 0)
+    };
+
+    const D = [0, .17, .41, .58, .83, 1.02, 1.24, 1.39, 1.63, 1.84, 2.01, 2.27, 2.45, 2.63, 2.86, 3.0];
+    const dc = tk % 20;
+    const v = D[Math.min(dc, D.length - 1)];
+    const dl = { got: fmt(v) + ' из 3,0 ГБ', pct: Math.round(v / 3 * 100) + ' %', w: (v / 3 * 100).toFixed(1) + '%', tr: tr(dc !== 0), done: v >= 3, run: v < 3 };
+
+    const ldone = st.logoManual ? !!st.logoDone : Math.floor(tk / 9) % 2 === 1;
+    const lg = {
+      cls: ldone ? 'settle' : 'orbit', label: ldone ? 'Готово' : 'Устанавливаю…', btn: ldone ? 'Ещё раз' : 'Завершить',
+      toggle: () => this.setState({ logoManual: true, logoDone: !ldone })
+    };
+
+    const fail = !!st.fail;
+    const net = {
+      fail, ok: !fail,
+      lc: fail ? 'var(--err)' : 'var(--text)', rc: fail ? 'var(--err)' : 'var(--muted)',
+      right: fail ? 'нет связи' : '1,3 из 3,0 ГБ', bar: fail ? 'var(--err)' : 'var(--accent)',
+      toggle: () => this.setState({ fail: !fail })
+    };
+
+    const autoOn = st.auto ?? true, gpu = st.gpu ?? true, launch = st.launch ?? true;
+    const ctl = {
+      auto: autoOn, autoSw: sw(autoOn), tAuto: () => this.setState({ auto: !autoOn }),
+      gpu, cpu: !gpu, gpuDot: radio(gpu), cpuDot: radio(!gpu),
+      pickGpu: () => this.setState({ gpu: true }), pickCpu: () => this.setState({ gpu: false }),
+      launch, tLaunch: () => this.setState({ launch: !launch }),
+      launchBox: launch ? 'border: 1px solid var(--accent); background: var(--accent); color: var(--onAccent)' : 'border: 1px solid var(--knob); background: transparent; color: transparent'
+    };
+
+    const moved = !!st.moved;
+    const bt = {
+      note: moved ? 'Свободно 812 ГБ на диске D:' : 'Не хватает места на C: — нужно около 7 ГБ, свободно 3,1 ГБ',
+      nc: moved ? 'var(--muted)' : 'var(--err)',
+      alt: moved ? 'Вернуть C:' : 'Другая папка',
+      toggle: () => this.setState({ moved: !moved }),
+      off: !moved, cls: moved ? 'prim' : '',
+      st: (moved ? 'border: 1px solid var(--accent); background: var(--accent); color: var(--onAccent)' : 'border: 1px solid var(--line); background: var(--line); color: var(--faint)') + '; transition: background-color calc(.15s*var(--k)), border-color calc(.15s*var(--k)), color calc(.15s*var(--k)), transform calc(.1s*var(--k)) cubic-bezier(.2,0,0,1), filter calc(.12s*var(--k))'
+    };
+
+    const spec = [
+      ['Окно и смена экранов', '320 мс', 'Подъём на 8 px и проявление; замедление cubic-bezier(.2, 0, 0, 1)'],
+      ['Знак появляется', '450 мс', 'С 80% до 100% с проявлением'],
+      ['Строки карточки', '250 мс, шаг 60 мс', 'Подъём на 6 px; каждая следующая строка — на 60 мс позже'],
+      ['Точка кружит', '1,8 с на оборот', 'cubic-bezier(.45, .05, .55, .95), пока идёт установка, обновление или удаление'],
+      ['Точка встаёт на место', '500 мс', 'Поворот с −50° до 0, замедление'],
+      ['Кольцо активного шага', '0,9 с на оборот', 'Линейно, без остановок'],
+      ['Галочка шага', '350 мс', 'Линия дорисовывается от начала к концу'],
+      ['Полоса прогресса', '400 мс', 'Догоняет новое значение, cubic-bezier(.4, 0, .2, 1); счётчик — моноширинные цифры'],
+      ['Ошибка: крестик', '220 мс', 'Выпрыгивает с 60%; подпись и полоса краснеют за 200 мс'],
+      ['Ошибка: треугольник', '400 мс', 'Один раз: −4 px → +3 px → 0'],
+      ['Тумблер', '200 мс', 'Кружок переезжает; при нажатии вытягивается до 15 px'],
+      ['Радиокнопка и флажок', '150 мс', 'Рамка и заливка; галочка флажка дорисовывается за 350 мс'],
+      ['Кнопки', '120 мс / 100 мс', 'Фон при наведении / сжатие до 97% при нажатии; неактивная оживает за 150 мс'],
+      ['Установщик уходит', '120 мс', 'До 98% с исчезанием, ускорение cubic-bezier(.3, 0, 1, 1); сразу открывается экран запуска']
+    ].map(r => ({ what: r[0], ms: r[1], how: r[2] }));
+
+    return {
+      themeClass: dark ? 'dark' : '',
+      acc: dark ? light(accent, 0.45) : accent,
+      onAcc: dark ? '#111111' : '#ffffff',
+      logoColor: dark ? '#ffffff' : '#005fb8',
+      dark, accent,
+      k: slow ? 4 : 1,
+      slow, slowSw: sw(slow),
+      toggleSlow: () => { this.setState({ slow: !slow }); this.loop(slow ? 1 : 4); },
+      setPhase: scr => { if (!this.state || this.state.phase !== scr) this.setState({ phase: scr }); },
+      phases, sd, dl, lg, net, ctl, bt, spec
+    };
+  }
+}
+</script>
+</body>
+</html>

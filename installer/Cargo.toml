@@ -1,0 +1,60 @@
+[package]
+name = "semsearch-installer"
+version = "0.1.0"
+edition = "2021"
+# same toolchain floor as shell/ (tauri 2.12)
+rust-version = "1.90"
+description = "SemSearch setup (Tauri v2): install, update and uninstall for the current user (docs/INSTALLER.md)"
+publish = false
+default-run = "SemSearch-Setup"
+
+[[bin]]
+name = "SemSearch-Setup"
+path = "src/main.rs"
+
+# Build tool for build-installer.cmd: downloads Python, packs the payload, appends it to the setup exe.
+[[bin]]
+name = "pack"
+path = "src/bin/pack.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# HTTP: blocking ureq over rustls (ring); trusted roots = webpki roots + the Windows certificate store
+# (a clean Windows fetches missing roots on demand, so its store alone is not enough; proxies add theirs to it)
+ureq = { version = "2", default-features = false, features = ["tls"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "0.26"
+rustls-native-certs = "0.7"
+sha2 = "0.10"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
+globset = "0.4"
+# COM shortcuts (IShellLinkW); same version as tauri-runtime-wry uses
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell"] }
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_JobObjects",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+strip = true
+lto = "thin"
