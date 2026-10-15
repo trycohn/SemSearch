@@ -1,0 +1,4 @@
+# torch и torchvision ставятся отдельно от requirements.txt: из индекса PyTorch с CUDA (cu128) или для процессора (cpu).
+# setup.bat и установщик (docs/INSTALLER.md) берут версии отсюда; ставятся до requirements.txt.
+torch==2.11.0
+torchvision==0.26.0

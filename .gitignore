@@ -11,11 +11,15 @@ __pycache__/
 # Сборка Rust (engine/, shell/, tools/frameprobe/) и схемы, которые Tauri генерирует при сборке
 target/
 /shell/gen/schemas/
+/installer/gen/schemas/
 
 # Готовые exe — в релизы, а не в git
 /SemSearch.exe
 /bin/
 /tools/frameprobe.exe
+# Установщик: скачанный Python (build-installer.cmd) и готовый SemSearch-Setup-<версия>.exe
+/installer/.cache/
+/dist/
 
 # Результаты замеров на конкретной машине
 /tools/bench_results.jsonl

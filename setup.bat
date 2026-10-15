@@ -20,7 +20,7 @@ rem PyTorch: сборка с CUDA, если есть драйвер NVIDIA (nvid
 set "TORCH_INDEX=https://download.pytorch.org/whl/cpu"
 where nvidia-smi >nul 2>nul && set "TORCH_INDEX=https://download.pytorch.org/whl/cu128"
 echo PyTorch: %TORCH_INDEX%
-.venv\Scripts\python.exe -m pip install torch==2.11.0 torchvision==0.26.0 --index-url %TORCH_INDEX% || goto :fail
+.venv\Scripts\python.exe -m pip install -r requirements-torch.txt --index-url %TORCH_INDEX% || goto :fail
 .venv\Scripts\python.exe -m pip install -r requirements.txt || goto :fail
 echo.
 echo Готово. Запуск: start.bat  (при первом запуске скачается модель ~1.5 ГБ)

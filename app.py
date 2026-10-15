@@ -20,6 +20,7 @@ import core
 import i18n
 
 _moved = core.migrate_legacy(core.APP_DIR, core.DATA_DIR)  # до журнала, баз и настроек: старая раскладка → папка данных
+_moved += core.migrate_model()  # до загрузки модели: из общего кэша Hugging Face → папка данных
 core.setup_logging()
 log = logging.getLogger("server")
 for _level, _msg in _moved:
@@ -720,7 +721,9 @@ _size_cache = {"t": 0.0, "v": 0}
 def _index_bytes():
     if time.time() - _size_cache["t"] > 30:
         total = 0
-        for root, _, files in os.walk(core.DATA_DIR):
+        for root, dirs, files in os.walk(core.DATA_DIR):
+            if root == core.DATA_DIR and "models" in dirs:  # модель — не индекс: в «Размер на диске» не входит
+                dirs.remove("models")
             for f in files:
                 try:
                     total += os.path.getsize(os.path.join(root, f))

@@ -74,6 +74,16 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LEGACY_CONFIG_PATH = os.path.join(APP_DIR, "config.json")  # старая раскладка: читаем, пока не перенесён
 MODEL_ID = "google/embeddinggemma-2"
 DIM = 256  # Matryoshka: 768 -> 256, индекс в 3 раза меньше почти без потери качества
+
+# Модель (кэш Hugging Face) лежит в папке данных, а не в общем %USERPROFILE%\.cache\huggingface: удаление SemSearch
+# убирает и её, а SEMSEARCH_DATA_DIR переносит её на другой диск вместе с индексом. Кэш, заданный пользователем
+# (HF_HUB_CACHE или старое HUGGINGFACE_HUB_CACHE), не трогаем. huggingface_hub читает переменные при импорте,
+# поэтому они ставятся здесь, до первой загрузки модели.
+MODELS_DIR = os.path.join(DATA_DIR, "models")
+OWN_HF_CACHE = not (os.environ.get("HF_HUB_CACHE", "").strip() or os.environ.get("HUGGINGFACE_HUB_CACHE", "").strip())
+if OWN_HF_CACHE:
+    os.environ["HF_HUB_CACHE"] = MODELS_DIR
+    os.environ.setdefault("HF_XET_CACHE", os.path.join(MODELS_DIR, "xet"))
 TEXT_TOKENS = 8192  # порция текстов без throttle (поиск, проверки): строк × длина
 # Видеопамять под порцию текстов: ~56 КБ на токен на каждый байт числа модели (замер на RTX 4070 SUPER вместе с кэшем
 # аллокатора и графами: bfloat16 ~110 КБ, float32 ~220 КБ на токен). По остатку после загрузки модели считается
@@ -421,6 +431,57 @@ def migrate_legacy(legacy_root, data_dir):
     return notes
 
 
+def _shared_hf_cache():
+    """Общий кэш Hugging Face, каким его видит huggingface_hub без наших переменных: HF_HOME\\hub,
+    по умолчанию %USERPROFILE%\\.cache\\huggingface\\hub."""
+    home = os.environ.get("HF_HOME", "").strip() or os.path.join(
+        os.environ.get("XDG_CACHE_HOME", "").strip() or os.path.join(os.path.expanduser("~"), ".cache"), "huggingface")
+    return os.path.join(os.path.expandvars(os.path.expanduser(home)), "hub")
+
+
+def migrate_model():
+    """Разовый перенос модели, скачанной прежними версиями в общий кэш Hugging Face, в MODELS_DIR — иначе после
+    обновления она (1,5 ГБ) скачалась бы заново. Только если кэш выбран нами (OWN_HF_CACHE) и в MODELS_DIR модели
+    ещё нет; до первой загрузки модели. На другой том — копией через <имя>.part, и только целая копия занимает
+    место модели. Не удалось (файлы заняты, не хватило места) — в этот раз модель берётся со старого места,
+    перенос повторится при следующем запуске. Никогда не бросает.
+    -> [(уровень logging, сообщение)]: журнал в этот момент ещё не открыт."""
+    if not OWN_HF_CACHE:
+        return []
+    name = "models--" + MODEL_ID.replace("/", "--")
+    old_hub = _shared_hf_cache()
+    src, dst = os.path.join(old_hub, name), os.path.join(MODELS_DIR, name)
+    part = dst + ".part"
+    try:
+        if (not os.path.isdir(src) or os.path.lexists(dst)
+                or os.path.normcase(os.path.abspath(src)) == os.path.normcase(os.path.abspath(dst))):
+            return []
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        try:
+            try:
+                os.replace(src, dst)  # тот же том: мгновенно и целиком
+            except OSError as ex:
+                if ex.errno != errno.EXDEV:
+                    raise
+                if os.path.lexists(part):
+                    _remove(part)
+                shutil.copytree(src, part)
+                os.replace(part, dst)
+                shutil.rmtree(src, ignore_errors=True)  # не удалилось — останется лишняя копия, модель уже на месте
+        except OSError as ex:
+            try:
+                if os.path.lexists(part):
+                    _remove(part)
+            except OSError:
+                pass
+            os.environ["HF_HUB_CACHE"] = old_hub
+            return [(logging.WARNING, f"не удалось перенести модель из {src} в {MODELS_DIR} ({ex}) — "
+                                      f"пока беру её со старого места, перенос повторится при следующем запуске")]
+        return [(logging.INFO, f"модель перенесена из {src} в {MODELS_DIR}")]
+    except Exception as ex:
+        return [(logging.WARNING, f"перенос модели в {MODELS_DIR}: {type(ex).__name__}: {ex}")]
+
+
 # ---------------------------------------------------------------- база
 
 SCHEMA = """
@@ -596,6 +657,7 @@ def _load_model(device, dtype, on_download=None):
     try:
         return SentenceTransformer(MODEL_ID, local_files_only=True, **kw)
     except OSError:
+        drop_stale_downloads()  # до on_download: счётчик скачанного на экране запуска отсчитывается от того, что есть
         if on_download:
             on_download()
         return SentenceTransformer(MODEL_ID, **kw)
@@ -637,6 +699,36 @@ def model_cache_bytes():
                 continue
             partial = partial or name.endswith(".incomplete")
     return total, partial
+
+
+_STALE_PART = re.compile(r"^[0-9a-f]+\.[0-9a-f]{8}\.incomplete$")
+
+
+def drop_stale_downloads():
+    """Удаляет остатки оборванных загрузок модели. huggingface_hub качает каждый файл во временный
+    blobs\\<etag>.<8 hex>.incomplete и после обрыва начинает файл заново, не используя остаток; при kill (отмена в
+    установщике, выход из программы во время загрузки) остаток не удаляется и висит в кэше до 1,5 ГБ, да ещё
+    попадает в model_cache_bytes. Файл живой загрузки открыт, и Windows его не отдаст. Никогда не бросает.
+    -> сколько байт освобождено."""
+    freed = 0
+    try:
+        from huggingface_hub import constants
+
+        blobs = os.path.join(constants.HF_HUB_CACHE, "models--" + MODEL_ID.replace("/", "--"), "blobs")
+        for name in os.listdir(blobs):
+            if _STALE_PART.match(name):
+                path = os.path.join(blobs, name)
+                try:
+                    size = os.path.getsize(path)
+                    os.remove(path)
+                    freed += size
+                except OSError:
+                    continue
+        if freed:
+            log.info("удалены остатки оборванной загрузки модели: %.0f МБ", freed / 1e6)
+    except Exception:
+        pass
+    return freed
 
 
 def model_download_total():
