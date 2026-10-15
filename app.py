@@ -227,13 +227,6 @@ def _watch_download(attempt):
         time.sleep(0.5)
 
 
-def _engine_early():
-    try:
-        engine_ctl.ensure()
-    except Exception:
-        log.exception("не удалось запустить движок имён")
-
-
 def boot():
     global emb, store, indexer
     BOOT.update(step="index", download=None, gpu_note=None, chunks=None, error_kind=None, attempt=BOOT["attempt"] + 1)
@@ -243,9 +236,9 @@ def boot():
     except Exception:
         log.exception("не удалось проверить осиротевшие процессы")
 
-    # Движок имён — сразу, параллельно с моделью: поиск по имени обещан уже на экране запуска
-    threading.Thread(target=_engine_early, name="engine-start", daemon=True).start()
-
+    # Движок имён запускается после модели, не вместе с ней: на старте он в 8 потоков читает MFT всего диска,
+    # и вместе с чтением весов модели backend переставал отвечать на 15+ с. Поиск по имени на экране запуска
+    # идёт по запасному индексу names.db, движку для этого запускаться не нужно.
     def downloading():
         BOOT.update(step="download", first_run=True)
         log.info("модели нет в кэше — скачиваю %s", core.MODEL_ID)
