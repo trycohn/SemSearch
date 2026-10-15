@@ -440,7 +440,7 @@
       rows.push(mft);
     }
     // coming from the finished progress screen the dot has already settled
-    const v = hero({ mark: 'logo', dot: M.dot === 'settle' ? '' : A('settle'), title: upd ? t.updated : t.doneTitle, sub: upd ? t.updatedSub(S.version) : t.doneSub, rows });
+    const v = hero({ mark: 'logo', dot: M.dot === 'settle' ? '' : A('settle'), title: upd ? t.updated : t.doneTitle, sub: upd ? t.updatedSub(S.version) : t.doneSub((S.doneInfo && S.doneInfo.hotkey) || 'Ctrl+Alt+S'), rows });
     v.mftEl = mft;
     v.foot = { launch: true, btns: [B(t.finish, 'pri', () => finishNow(S.launch))] };
     return v;
