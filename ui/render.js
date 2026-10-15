@@ -34,21 +34,8 @@
     return out;
   };
 
-  /* ---------- значки по расширению (таблица «По имени») ---------- */
-  const set = (s) => new Set(s.split(' '));
-  const EXT = {
-    text: set('PDF DOC DOCX TXT RTF ODT MD EPUB DJVU FB2'),
-    sheet: set('XLS XLSX XLSM CSV ODS'),
-    image: set('JPG JPEG PNG GIF WEBP BMP HEIC TIF TIFF'),
-    video: set('MP4 MKV AVI MOV WEBM WMV M4V'),
-    audio: set('MP3 M4A WAV FLAC OGG OPUS AAC WMA'),
-    code: set('PY JS TS TSX JSX RS GO C CPP H HPP CS JAVA KT RB PHP SH PS1 SQL JSON YAML YML TOML HTML CSS LUA')
-  };
-  R.extIcon = (ext) => {
-    const e = String(ext || '').toUpperCase();
-    for (const k of Object.keys(EXT)) if (EXT[k].has(e)) return ic[k];
-    return ic.file;
-  };
+  /* ---------- значок типа файла: по имени (ui/filetypes), нет такого — серый стандартный ---------- */
+  R.fileIcon = (name, cls) => h('span.ft.ft-' + SS.ftName(name) + (cls ? '.' + cls : ''), { 'aria-hidden': 'true' });
 
   /* ---------- вкладки ---------- */
   R.tabs = (box, counts, tab, meta) => {
@@ -114,7 +101,7 @@
     const snip = k === 'audio' ? audioSnip(hit, it) : hit ? String(hit.text || '').replace(/\n\s*/g, ' ') : '';
     return h('button.row', { type: 'button', 'aria-pressed': 'false' },
       selbar(),
-      h('span.ico', svg(ic[k] || ic.file, { s: 18, sw: 1.6, join: true })),
+      R.fileIcon(it.name, 'ico'),
       h('span.bd',
         h('span.l1', h('span.nm', { text: it.name }), it.ext ? h('span.ext', { text: it.ext }) : null),
         /* точные копии считаются один раз — в выдаче одна строка и «ещё N копий» */
@@ -154,13 +141,13 @@
 
   R.nmRow = (it, re) => h('button.row.nm-row', { type: 'button', 'aria-pressed': 'false' },
     selbar(),
-    svg(ic.file, { s: 18, sw: 1.6, join: true, cls: 'nico' }),
+    R.fileIcon(it.name, 'nico'),
     h('span.nb', h('span.nn', R.parts(it.name, re)), h('span.ncr', { text: it.crumbs || '' })),
     h('span.nsd', { text: [SS.size(it.size), SS.dateShort(it.mtime)].filter(Boolean).join(' · ') }));
 
   R.nRow = (it, re) => h('button.nrow', { type: 'button', 'aria-pressed': 'false', title: it.path || '' },
     selbar(),
-    svg(R.extIcon(it.ext), { s: 16, sw: 1.6, join: true }),
+    R.fileIcon(it.name),
     h('span.c1', R.parts(it.name, re)),
     h('span.c2', { text: it.crumbs || '' }),
     h('span.c3', { text: SS.size(it.size) }),
@@ -388,7 +375,7 @@
         outside: 'Найдено по имени. Эта папка не входит в поиск по смыслу — её можно добавить в настройках.'
       }[pv && pv.state];
       box.appendChild(h('div.nmbox',
-        h('span.ib.pop', svg(ic.file, { s: 28, sw: 1.5, join: true })),
+        R.fileIcon((pv && pv.name) || it.name, 'ib.pop'),
         h('span.tx', { text: why || 'Найдено по имени. Содержимое ' + (ext ? 'файлов .' + String(ext).toLowerCase() : 'этого файла') + ' не индексируется.' })));
     }
     pane.appendChild(box);

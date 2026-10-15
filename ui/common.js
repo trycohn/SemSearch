@@ -130,6 +130,22 @@
     return map[k] || (k.length === 1 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1));
   });
 
+  /* ---------- значок типа файла ----------
+     Таблица — filetypes/filetypes.js. Имя файла ищется целиком (dockerfile, .gitignore), потом каждый хвост после точки
+     (archive.tar.gz → tar.gz → gz). Не нашлось — серый стандартный значок default. */
+  SS.ftName = (name) => {
+    const m = window.SS_FILETYPES;
+    if (!m) return 'default';
+    const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    const n = String(name || '').toLowerCase();
+    if (has(m.fileNames, n)) return m.fileNames[n];
+    for (let i = n.indexOf('.'); i !== -1; i = n.indexOf('.', i + 1)) {
+      const tail = n.slice(i + 1);
+      if (has(m.fileExtensions, tail)) return m.fileExtensions[tail];
+    }
+    return m.defaultIcon || 'default';
+  };
+
   /* ---------- тема ---------- */
   const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   let themeCur = { theme: 'system', accent: '#005fb8' };
