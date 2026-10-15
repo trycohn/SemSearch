@@ -77,6 +77,16 @@ class LocalNames:
     def count(self):
         return self._rows("SELECT count(*) FROM names_t_{g}", ())[0][0]
 
+    def quick_info(self):
+        """-> (примерно файлов, время сборки) без полного подсчёта: count(*) по миллионам имён — полсекунды,
+        а статус на экране запуска спрашивают несколько раз в секунду."""
+        try:
+            n = self._rows("SELECT max(id) FROM names_t_{g}", ())[0][0] or 0
+            row = self._rows("SELECT v FROM meta WHERE k='last_scan'", ())
+            return n, float(row[0][0]) if row else None
+        except Exception:
+            return 0, None
+
 
 class EngineNames:
     """Клиент движка semsearch-engine (named pipe), см. docs/API.md §4."""
@@ -87,7 +97,9 @@ class EngineNames:
         self.client = client
 
     def search(self, q, limit=200):
-        r = self.client.request("search", q=q, mode="auto", limit=limit, files_only=True)
+        # Движок бывает занят (отдаёт индексатору список файлов) — не держим поиск дольше пары секунд,
+        # NamesProvider тогда ответит из запасного индекса
+        r = self.client.request("search", timeout=3, q=q, mode="auto", limit=limit, files_only=True)
         return r["total"], r["items"]
 
     def same_name(self, name, limit=10):
@@ -97,7 +109,7 @@ class EngineNames:
         return bool(self.client.request("exists", path=path).get("exists"))
 
     def status(self):
-        return self.client.request("status")
+        return self.client.request("status", timeout=2)
 
 
 class NamesProvider:
@@ -116,22 +128,30 @@ class NamesProvider:
             self._client = None
 
     def current(self):
-        now = time.time()
-        if self._client is not None and now - self._checked > 5:
-            with self._lock:
-                self._checked = now
-                try:
-                    # Пока движок строит индекс, его ответы неполные — ищем по запасному индексу
-                    ok = self._client.available() and bool(self._client.request("status").get("ready"))
-                except Exception:
-                    ok = False
-                if ok and self.engine is None:
-                    log.info("поиск по имени: подключён движок")
-                    self.engine = EngineNames(self._client)
-                elif not ok and self.engine is not None:
-                    log.warning("поиск по имени: движок не отвечает, работаю на запасном индексе")
-                    self.engine = None
+        # Проверка движка — в фоне, запросы её не ждут и берут то, что выбрано сейчас: занятый движок
+        # (на запуске он строит индекс и отдаёт список файлов) отвечает секундами, и раньше каждый запрос
+        # статуса и поиска вставал в очередь за этой проверкой — поиск по имени висел до минуты
+        if self._client is not None and time.time() - self._checked > 5 and self._lock.acquire(blocking=False):
+            self._checked = time.time()
+            threading.Thread(target=self._check, name="names-check", daemon=True).start()
         return self.engine or self.local
+
+    def _check(self):
+        try:
+            try:
+                # Пока движок строит индекс, его ответы неполные — ищем по запасному индексу
+                ok = self._client.available() and bool(self._client.request("status", timeout=2).get("ready"))
+            except Exception:
+                ok = False
+            if ok and self.engine is None:
+                log.info("поиск по имени: подключён движок")
+                self.engine = EngineNames(self._client)
+            elif not ok and self.engine is not None:
+                log.warning("поиск по имени: движок не отвечает, работаю на запасном индексе")
+                self.engine = None
+        finally:
+            self._checked = time.time()
+            self._lock.release()
 
     def reachable(self):
         """Движок на связи, пусть даже ещё строит индекс, — тогда свой индекс имён не строим (он сделает это сам)."""
