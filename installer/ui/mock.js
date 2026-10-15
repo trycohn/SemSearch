@@ -13,7 +13,7 @@
 
   const GiB = 1073741824;
   const mode = (scen === 'update' || scen === 'updated') ? 'update' : (scen === 'uninstall' || scen === 'removed') ? 'uninstall' : 'install';
-  const ROOT = 'C:\\Users\\1337\\AppData\\Local\\Programs\\SemSearch', DATA = 'C:\\Users\\1337\\AppData\\Local\\SemSearch';
+  const ROOT = 'C:\\Users\\Anna\\AppData\\Local\\Programs\\SemSearch', DATA = 'C:\\Users\\Anna\\AppData\\Local\\SemSearch';
   const gq = q.get('gpu');
   const gpu = gq === 'none' ? null
     : gq === 'old' ? { name: 'NVIDIA GeForce GTX 1060 6GB', cap: '6.1', supported: false, reason: 'cap' }
