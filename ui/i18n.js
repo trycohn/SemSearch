@@ -89,6 +89,7 @@
 
       /* статус */
       'st.noLink': 'Нет связи с SemSearch', 'st.error': 'Ошибка: {e}', 'st.unknown': 'неизвестная',
+      'st.errDownload': 'Не удалось скачать модель', 'st.errModel': 'Не удалось загрузить модель',
       'st.loading': 'Загружаю модель поиска…', 'st.pFull': 'Пауза: полноэкранное приложение',
       'st.pProc': 'Пауза: запущен {p}', 'st.pProcAny': 'процесс из списка', 'st.pBatt': 'Пауза: работа от батареи',
       'st.paused': 'Индексация на паузе', 'st.indexing': 'Индексирую {what}: {a} из {b}', 'st.ixLabel': 'Индексация {what}',
@@ -103,7 +104,7 @@
       'sum.prefix': 'В индексе: {list}', 'sum.text': ['{n} документ', '{n} документа', '{n} документов'],
       'sum.code': ['{n} файл кода', '{n} файла кода', '{n} файлов кода'], 'sum.image': '{n} фото', 'sum.audio': '{n} аудио',
       'sum.video': '{n} видео', 'sum.names': ['{n} имя', '{n} имени', '{n} имён'], 'sum.namesBig': '{n} имён', 'sum.on': '{a} на {b}',
-      'dev.loading': 'Модель загружается…', 'dev.gpu': 'Модель работает на видеокарте', 'dev.cpu': 'Модель работает на процессоре',
+      'dev.none': 'Поиск по смыслу недоступен', 'dev.loading': 'Модель загружается…', 'dev.gpu': 'Модель работает на видеокарте', 'dev.cpu': 'Модель работает на процессоре',
 
       /* экран запуска */
       'boot.title': 'SemSearch', 'boot.starting': 'Запускаю SemSearch…', 'boot.firstRun': 'Первый запуск SemSearch', 'boot.ready': 'Готово',
@@ -111,7 +112,7 @@
       'boot.progress': 'Запуск',
       'boot.s.server': 'Запускаю сервер поиска', 'boot.s.index': 'Открываю индекс',
       'boot.s.download': 'Скачиваю модель EmbeddingGemma 2', 'boot.s.model': 'Загружаю модель',
-      'boot.s.modelGpu': 'Загружаю модель на видеокарту', 'boot.s.vectors': 'Загружаю векторы в память',
+      'boot.s.vectors': 'Загружаю векторы в память',
       'boot.s.watch': 'Включаю слежение за файлами',
       'boot.n.once': 'один раз', 'boot.n.of': '{a} из {b}', 'boot.n.got': 'скачано {a}',
       'boot.n.files': ['{n} файл', '{n} файла', '{n} файлов'], 'boot.n.chunks': ['{n} фрагмент', '{n} фрагмента', '{n} фрагментов'],
@@ -256,6 +257,7 @@
       'place.folder': 'in the “{name}” folder',
 
       'st.noLink': 'No connection to SemSearch', 'st.error': 'Error: {e}', 'st.unknown': 'unknown',
+      'st.errDownload': 'Couldn’t download the model', 'st.errModel': 'Couldn’t load the model',
       'st.loading': 'Loading the search model…', 'st.pFull': 'Paused: full-screen app',
       'st.pProc': 'Paused: {p} is running', 'st.pProcAny': 'a listed process', 'st.pBatt': 'Paused: on battery',
       'st.paused': 'Indexing paused', 'st.indexing': 'Indexing {what}: {a} of {b}', 'st.ixLabel': 'Indexing {what}',
@@ -268,16 +270,16 @@
       'mid.allDrives': 'Search by name covers all selected drives, AppData and Program Files included',
       'mid.oneDrive': 'Search by name covers the whole drive, AppData and Program Files included',
       'sum.prefix': 'Indexed: {list}', 'sum.text': ['{n} document', '{n} documents'],
-      'sum.code': ['{n} code file', '{n} code files'], 'sum.image': ['{n} photo', '{n} photos'], 'sum.audio': '{n} audio',
+      'sum.code': ['{n} code file', '{n} code files'], 'sum.image': ['{n} photo', '{n} photos'], 'sum.audio': ['{n} audio file', '{n} audio files'],
       'sum.video': ['{n} video', '{n} videos'], 'sum.names': ['{n} name', '{n} names'], 'sum.namesBig': '{n} names', 'sum.on': '{a} on {b}',
-      'dev.loading': 'The model is loading…', 'dev.gpu': 'The model runs on the GPU', 'dev.cpu': 'The model runs on the CPU',
+      'dev.none': 'Search by meaning is unavailable', 'dev.loading': 'The model is loading…', 'dev.gpu': 'The model runs on the GPU', 'dev.cpu': 'The model runs on the CPU',
 
       'boot.title': 'SemSearch', 'boot.starting': 'Starting SemSearch…', 'boot.firstRun': 'First start of SemSearch', 'boot.ready': 'Ready',
       'boot.opening': 'Opening the search window…', 'boot.openingFirst': 'Opening the search window — indexing continues there',
       'boot.progress': 'Startup',
       'boot.s.server': 'Starting the search server', 'boot.s.index': 'Opening the index',
       'boot.s.download': 'Downloading the EmbeddingGemma 2 model', 'boot.s.model': 'Loading the model',
-      'boot.s.modelGpu': 'Loading the model onto the GPU', 'boot.s.vectors': 'Loading vectors into memory',
+      'boot.s.vectors': 'Loading vectors into memory',
       'boot.s.watch': 'Watching files for changes',
       'boot.n.once': 'one time only', 'boot.n.of': '{a} of {b}', 'boot.n.got': '{a} downloaded',
       'boot.n.files': ['{n} file', '{n} files'], 'boot.n.chunks': ['{n} chunk', '{n} chunks'],

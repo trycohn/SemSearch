@@ -7,6 +7,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
     "allow-win-minimize",
+    "allow-win-toggle-maximize",
     "allow-win-hide",
     "allow-show-main",
     "allow-tray-hide",

@@ -271,9 +271,22 @@
     });
     return out.join(SS.t('none.and'));
   };
+  /* модель не запустилась: "download" | "other" | "" (запуск идёт или закончен) */
+  R.bootFail = (st) => (st && !st.ready && (st.state === 'error' || st.error) ? (st.boot && st.boot.error_kind) || 'other' : '');
   R.modelLoading = (st, settings, done) => {
     const dev = (st && st.device) || (settings && settings.info && settings.info.device);
-    if (done) return h('div.mload', R.check(22, 2.4), h('span', { text: SS.t('load.done') }));
+    if (done) return h('div.mload', { 'data-done': '1' }, R.check(22, 2.4), h('span', { text: SS.t('load.done') }));
+    /* экран запуска с ошибкой пропустили кнопкой «Искать по имени» — здесь то же сообщение и «Повторить» */
+    const fail = R.bootFail(st);
+    if (fail) {
+      const dl = fail === 'download';
+      return h('div.mload.fadein', { 'data-fail': '1' },
+        h('span.mfail', svg('M12 7v6 M12 16.5h.01 M10.3 3.6L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z', { s: 26, sw: 1.7 })),
+        h('span', { text: SS.t(dl ? 'boot.errDownload' : 'boot.errOther') }),
+        h('span.sub', { text: SS.t(dl ? 'boot.errDownloadNote' : 'boot.errOtherNote') }),
+        h('span.mbtns', h('button.prim', { type: 'button', 'data-retry': '1' }, SS.t('boot.retry')),
+          h('button.btn2', { type: 'button', 'data-go': 'name' }, SS.t('load.byName'))));
+    }
     return h('div.mload.fadein', R.ring(22, 2.4), h('span', { text: SS.t(dev === 'cuda' ? 'load.gpu' : 'load.any') }),
       h('span.sub', { text: SS.t('load.sub') }),
       h('button.btn2', { type: 'button', 'data-go': 'name', style: 'margin-top:4px;height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:4px;background:var(--surface)' }, SS.t('load.byName')));
@@ -467,7 +480,12 @@
   /* ---------- статус: kind = run | pause | done | load | plain ---------- */
   R.status = (s) => {
     if (!s) return { kind: 'plain', text: SS.t('st.noLink') };
-    if (s.state === 'error' || (s.error && !s.ready)) return { kind: 'plain', text: SS.t('st.error', { e: s.error || SS.t('st.unknown') }) };
+    if (s.state === 'error' || (s.error && !s.ready)) {
+      /* понятная фраза вместо текста исключения; само исключение — во всплывающей подсказке */
+      const k = s.boot && s.boot.error_kind;
+      return { kind: 'plain', title: s.error || '',
+        text: k ? SS.t(k === 'download' ? 'st.errDownload' : 'st.errModel') : SS.t('st.error', { e: s.error || SS.t('st.unknown') }) };
+    }
     if (s.state === 'loading' || !s.ready) return { kind: 'load', text: SS.t('st.loading') };
     if (s.paused || s.state === 'paused') {
       const p = s.paused || {};
@@ -504,6 +522,7 @@
     const cur = box.querySelector('.stl:not(.leave)');
     if (cur && cur.getAttribute('data-k') === key) {
       cur.querySelector('.stt').textContent = info.text;
+      cur.title = info.title || '';
       const pb = cur.querySelector('.pbar');
       if (pb && info.pct !== undefined) {
         pb.firstChild.style.transform = 'scaleX(' + (info.pct / 100).toFixed(4) + ')';
@@ -513,6 +532,7 @@
       return;
     }
     const l = h('span.stl', { 'data-k': key });
+    if (info.title) l.title = info.title;
     if (info.kind === 'run') l.appendChild(h('span.dot.pulse', { 'aria-hidden': 'true' }));
     if (info.kind === 'pause') l.appendChild(h('span.dot.idle', { 'aria-hidden': 'true' }));
     if (info.kind === 'load') l.appendChild(R.ring(14, 2.6));
@@ -539,7 +559,7 @@
     if (s.names && s.names.count) p.push(SS.t('sum.on', { a: namesCount(s.names.count), b: SS.drives(s.names.drives) || 'C:' }));
     return SS.t('sum.prefix', { list: p.join(' · ') });
   };
-  R.device = (s) => SS.t(!s || !s.ready ? 'dev.loading' : s.device === 'cuda' ? 'dev.gpu' : 'dev.cpu');
+  R.device = (s) => SS.t(R.bootFail(s) ? 'dev.none' : !s || !s.ready ? 'dev.loading' : s.device === 'cuda' ? 'dev.gpu' : 'dev.cpu');
 
   /* ---------- первая индексация ---------- */
   R.eta = (sec) => {

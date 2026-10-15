@@ -332,7 +332,8 @@
   const BOOT_W = { index: 4, download: 56, model: 26, vectors: 9, watch: 5 };
   const boot = { on: true, leaving: false, ready: false, keys: '', step: null, stepAt: 0, hk: '' };
   const bootKeys = (s) => ['index'].concat(s && s.boot && s.boot.first_run ? ['download'] : [], ['model', 'vectors', 'watch']);
-  const bootLabel = (k, s) => SS.t(k === 'model' && s && s.device === 'cuda' ? 'boot.s.modelGpu' : 'boot.s.' + k);
+  /* «на видеокарте» / «на процессоре» — в пометке справа, а не в названии шага: иначе оно повторяется дважды */
+  const bootLabel = (k) => SS.t('boot.s.' + k);
   function bootNote(k, state, s) {
     const b = (s && s.boot) || {};
     if (k === 'index' && state === 'done') {
@@ -480,11 +481,23 @@
       if (boot.on && !boot.ready && !boot.keys && S.status && S.status.ready) bootSkip();
       else bootPaint();
       footer();
+      syncMload();
       if (isStart()) startScreen();
     }
     const loading = !S.status || !S.status.ready;
     const busy = S.status && (S.status.state === 'indexing' || S.status.state === 'loading' || (S.status.names && !S.status.names.ready));
     stT = setTimeout(pollStatus, boot.on && loading ? 400 : busy ? 1000 : 2000);
+  }
+  /* запуск упал, а экран запуска пропустили: «Повторить» прямо в результатах, плашка сама сменится на загрузку */
+  async function retryBoot(btn) {
+    btn.disabled = true;
+    try { await SS.api('/api/boot/retry', { body: {} }); } catch (e) { if (e.status !== 409) SS.toast(SS.t('boot.retryFail')); }
+    btn.disabled = false;
+    await pollStatus();
+  }
+  function syncMload() {
+    const box = el.results.querySelector('.mload:not([data-done])');
+    if (box && box.hasAttribute('data-fail') !== !!R.bootFail(S.status)) box.replaceWith(R.modelLoading(S.status, S.settings, false));
   }
   /* модель догрузилась: галочка «Готово — можно искать», затем повтор запроса */
   function modelReady() {
@@ -540,6 +553,8 @@
     if (b) setTab(b.getAttribute('data-tab'));
   });
   el.results.addEventListener('click', (e) => {
+    const rb = e.target.closest('[data-retry]');
+    if (rb) { retryBoot(rb); return; }
     const go = e.target.closest('[data-go]');
     if (go) {
       let t = go.getAttribute('data-go');

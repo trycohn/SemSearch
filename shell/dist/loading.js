@@ -6,10 +6,10 @@
   var boot = window.__SEMSEARCH_BOOT || {};
   var TEXT = {
     ru: { starting: 'Запускаю SemSearch…', index: 'Открываю индекс', model: 'Загружаю модель', vectors: 'Загружаю векторы в память',
-      watch: 'Включаю слежение за файлами', progress: 'Запуск', min: 'Свернуть', hide: 'Скрыть в трей',
+      watch: 'Включаю слежение за файлами', progress: 'Запуск', min: 'Свернуть', max: 'Развернуть', hide: 'Скрыть в трей',
       trayStarting: 'Запускаю…', open: 'Открыть поиск', quit: 'Выйти из SemSearch' },
     en: { starting: 'Starting SemSearch…', index: 'Opening the index', model: 'Loading the model', vectors: 'Loading vectors into memory',
-      watch: 'Watching files for changes', progress: 'Startup', min: 'Minimize', hide: 'Hide to tray',
+      watch: 'Watching files for changes', progress: 'Startup', min: 'Minimize', max: 'Maximize', hide: 'Hide to tray',
       trayStarting: 'Starting…', open: 'Open search', quit: 'Quit SemSearch' }
   };
   var lang = boot.lang === 'en' || boot.lang === 'ru' ? boot.lang : boot.sys === 'en' || boot.sys === 'ru' ? boot.sys
@@ -47,6 +47,13 @@
   };
   document.addEventListener('DOMContentLoaded', translate);
   if (document.readyState !== 'loading') translate();
+  /* кнопки окна — как у страницы, которая придёт на смену: у главного окна есть «Развернуть», у настроек нет */
+  try {
+    if (T && T.window && T.window.getCurrentWindow().label !== 'main') {
+      var mx = document.getElementById('capMax');
+      if (mx) mx.parentNode.removeChild(mx);
+    }
+  } catch (e) { /* не в оболочке */ }
   document.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('[data-cmd]') : null;
     if (b && T && T.core) T.core.invoke(b.getAttribute('data-cmd')).catch(function () {});

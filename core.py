@@ -534,22 +534,28 @@ def model_cached():
 
 
 def model_cache_bytes():
-    """-> (байт в кэше модели, идёт ли докачка: есть *.incomplete)."""
+    """-> (байт в кэше модели, идёт ли докачка: есть *.incomplete).
+    Файл качается в blobs\\<etag>.incomplete. Без символических ссылок (обычный Windows без режима разработчика)
+    huggingface_hub переносит готовый файл из blobs в snapshots, поэтому считаем обе папки, а ссылки — нет:
+    иначе после каждого скачанного файла счётчик на экране запуска падал бы обратно."""
     try:
         from huggingface_hub import constants
 
-        d = os.path.join(constants.HF_HUB_CACHE, "models--" + MODEL_ID.replace("/", "--"), "blobs")
-        total, partial = 0, False
-        with os.scandir(d) as it:
-            for e in it:
-                try:
-                    total += e.stat().st_size
-                except OSError:
-                    continue
-                partial = partial or e.name.endswith(".incomplete")
-        return total, partial
-    except OSError:
+        d = os.path.join(constants.HF_HUB_CACHE, "models--" + MODEL_ID.replace("/", "--"))
+    except Exception:
         return 0, False
+    total, partial = 0, False
+    for root, _, files in os.walk(d):
+        for name in files:
+            p = os.path.join(root, name)
+            try:
+                if os.path.islink(p):
+                    continue
+                total += os.lstat(p).st_size
+            except OSError:
+                continue
+            partial = partial or name.endswith(".incomplete")
+    return total, partial
 
 
 def model_download_total():

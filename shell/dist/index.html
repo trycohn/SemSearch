@@ -10,6 +10,7 @@
 <body class="win" data-tauri-drag-region="deep">
 <header class="cap" data-tauri-drag-region="deep">
   <button type="button" class="cb" data-cmd="win_minimize" data-t="min" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg></button>
+  <button type="button" class="cb" id="capMax" data-cmd="win_toggle_maximize" data-t="max" aria-label="Развернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
   <button type="button" class="cb x" data-cmd="win_hide" data-t="hide" aria-label="Скрыть в трей"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg></button>
 </header>
 <!-- Заставка — первый кадр экрана запуска (design/Launch, ui/index.html #boot): тот же вид, пока backend не ответил -->
