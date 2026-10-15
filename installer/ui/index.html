@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>SemSearch</title>
+<link rel="stylesheet" href="style.css">
+<script src="i18n.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="iw" id="iw">
+
+<div class="tbar" data-tauri-drag-region>
+<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 6.5a5.5 5.5 0 1 1 11 0a5.5 5.5 0 1 1 -11 0ZM3 6.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z"></path><path d="M11 13a2 2 0 1 1 4 0a2 2 0 1 1 -4 0Z"></path></svg>
+<span class="ttl" id="ttl"></span>
+<div class="caps">
+<button class="cap" id="capMin" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap x" id="capClose" aria-label="Закрыть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+</div>
+
+<div class="view" id="view"></div>
+
+<div class="foot" id="foot">
+<div class="dd" id="ddLang" hidden><button class="btn2 ddb" aria-haspopup="listbox" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M3.5 9h17 M3.5 15h17 M12 3c-2.5 2.6-3.6 5.6-3.6 9s1.1 6.4 3.6 9 M12 3c2.5 2.6 3.6 5.6 3.6 9s-1.1 6.4-3.6 9"></path></svg><span class="ddl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button><div class="ddp" role="listbox" hidden></div></div>
+<div class="dd" id="ddTheme" hidden><button class="btn2 ddb" aria-haspopup="listbox" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-th="system"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"></path><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"></path></svg><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-th="light" hidden><path d="M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z M12 2.5v2 M12 19.5v2 M4.6 4.6l1.4 1.4 M18 18l1.4 1.4 M2.5 12h2 M19.5 12h2 M4.6 19.4L6 18 M18 6l1.4-1.4"></path></svg><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-th="dark" hidden><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg><span class="ddl"></span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button><div class="ddp" role="listbox" hidden></div></div>
+<button class="ghost lc" id="launchBtn" role="checkbox" aria-checked="true" hidden><span class="box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span><span id="launchTxt"></span></button>
+<span class="fnote" id="fnote" hidden></span>
+<a href="#" class="flink" id="flog" hidden></a>
+<div class="fbtns" id="fbtns"></div>
+</div>
+
+</div>
+</body>
+</html>

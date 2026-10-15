@@ -4,9 +4,9 @@ setlocal
 cd /d "%~dp0"
 rem Сборка Rust-частей: engine -> bin\semsearch-engine.exe, shell -> SemSearch.exe.
 rem Каждая часть собирается из своей папки: Cargo читает .cargo\config.toml от текущей папки вверх
-rem (у движка там статический CRT, и exe не требует VC++ Redistributable).
+rem (у движка и оболочки там статический CRT, и exe не требуют VC++ Redistributable).
 where cargo >nul 2>nul || (echo Нужен Rust: https://rustup.rs & exit /b 1)
-if defined RUSTFLAGS echo Внимание: задан RUSTFLAGS, он заменяет флаги из engine\.cargo\config.toml — движку понадобится VC++ Redistributable.
+if defined RUSTFLAGS echo Внимание: задан RUSTFLAGS, он заменяет флаги из engine\.cargo\config.toml и shell\.cargo\config.toml — exe понадобится VC++ Redistributable.
 
 echo === Движок имён: engine ===
 pushd engine || exit /b 1
