@@ -162,7 +162,8 @@ WebView2. Установить?» → `https://go.microsoft.com/fwlink/p/?LinkId
 - `setup://error` `{id, kind: "network"|"space"|"uac_denied"|"not_admin"|"cancelled"|"other", message, got?, total?}`
   — после `failed` у фатального шага; установщик ждёт `retry()` / `cancel()` / `start()`. У `mft` и `engine_del`
   (не фатальны) — только `failed` у шага, без `setup://error`.
-- `setup://done` `{mode, ok: true, mft_ok, root, data_dir}` — только после успешного прогона (ошибка приходит
+- `setup://done` `{mode, ok: true, mft_ok, root, data_dir, hotkey}` (`hotkey` — для экрана «Готово»: из `D\config.json`, иначе
+  как выберет программа: Ctrl+Alt+S, а если AltGr+S набирает букву в одной из раскладок — Ctrl+Alt+Space) — только после успешного прогона (ошибка приходит
   `setup://error`, `done` с `ok: false` ядро не шлёт). `mft_ok: false` — `mft` (или при удалении `engine_del`) был в
   плане и не удался; иначе `true`.
 
