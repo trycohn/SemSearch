@@ -6,7 +6,7 @@
   const el = {};
   ['win', 'caps', 'capMin', 'capMax', 'capHide', 'sbox', 'ibar', 'simchip', 'q', 'clr', 'ssep', 'imgb', 'imgfile', 'tabs', 'main',
     'results', 'pane', 'start', 'chips', 'fix', 'fixRows', 'eta', 'kgrid', 'dropovl', 'st', 'mid', 'pauseb', 'pauseLbl', 'setb',
-    'boot', 'bLogo', 'bDot', 'bErrIco', 'bTitle', 'bSub', 'bBar', 'bFill', 'bSteps', 'bErr', 'bRetry', 'bLog', 'bNames', 'bByName', 'bFoot'
+    'boot', 'bLogo', 'bDot', 'bErrIco', 'bTitle', 'bSub', 'bBar', 'bFill', 'bSteps', 'bErr', 'bRetry', 'bLog', 'bNames', 'bByName', 'bByName2', 'bFoot'
   ].forEach((id) => (el[id] = $(id)));
 
   const devCaps = /caps/.test(location.hash);
@@ -365,6 +365,7 @@
     const ready = !!(s && s.ready);
     const keys = bootKeys(s);
     let idx = ready ? keys.length : s ? keys.indexOf(b.step) : 0;
+    if (idx < 0 && err) idx = keys.indexOf(b.error_kind === 'download' && keys.indexOf('download') >= 0 ? 'download' : 'model');
     if (idx < 0) idx = 0;
     if (b.step !== boot.step) { boot.step = b.step; boot.stepAt = performance.now(); }
     /* строки: пересобираются, только если сменился сам список (появился шаг «скачиваю модель») */
@@ -399,11 +400,11 @@
       : ready ? SS.t('boot.ready') : SS.t(b.first_run ? 'boot.firstRun' : 'boot.title');
     el.bSub.textContent = err ? SS.t(b.error_kind === 'download' ? 'boot.errDownloadNote' : 'boot.errOtherNote')
       : ready ? SS.t(b.first_run ? 'boot.openingFirst' : 'boot.opening')
-      : (s ? bootLabel(keys[idx], s) : SS.t('boot.s.server')) + '…';
+      : s ? bootLabel(keys[idx], s) + '…' : SS.t('boot.starting');
     el.bSub.title = err && s.error ? s.error : '';
     el.bBar.hidden = err;
     el.bErr.hidden = !err;
-    el.bNames.hidden = ready;
+    el.bNames.hidden = ready || err;
     /* полоса: сделанные шаги + доля текущего (скачивание — по байтам, остальное ползёт к 90% своей доли) */
     const sum = keys.reduce((a, k) => a + BOOT_W[k], 0);
     let pct = 100;
@@ -447,6 +448,13 @@
     el.boot.hidden = true;
   }
   el.bByName.addEventListener('click', () => bootLeave(true));
+  /* пришли с заставки оболочки (#boot): экран запуска продолжает её кадр, без повторного появления */
+  if (/(^|[#&])boot($|&)/.test(location.hash)) {
+    el.win.classList.remove('w-launch');
+    el.boot.classList.add('calm');
+    bootPaint();
+  }
+  el.bByName2.addEventListener('click', () => bootLeave(true));
   el.bRetry.addEventListener('click', async () => {
     try { await SS.api('/api/boot/retry', { body: {} }); } catch (e) { if (e.status !== 409) SS.toast(SS.t('boot.retryFail')); }
     pollStatus();

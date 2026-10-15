@@ -1,6 +1,9 @@
-/* Встроенные страницы оболочки: заставка запуска (design/MainLive, Motion «Запуск программы») и запасное меню трея. */
-:root{color-scheme:light dark;--bg:#f3f3f3;--text:#1a1a1a;--muted:#5c5c5c;--line2:#cfcfcf;--accent:#005fb8;--onAccent:#ffffff;--hover:#ebebeb;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
-@media (prefers-color-scheme:dark){:root{--bg:#202020;--text:#f2f2f2;--muted:#bdbdbd;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333}}
+/* Встроенные страницы оболочки: заставка запуска (первый кадр design/Launch, как #boot в ui/index.html) и запасное меню трея.
+   Тема и язык — из window.__SEMSEARCH_BOOT (shell, config.json): loading.js ставит на <html> класс light/dark. */
+:root{color-scheme:light dark;--bg:#f3f3f3;--surface:#ffffff;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--line:#e1e1e1;--line2:#cfcfcf;--accent:#005fb8;--onAccent:#ffffff;--hover:#ebebeb;--mark:#005fb8;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+@media (prefers-color-scheme:dark){:root:not(.light){--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff}}
+:root.dark{--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff;color-scheme:dark}
+:root.light{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font:14px/1.45 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;user-select:none;cursor:default}
 button{font:inherit;color:inherit;cursor:default}
@@ -12,15 +15,29 @@ body.win{background:var(--bg);color:var(--text);display:flex;flex-direction:colu
 .cb:hover{background:var(--hover)}
 .cb.x:hover{background:#c42b1c;color:#ffffff}
 .cb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding-bottom:32px}
+.center{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
 /* показывается, только если запуск дольше 400 мс: появление .3 с с 85% */
-.splash{display:flex;flex-direction:column;align-items:center;gap:16px;animation:splash .3s var(--eo) .4s both}
+.bin{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;animation:splash .3s var(--eo) .4s both}
 @keyframes splash{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
-.tile{width:72px;height:72px;border-radius:16px;background:var(--accent);color:var(--onAccent);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(0,0,0,.18)}
-.lbl{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.blogo{width:72px;height:72px;display:flex;align-items:center;justify-content:center;color:var(--mark)}
+.blogo svg{overflow:visible}
+.bdot{transform-box:view-box;transform-origin:108.04px 106.54px;animation:orbit 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.btitle{margin:20px 0 0;font-size:22px;font-weight:600;line-height:1.3}
+.bsub{margin:6px 0 0;min-height:21px;font-size:14px;color:var(--muted);text-align:center}
+.bbar{width:280px;height:4px;margin-top:20px;border-radius:2px;background:var(--line2);overflow:hidden}
+.bbar>div{width:2%;height:100%;border-radius:2px;background:var(--accent)}
+.bsteps{width:100%;margin-top:28px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.bstep{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-top:1px solid var(--line);font-size:13px;color:var(--faint)}
+.bstep:first-child{border-top:0}
+.bstep.active{color:var(--text);font-weight:600}
+.bi{flex:none;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.wait{width:6px;height:6px;border-radius:3px;background:var(--line2)}
+.bl{flex:1;min-width:0}
 .spin{flex:none;animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.status{margin:0;min-height:18px;max-width:520px;padding:0 24px;text-align:center;color:var(--muted);font-size:12px}
+.status{margin:16px 0 0;min-height:18px;max-width:520px;padding:0 8px;text-align:center;color:var(--muted);font-size:12px;user-select:text}
+.status:empty{display:none}
 
 /* запасное меню трея (пока backend не ответил) — как design/Tray.dc.html */
 body.tray{background:transparent;color:#f2f2f2;overflow:hidden}

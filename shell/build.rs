@@ -16,6 +16,7 @@ fn main() {
             "get_hotkey",
             "set_hotkey",
             "page_ready",
+            "set_lang",
         ]),
     ))
     .expect("tauri-build failed");

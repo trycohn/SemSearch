@@ -106,7 +106,7 @@
       'dev.loading': 'Модель загружается…', 'dev.gpu': 'Модель работает на видеокарте', 'dev.cpu': 'Модель работает на процессоре',
 
       /* экран запуска */
-      'boot.title': 'SemSearch', 'boot.firstRun': 'Первый запуск SemSearch', 'boot.ready': 'Готово',
+      'boot.title': 'SemSearch', 'boot.starting': 'Запускаю SemSearch…', 'boot.firstRun': 'Первый запуск SemSearch', 'boot.ready': 'Готово',
       'boot.opening': 'Открываю окно поиска…', 'boot.openingFirst': 'Открываю окно поиска — индексация пойдёт в нём',
       'boot.progress': 'Запуск',
       'boot.s.server': 'Запускаю сервер поиска', 'boot.s.index': 'Открываю индекс',
@@ -120,7 +120,7 @@
       'boot.names': 'Пока ждём — поиск по имени уже работает', 'boot.byName': 'Искать по имени',
       'boot.errDownload': 'Не удалось скачать модель', 'boot.errDownloadNote': 'Проверьте подключение к интернету — модель скачивается один раз.',
       'boot.errOther': 'Не удалось загрузить модель', 'boot.errOtherNote': 'Подробности — в журнале.',
-      'boot.retry': 'Повторить', 'boot.log': 'Открыть журнал', 'boot.noModel': 'Поиск по имени работает и без модели',
+      'boot.retry': 'Повторить', 'boot.log': 'Открыть журнал', 'boot.logLink': 'открыть журнал', 'boot.noModel': 'Поиск по имени работает и без модели',
       'boot.foot': 'открыть из любой программы — {hk}', 'boot.retryFail': 'Не удалось перезапустить',
 
       /* трей */
@@ -272,7 +272,7 @@
       'sum.video': ['{n} video', '{n} videos'], 'sum.names': ['{n} name', '{n} names'], 'sum.namesBig': '{n} names', 'sum.on': '{a} on {b}',
       'dev.loading': 'The model is loading…', 'dev.gpu': 'The model runs on the GPU', 'dev.cpu': 'The model runs on the CPU',
 
-      'boot.title': 'SemSearch', 'boot.firstRun': 'First start of SemSearch', 'boot.ready': 'Ready',
+      'boot.title': 'SemSearch', 'boot.starting': 'Starting SemSearch…', 'boot.firstRun': 'First start of SemSearch', 'boot.ready': 'Ready',
       'boot.opening': 'Opening the search window…', 'boot.openingFirst': 'Opening the search window — indexing continues there',
       'boot.progress': 'Startup',
       'boot.s.server': 'Starting the search server', 'boot.s.index': 'Opening the index',
@@ -286,7 +286,7 @@
       'boot.names': 'While you wait, search by name already works', 'boot.byName': 'Search by name',
       'boot.errDownload': 'Couldn’t download the model', 'boot.errDownloadNote': 'Check your internet connection — the model is downloaded only once.',
       'boot.errOther': 'Couldn’t load the model', 'boot.errOtherNote': 'The details are in the log.',
-      'boot.retry': 'Try again', 'boot.log': 'Open the log', 'boot.noModel': 'Search by name works without the model',
+      'boot.retry': 'Try again', 'boot.log': 'Open the log', 'boot.logLink': 'open the log', 'boot.noModel': 'Search by name works without the model',
       'boot.foot': 'open from any app — {hk}', 'boot.retryFail': 'Couldn’t restart',
 
       'tray.connecting': 'Connecting…', 'tray.open': 'Open search', 'tray.pause': 'Pause indexing',

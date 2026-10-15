@@ -313,7 +313,53 @@ def scenario(name):
         base.update(state="paused", kinds=kinds(vid=(482, 612)), paused={"reason": reason, "detail": "cs2.exe" if name == "process" else None})
     elif name == "loading":
         base.update(ready=False, device=None, state="loading", names=dict(NAMES_ST, ready=False, count=1204331, progress=0.57))
+    base["boot"] = {"step": None, "first_run": False, "download": None, "gpu_note": None, "chunks": 48210, "error_kind": None}
+    if name in BOOT_PLANS:
+        boot_state(name, base)
     return base
+
+
+# Экран запуска: шаги по времени с момента /dev/scenario/<boot|firstrun|cpu|booterror|bootnet> (или /api/boot/retry)
+BOOT_PLANS = {
+    "boot": [("index", 0.6), ("model", 5.0), ("vectors", 1.2), ("watch", 0.6)],
+    "cpu": [("index", 0.6), ("model", 4.0), ("vectors", 1.2), ("watch", 0.6)],
+    "firstrun": [("index", 0.6), ("download", 9.0), ("model", 4.0), ("vectors", 0.8), ("watch", 0.6)],
+    "booterror": [("index", 0.6), ("model", 3.0), ("fail", 0)],
+    "bootnet": [("index", 0.6), ("download", 3.0), ("fail", 0)],
+    # остановиться на шаге — для скриншотов
+    "hold-download": [("index", 0.6), ("download", 900.0)],
+    "hold-model": [("index", 0.6), ("model", 900.0)],
+}
+
+
+def boot_state(name, base):
+    t = time.time() - STATE.get("t0", time.time())
+    b = base["boot"]
+    b.update(first_run=name in ("firstrun", "bootnet", "hold-download"), chunks=None)
+    last = "index"
+    for step, dur in BOOT_PLANS[name]:
+        if step == "fail":
+            b["step"] = last
+            b["error_kind"] = "download" if name == "bootnet" else "other"
+            base.update(ready=False, device=None, state="error",
+                        error="OSError: We couldn't connect to 'https://huggingface.co'" if name == "bootnet" else "RuntimeError: CUDA error: out of memory")
+            return
+        if t < dur:
+            b["step"] = step
+            if step == "download":
+                total = int(1.46 * GB)
+                b["download"] = {"done": int(total * min(1.0, t / dur)), "total": total}
+            if step in ("vectors", "watch"):
+                b["gpu_note"] = "busy" if name == "cpu" else None
+            if step == "watch":
+                b["chunks"] = 48210
+            base.update(ready=False, device=("cpu" if name == "cpu" else "cuda") if step in ("vectors", "watch") else None,
+                        state="loading", names=dict(NAMES_ST, ready=False, count=1204331, progress=0.57))
+            return
+        t -= dur
+        last = step
+    b.update(step=None, gpu_note="busy" if name == "cpu" else None, chunks=48210)
+    base.update(ready=True, device="cpu" if name == "cpu" else "cuda")
 
 
 STATE = {"scenario": "video", "before_pause": "video"}
@@ -322,7 +368,7 @@ SETTINGS = {
     "drives": {"available": [{"drive": "C:", "label": "Windows", "fs": "NTFS"}, {"drive": "D:", "label": "Data", "fs": "NTFS"}], "selected": ["C:"]},
     "exclude_dirs": ["node_modules", "venv", "__pycache__", "AppData", "build", "target", "Temp", "Cache", "env", "site-packages", "dist", "obj",
                      "bin", "Library", "packages", "vendor", "$Recycle.Bin", "System Volume Information", "WinSxS", "Logs", "cache"],
-    "hotkey": "ctrl+alt+s", "theme": "system", "accent": "#005fb8",
+    "hotkey": "ctrl+alt+s", "theme": "system", "accent": "#005fb8", "lang": "system", "lang_system": "ru",
     "pause_on_fullscreen": True, "pause_processes": ["cs2.exe"], "pause_on_battery": False,
     "video_frame_every_sec": 10, "video_max_frames": 40, "audio_segment_sec": 30, "audio_max_segments": 10, "max_text_mb": 2, "max_pdf_pages": 80,
     "info": {"model": "EmbeddingGemma 2", "device": "cuda", "index_bytes": int(1.3 * GB), "rescan_minutes": 360, "name_rescan_minutes": 1440, "failed": 214},
@@ -382,7 +428,7 @@ def thumb(chunk: int):
 def api_search(q: str = "", tab: str = "all"):
     if STATE.get("delay"):
         time.sleep(STATE["delay"])
-    if STATE["scenario"] == "loading" and tab != "name":
+    if (STATE["scenario"] == "loading" or not scenario(STATE["scenario"])["ready"]) and tab != "name":
         return JSONResponse({"detail": "модель ещё загружается"}, 503)
     return search(q, tab)
 
@@ -441,6 +487,14 @@ async def api_pause(request: Request):
         STATE["before_pause"], STATE["scenario"] = STATE["scenario"], "paused"
     elif not paused and STATE["scenario"] == "paused":
         STATE["scenario"] = STATE["before_pause"] if STATE["before_pause"] != "paused" else "video"
+    return {"ok": True}
+
+
+@app.post("/api/boot/retry")
+async def api_boot_retry():
+    STATE["t0"] = time.time()
+    if STATE["scenario"] in ("booterror", "bootnet"):
+        STATE["scenario"] = "boot" if STATE["scenario"] == "booterror" else "firstrun"
     return {"ok": True}
 
 
@@ -506,7 +560,17 @@ def dev_shell(name: str):
 @app.get("/dev/scenario/{name}")
 def dev_scenario(name: str):
     STATE["scenario"] = name
+    STATE["t0"] = time.time()
     return {"scenario": name}
+
+
+@app.get("/dev/lang/{lang}")
+def dev_lang(lang: str, system: str = None):
+    """Язык: /dev/lang/<system|ru|en>?system=<ru|en> — как будто сменили в настройках (окна подхватят при опросе)."""
+    SETTINGS["lang"] = lang
+    if system:
+        SETTINGS["lang_system"] = system
+    return {"lang": lang, "lang_system": SETTINGS["lang_system"]}
 
 
 @app.get("/dev/delay/{ms}")

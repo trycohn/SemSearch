@@ -51,6 +51,8 @@ struct Shell {
     ignore_clicks_until: Mutex<Option<Instant>>,
     /// Last navigation per window label (to avoid repeating it while the page commits).
     navs: Mutex<HashMap<String, (Url, Instant)>>,
+    /// UI language in effect: "ru" | "en" (config.json "lang" at start, then set_lang from the pages).
+    lang: Mutex<&'static str>,
 }
 
 #[derive(Default)]
@@ -61,6 +63,32 @@ struct Hotkey {
 
 fn shell(app: &AppHandle) -> tauri::State<'_, Shell> {
     app.state::<Shell>()
+}
+
+/// The shell's own texts (window titles, errors, loading-page status) in the UI language.
+fn tr(app: &AppHandle, ru: &str, en: &str) -> String {
+    (if *shell(app).lang.lock().unwrap() == "en" { en } else { ru }).to_string()
+}
+
+/// Runs before every page of a window: language and theme for the bundled loading page (dist/), so it is drawn
+/// in the right language and colours before the backend answers; ui/i18n.js also starts from it.
+fn boot_script(app: &AppHandle) -> String {
+    let s = shell(app);
+    let lang = *s.lang.lock().unwrap();
+    let info = serde_json::json!({
+        "lang": lang, "sys": util::system_lang(), "theme": s.cfg.theme, "accent": s.cfg.accent,
+    });
+    format!("window.__SEMSEARCH_BOOT = {info};")
+}
+
+/// Window titles that depend on the language (taskbar, Alt+Tab).
+fn retitle(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.set_title(&tr(app, "Настройки — SemSearch", "Settings — SemSearch"));
+    }
+    if let Some(w) = app.get_webview_window("tray") {
+        let _ = w.set_title(&tr(app, "SemSearch — меню", "SemSearch — menu"));
+    }
 }
 
 // ---------------------------------------------------------------- windows & pages
@@ -105,6 +133,7 @@ fn page_bg() -> Color {
 fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow> {
     WebviewWindowBuilder::new(app, "main", initial_url(app, "main"))
         .title("SemSearch")
+        .initialization_script(&boot_script(app))
         .inner_size(1100.0, 760.0)
         .min_inner_size(760.0, 520.0)
         .center()
@@ -122,7 +151,8 @@ fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow> {
 
 fn build_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     WebviewWindowBuilder::new(app, "settings", initial_url(app, "settings"))
-        .title("Настройки — SemSearch")
+        .title(tr(app, "Настройки — SemSearch", "Settings — SemSearch"))
+        .initialization_script(&boot_script(app))
         .inner_size(880.0, 900.0)
         .min_inner_size(600.0, 500.0)
         .center()
@@ -150,7 +180,8 @@ fn show_if_hidden(w: &WebviewWindow) {
 
 fn build_tray(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let w = WebviewWindowBuilder::new(app, "tray", initial_url(app, "tray"))
-        .title("SemSearch — меню")
+        .title(tr(app, "SemSearch — меню", "SemSearch — menu"))
+        .initialization_script(&boot_script(app))
         .inner_size(TRAY_W, TRAY_H)
         .resizable(false)
         .maximizable(false)
@@ -403,7 +434,7 @@ fn apply_hotkey(app: &AppHandle, accel: &str) -> Result<(), String> {
             Shortcut::from_str(&normalize_accel(accel))
                 .map_err(|e| {
                     log(&format!("hotkey {accel:?}: {e}"));
-                    format!("Неверное сочетание клавиш: {}", pretty_accel(accel))
+                    format!("{}: {}", tr(app, "Неверное сочетание клавиш", "Invalid shortcut"), pretty_accel(accel))
                 })?,
         )
     };
@@ -424,10 +455,11 @@ fn apply_hotkey(app: &AppHandle, accel: &str) -> Result<(), String> {
                     hk.shortcut = Some(o);
                 }
             }
-            return Err(format!(
-                "Не удалось назначить {}: это сочетание уже занято другой программой.",
-                pretty_accel(accel)
-            ));
+            return Err(if *s.lang.lock().unwrap() == "en" {
+                format!("Couldn't set {}: another program already uses this shortcut.", pretty_accel(accel))
+            } else {
+                format!("Не удалось назначить {}: это сочетание уже занято другой программой.", pretty_accel(accel))
+            });
         }
         hk.shortcut = Some(n);
     }
@@ -492,9 +524,8 @@ async fn quit_app(app: AppHandle) {
 #[tauri::command]
 async fn pick_folder(window: WebviewWindow) -> Option<String> {
     let w = window.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        w.dialog().file().set_parent(&w).set_title("Выберите папку").blocking_pick_folder()
-    })
+    let title = tr(window.app_handle(), "Выберите папку", "Choose a folder");
+    tauri::async_runtime::spawn_blocking(move || w.dialog().file().set_parent(&w).set_title(title).blocking_pick_folder())
     .await
     .ok()
     .flatten()
@@ -515,7 +546,19 @@ async fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     }
     let r = if enabled { enable_autostart() } else { m.disable().map_err(|e| e.to_string()) };
     log(&format!("autostart -> {enabled}: {r:?}"));
-    r.map_err(|e| format!("Не удалось изменить автозапуск: {e}"))
+    r.map_err(|e| format!("{}: {e}", tr(&app, "Не удалось изменить автозапуск", "Couldn't change startup with Windows")))
+}
+
+/// The pages report the UI language they show ("ru" | "en"): the shell's own texts and window titles follow it.
+#[tauri::command]
+async fn set_lang(app: AppHandle, lang: String) {
+    let l: &'static str = if lang == "en" { "en" } else { "ru" };
+    let s = shell(&app);
+    let old = std::mem::replace(&mut *s.lang.lock().unwrap(), l);
+    if old != l {
+        log(&format!("language = {l}"));
+        retitle(&app);
+    }
 }
 
 // ---------------------------------------------------------------- autostart
@@ -609,7 +652,12 @@ fn sync_windows(app: &AppHandle) {
             continue; // still loading its initial page
         }
         let target = if ready && !s.cfg.is_backend_url(&cur) {
-            Some(s.cfg.page_url(route(&label)))
+            let mut u = s.cfg.page_url(route(&label));
+            // from the bundled loading page: the backend's launch screen continues it without replaying its entrance
+            if is_local(&cur) && label == "main" {
+                u.set_fragment(Some("boot"));
+            }
+            Some(u)
         } else if !ready && !is_local(&cur) {
             Url::parse(LOCAL_ORIGIN).and_then(|u| u.join(local_page(&label))).ok()
         } else {
@@ -688,7 +736,8 @@ fn supervisor(app: AppHandle) {
                 }
                 if s.cfg.no_backend {
                     if !ready {
-                        set_status(&app, &format!("Жду сервер поиска на {} (SEMSEARCH_NO_BACKEND=1)…", s.cfg.base()));
+                        let wait = tr(&app, "Жду сервер поиска на", "Waiting for the search server at");
+                        set_status(&app, &format!("{wait} {} (SEMSEARCH_NO_BACKEND=1)…", s.cfg.base()));
                     }
                 } else if child == ChildState::None && ever_ready && misses < 3 {
                     // a backend we did not start went away: give it a moment (it may be restarting) before we start ours
@@ -697,19 +746,27 @@ fn supervisor(app: AppHandle) {
                     if wait == 0 {
                         match s.backend.spawn(&s.cfg) {
                             Ok(()) => set_status(&app, ""),
-                            Err(e) => set_status(&app, &format!("Не удалось запустить сервер поиска: {e}")),
+                            Err(e) => set_status(
+                                &app,
+                                &format!("{}: {e}", tr(&app, "Не удалось запустить сервер поиска", "Couldn't start the search server")),
+                            ),
                         }
                     } else {
+                        let en = *s.lang.lock().unwrap() == "en";
                         let code = match *s.backend.last_exit.lock().unwrap() {
+                            Some(c) if en => format!(" (code {c})"),
                             Some(c) => format!(" (код {c})"),
                             None => String::new(),
                         };
-                        if !matches!(child, ChildState::None) || !s.status.lock().unwrap().starts_with("Не удалось") {
+                        let failed = { let st = s.status.lock().unwrap(); st.starts_with("Не удалось") || st.starts_with("Couldn't") };
+                        if !matches!(child, ChildState::None) || !failed {
                             let log_file = s.cfg.data.join("semsearch.log");
-                            set_status(
-                                &app,
-                                &format!("Сервер поиска остановился{code}. Перезапуск через {wait} с… Подробности: {}", log_file.display()),
-                            );
+                            let text = if en {
+                                format!("The search server stopped{code}. Restarting in {wait} s… Details: {}", log_file.display())
+                            } else {
+                                format!("Сервер поиска остановился{code}. Перезапуск через {wait} с… Подробности: {}", log_file.display())
+                            };
+                            set_status(&app, &text);
                         }
                     }
                 }
@@ -793,6 +850,7 @@ fn main() {
         log(note);
     }
 
+    let lang = util::resolve_lang(&cfg.lang);
     let state = Shell {
         cfg,
         backend: Backend::new(),
@@ -803,6 +861,7 @@ fn main() {
         tray_blur: Mutex::new(None),
         ignore_clicks_until: Mutex::new(None),
         navs: Mutex::new(HashMap::new()),
+        lang: Mutex::new(lang),
     };
 
     let app = tauri::Builder::default()
@@ -843,7 +902,8 @@ fn main() {
             set_autostart,
             get_hotkey,
             set_hotkey,
-            page_ready
+            page_ready,
+            set_lang
         ])
         .on_window_event(|window, event| match event {
             // closing main (Alt+F4 etc.) only hides it — SemSearch keeps running in the tray

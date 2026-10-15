@@ -28,6 +28,11 @@ pub struct Config {
     pub hotkey: String,
     /// `--hidden` on the command line (autostart): start in the tray.
     pub hidden: bool,
+    /// config.json "lang": "system" | "ru" | "en" (the UI language; "system" follows Windows).
+    pub lang: String,
+    /// config.json "theme" ("system" | "light" | "dark") and "accent" ("#rrggbb") for the bundled loading page.
+    pub theme: String,
+    pub accent: String,
     /// SEMSEARCH_DEV_URL, always ending with "/".
     dev_url: Option<Url>,
     /// Backend in use: port and session token. Set when the shell attaches to a running backend or spawns one.
@@ -68,7 +73,22 @@ impl Config {
         );
         let hidden = std::env::args().skip(1).any(|a| a == "--hidden");
         let backend = Mutex::new((port, None));
-        Config { root, data, data_note, port, dev, no_backend, hotkey, hidden, dev_url, backend }
+        let text = |key: &str, ok: &dyn Fn(&str) -> bool, default: &str| {
+            json.as_ref()
+                .and_then(|v| v.get(key))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| ok(s))
+                .unwrap_or_else(|| default.to_string())
+        };
+        let lang = text("lang", &|s| matches!(s, "system" | "ru" | "en"), "system");
+        let theme = text("theme", &|s| matches!(s, "system" | "light" | "dark"), "system");
+        let accent = text(
+            "accent",
+            &|s| s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit()),
+            "#005fb8",
+        );
+        Config { root, data, data_note, port, dev, no_backend, hotkey, hidden, lang, theme, accent, dev_url, backend }
     }
 
     /// Base URL of the pages, always ending with "/": SEMSEARCH_DEV_URL or http://127.0.0.1:<port of the backend in use>/.
@@ -224,6 +244,27 @@ fn now_string() -> String {
 }
 
 // ---------------------------------------------------------------- Win32 helpers
+
+/// Language of the Windows UI for SemSearch: "ru" when it is Russian, otherwise "en"
+/// (the backend's i18n.py and the pages' ui/i18n.js decide the same way).
+pub fn system_lang() -> &'static str {
+    use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
+    const LANG_RUSSIAN: u16 = 0x19;
+    if unsafe { GetUserDefaultUILanguage() } & 0x3FF == LANG_RUSSIAN {
+        "ru"
+    } else {
+        "en"
+    }
+}
+
+/// "system" | "ru" | "en" -> "ru" | "en".
+pub fn resolve_lang(pref: &str) -> &'static str {
+    match pref {
+        "ru" => "ru",
+        "en" => "en",
+        _ => system_lang(),
+    }
+}
 
 /// Windows "app mode" is dark (HKCU\...\Themes\Personalize\AppsUseLightTheme == 0).
 pub fn system_dark() -> bool {

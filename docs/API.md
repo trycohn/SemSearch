@@ -120,14 +120,25 @@ SearchResponse = {
     "current": { "kind": "image", "done": 11280, "total": 18204 } | null,
     "names": { "count": int, "drives": ["C:"], "engine": "mft"|"walk"|"python", "ready": bool, "updated": float|null,
                "progress": float|null /*0..1 во время пересборки, если известно*/ },
-    "eta_sec": int|null, "watching": bool, "throttle": str|null, "index_bytes": int }
+    "eta_sec": int|null, "watching": bool, "throttle": str|null, "index_bytes": int,
+    "boot": { "step": "index"|"download"|"model"|"vectors"|"watch"|null,   // шаг запуска; null — запуск закончен,
+                                                                       // при ошибке — шаг, на котором упали
+               "first_run": bool,                                       // модели не было в кэше: будет шаг download
+               "download": { "done": int, "total": int|null } | null,   // байт скачано / всего (null — сеть не сказала)
+               "gpu_note": null|"unsupported"|"busy"|"failed",         // почему модель на процессоре
+               "chunks": int|null,                                      // фрагментов загружено в память
+               "error_kind": null|"download"|"other" } }              // модель не скачалась / другой сбой
   ```
+  Экран запуска (`ui/index.html #boot`) показывает эти шаги, пока `ready` = false.
+- `POST /api/boot/retry {}` — запуск упал (`state` = "error"): повторить без перезапуска программы; 409, если не падал.
 - `POST /api/pause {"paused": bool}`, `POST /api/rescan {}`, `POST /api/rebuild {}` (стереть индекс содержимого и собрать заново).
 - `GET /api/settings` →
   ```
   { "content_roots": [{ "path": str, "files": int }],
     "drives": { "available": [{ "drive": "C:", "label": str, "fs": "NTFS" }], "selected": ["C:"] },
     "exclude_dirs": [str], "hotkey": "ctrl+alt+s", "theme": "system"|"light"|"dark", "accent": "#005fb8",
+    "lang": "system"|"ru"|"en",   // язык интерфейса; system — как в Windows (русский → ru, иначе en)
+    "lang_system": "ru"|"en",      // только чтение: во что превращается system на этой машине
     "pause_on_fullscreen": bool, "pause_processes": [str], "pause_on_battery": bool,
     "video_frame_every_sec": int, "video_max_frames": int, "audio_segment_sec": int, "audio_max_segments": int,
     "max_text_mb": int, "max_pdf_pages": int,
@@ -136,6 +147,7 @@ SearchResponse = {
               "name_rescan_minutes": int, "failed": int, "foreign_skipped": int, "copies": int } }
   ```
 - `POST /api/settings {…любые редактируемые ключи выше; content_roots — список строк, drives — список выбранных или null (все несъёмные)…}` → `{"ok": true, "restart": bool}`.
+  Подписи, которые собирает backend (`crumbs`, `type`, `page_label`, `loc` и `text` у hits, `reason`, `err`, тексты ошибок `detail`), — на языке `lang`.
 - `GET /api/failed?limit=200` → `{"total": int, "items": [{ "path", "err" }]}`.
 - `GET /api/processes` → `{"items": ["cs2.exe", …]}` — имена запущенных процессов (для «Добавить процесс»).
 - `POST /api/open_log {}` — открыть `D\semsearch.log`.
@@ -160,6 +172,9 @@ UI проверяет `window.__TAURI__`; без него (обычный бра
 | `pick_folder` | — | `string \| null` — системный выбор папки |
 | `get_autostart` / `set_autostart` | `{enabled: bool}` | `bool` / — |
 | `get_hotkey` / `set_hotkey` | `{accel: "ctrl+alt+s"}` | `string` / `null` или текст ошибки |
+| `set_lang` | `{lang: "ru"\|"en"}` | — язык, которым страницы сейчас показывают интерфейс: на нём shell пишет свои тексты (заголовки окон, ошибки, строку на заставке) |
+
+До загрузки любой страницы shell выполняет в окне `window.__SEMSEARCH_BOOT = {lang, sys, theme, accent}` (из `config.json` и языка Windows): по нему встроенная заставка (`shell/dist`) сразу рисуется на нужном языке и в нужной теме, а `ui/i18n.js` берёт начальный язык. С заставки главное окно переходит на `/#boot` — экран запуска продолжает её кадр без повторного появления.
 
 События shell → UI (`__TAURI__.event.listen`): `focus-search` (главное окно: фокус в поле, выделить текст), `tray-shown` (попап: обновить статус).
 

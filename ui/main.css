@@ -366,3 +366,8 @@ html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;an
 .boot .bfoot{display:flex;justify-content:center;gap:12px;padding:0 16px 16px;font-size:12px;color:var(--faint)}
 .boot .bfoot:empty{display:none}
 .win .reveal{animation:winin .32s var(--eo) both}
+.boot .berr .lnk{padding:0;border:0;background:none;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.boot .berr .lnk:hover{color:var(--text)}
+.win .boot.calm .blogo,.win .boot.calm .btitle,.win .boot.calm .bsub,.win .boot.calm .bbar,.win .boot.calm .bsteps,.win .boot.calm .bstep.rs{animation:none}
+@media (prefers-reduced-motion:reduce){.win .boot .bdot{animation:none!important}}
+html.rm .win .boot .bdot{animation:none!important}
