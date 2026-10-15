@@ -1,6 +1,7 @@
 // Bundled placeholder page: shown by the shell until the backend answers (window "main"/"settings" -> index.html,
 // window "tray" -> tray.html). The shell pushes an extra status line via window.__semsearchStatus(text) and sets
 // window.__SEMSEARCH_BOOT = {lang, sys, theme, accent} before the page runs (language and theme from config.json).
+// The second argument of __semsearchStatus marks the text as a problem (server could not start) and draws it as one.
 (function () {
   var T = window.__TAURI__;
   var boot = window.__SEMSEARCH_BOOT || {};
@@ -39,11 +40,12 @@
   }
 
   var def = null;
-  window.__semsearchStatus = function (text) {
+  window.__semsearchStatus = function (text, isErr) {
     var el = document.getElementById('status');
     if (!el || typeof text !== 'string') return;
     if (def === null) def = el.textContent;
     el.textContent = text || def;
+    el.classList.toggle('err', !!(isErr && text)); /* сервер не запустился — это ошибка, а не ход запуска */
   };
   document.addEventListener('DOMContentLoaded', translate);
   if (document.readyState !== 'loading') translate();

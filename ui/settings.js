@@ -47,6 +47,21 @@
     SS.setLang(S.lang, S.lang_system);
     render();
     pageReady();
+    hotkeyCheck();
+  }
+  /* при запуске оболочка не смогла занять горячую клавишу (её держит другая программа или ещё не закрывшийся прежний
+     SemSearch; оболочка пробует снова несколько минут): сказать об этом, а не показывать клавишу, которая не работает */
+  let hkBusy = false;
+  function hotkeyCheck() {
+    if (!SS.tauri || !S || !S.hotkey || capturing) return;
+    SS.invoke('get_hotkey').then((v) => {
+      if (capturing) return;
+      if (!v) {
+        $('hkErr').textContent = SS.t('set.hkBusy', { k: SS.caps(S.hotkey).join('+') });
+        $('hkErr').hidden = false;
+      } else if (hkBusy) $('hkErr').hidden = true;
+      hkBusy = !v;
+    }).catch(() => {});
   }
 
   /* ---------- отрисовка ---------- */
@@ -248,6 +263,9 @@
   }
   function keyName(e) {
     const c = e.code || '';
+    /* Windows привязывает сочетание к букве на клавише (VK_A…VK_Z): на QWERTZ/AZERTY/Dvorak букву берём из e.key;
+       раскладки без латиницы (кириллица, греческая…) дают e.code — клавишу на том же месте американской клавиатуры */
+    if (/^[a-z]$/i.test(e.key || '')) return e.key.toLowerCase();
     if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
     if (/^Digit[0-9]$/.test(c)) return c.slice(5);
     if (/^F([1-9]|1[0-9]|2[0-4])$/.test(c)) return c.toLowerCase();

@@ -6,6 +6,7 @@ use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -15,6 +16,7 @@ use tauri::Url;
 use crate::util::{local_url, log, Config};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+const CREATE_SUSPENDED: u32 = 0x0000_0004;
 /// At most this many spawns per rolling minute.
 const MAX_SPAWNS_PER_MIN: usize = 3;
 
@@ -221,12 +223,18 @@ impl Job {
             }
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
             info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-            SetInformationJobObject(
+            let ok = SetInformationJobObject(
                 h,
                 JobObjectExtendedLimitInformation,
                 &info as *const _ as *const core::ffi::c_void,
                 std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
             );
+            if ok == 0 {
+                // without KILL_ON_JOB_CLOSE the job is pointless; the backend is still stopped by POST /api/shutdown
+                log("job object: cannot set KILL_ON_JOB_CLOSE");
+                windows_sys::Win32::Foundation::CloseHandle(h);
+                return None;
+            }
             Some(Job(h))
         }
     }
@@ -235,6 +243,76 @@ impl Job {
     }
     fn terminate(&self) {
         unsafe { windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1) };
+    }
+}
+
+/// Resume the main thread of a process created with CREATE_SUSPENDED (`Child` does not keep the thread handle).
+fn resume_main_thread(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+    };
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if snap == INVALID_HANDLE_VALUE {
+            return false;
+        }
+        let mut te: THREADENTRY32 = std::mem::zeroed();
+        te.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+        let mut resumed = false;
+        let mut more = Thread32First(snap, &mut te) != 0;
+        while more {
+            if te.th32OwnerProcessID == pid {
+                let t = OpenThread(THREAD_SUSPEND_RESUME, 0, te.th32ThreadID);
+                if !t.is_null() {
+                    resumed |= ResumeThread(t) != u32::MAX;
+                    CloseHandle(t);
+                }
+            }
+            more = Thread32Next(snap, &mut te) != 0;
+        }
+        CloseHandle(snap);
+        resumed
+    }
+}
+
+// ---------------------------------------------------------------- python
+
+/// `pythonw.exe` for the backend and whether it is the explicit one: SEMSEARCH_PYTHON (full path), else the venv
+/// (`<root>\.venv\Scripts`: a source checkout after setup.bat, and the installed copy), else an embedded runtime
+/// (`<root>\runtime`). Err = every path that was tried.
+fn find_python(root: &Path) -> Result<(PathBuf, bool), Vec<PathBuf>> {
+    let mut tried = Vec::new();
+    if let Some(p) = std::env::var_os("SEMSEARCH_PYTHON").map(PathBuf::from).filter(|p| !p.as_os_str().is_empty()) {
+        if p.is_file() {
+            return Ok((p, true));
+        }
+        log(&format!("SEMSEARCH_PYTHON points to a missing file: {}", p.display()));
+        tried.push(p);
+    }
+    for p in [root.join(".venv").join("Scripts").join("pythonw.exe"), root.join("runtime").join("pythonw.exe")] {
+        if p.is_file() {
+            return Ok((p, false));
+        }
+        tried.push(p);
+    }
+    Err(tried)
+}
+
+/// What the user can do about missing files: an installed copy has uninstall.exe next to server.py and is reinstalled,
+/// a source checkout has setup.bat. `python`: the missing file is Python (else server.py).
+fn fix_hint(root: &Path, en: bool, python: bool) -> &'static str {
+    if root.join("uninstall.exe").is_file() {
+        if en { "reinstall SemSearch" } else { "переустановите SemSearch" }
+    } else if python && root.join("setup.bat").is_file() {
+        if en { "run setup.bat" } else { "запустите setup.bat" }
+    } else if python {
+        if en { "set SEMSEARCH_PYTHON to the full path of pythonw.exe" } else { "укажите путь к pythonw.exe в переменной SEMSEARCH_PYTHON" }
+    } else if en {
+        "check SEMSEARCH_ROOT"
+    } else {
+        "проверьте SEMSEARCH_ROOT"
     }
 }
 
@@ -313,23 +391,37 @@ impl Backend {
         wait.as_secs() + u64::from(wait.subsec_millis() > 0)
     }
 
-    /// `<root>\.venv\Scripts\pythonw.exe <root>\server.py --no-browser`, cwd root, no window, env SEMSEARCH_SHELL=1,
+    /// A spawn that cannot even be tried (files missing): the next attempt is in 10 s, in case the user has fixed it.
+    fn refuse(&self, msg: String) -> Result<(), String> {
+        *self.next_spawn.lock().unwrap() = Some(Instant::now() + Duration::from_secs(10));
+        Err(msg)
+    }
+
+    /// `<python> <root>\server.py --no-browser` (python: see find_python), cwd root, no window, env SEMSEARCH_SHELL=1,
     /// SEMSEARCH_PORT (preferred port or a free one), SEMSEARCH_TOKEN (new session token) and SEMSEARCH_DATA_DIR
-    /// (the data folder the shell uses).
-    pub fn spawn(&self, cfg: &Config) -> Result<(), String> {
-        let py = cfg.root.join(".venv").join("Scripts").join("pythonw.exe");
+    /// (the data folder the shell uses). `en`: error texts in English (else Russian).
+    pub fn spawn(&self, cfg: &Config, en: bool) -> Result<(), String> {
         let server = cfg.root.join("server.py");
-        let missing = if !server.is_file() {
-            Some(format!("не найден {}", server.display()))
-        } else if !py.is_file() {
-            Some(format!("не найден {} — запустите setup.bat", py.display()))
-        } else {
-            None
-        };
-        if let Some(e) = missing {
-            *self.next_spawn.lock().unwrap() = Some(Instant::now() + Duration::from_secs(10));
-            return Err(e);
+        if !server.is_file() {
+            let hint = fix_hint(&cfg.root, en, false);
+            return self.refuse(if en {
+                format!("{} not found — {hint}", server.display())
+            } else {
+                format!("не найден {} — {hint}", server.display())
+            });
         }
+        let (py, explicit) = match find_python(&cfg.root) {
+            Ok(found) => found,
+            Err(tried) => {
+                let list = tried.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+                let hint = fix_hint(&cfg.root, en, true);
+                return self.refuse(if en {
+                    format!("Python not found (looked for {list}) — {hint}")
+                } else {
+                    format!("не найден Python (искал {list}) — {hint}")
+                });
+            }
+        };
         self.spawns.lock().unwrap().push_back(Instant::now());
         let port = choose_port(cfg.port);
         let token = new_token();
@@ -343,21 +435,42 @@ impl Backend {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW);
+            // Suspended until it is in the job: the venv's pythonw.exe is only a launcher that starts the real interpreter
+            // as its child (and puts itself in a job of its own), and a process created before AssignProcessToJobObject
+            // would stay outside our job - or make the assignment fail.
+            .creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+        if !explicit {
+            // a PYTHONHOME / PYTHONPATH of some other Python on the user's machine breaks ours
+            cmd.env_remove("PYTHONHOME").env_remove("PYTHONPATH");
+        }
         if let Some(t) = &token {
             cmd.env("SEMSEARCH_TOKEN", t);
         }
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
                 let in_job = self.job.as_ref().map(|j| j.assign(&child)).unwrap_or(false);
-                log(&format!("backend started: pid {}, port {port} (job: {in_job})", child.id()));
+                if !resume_main_thread(child.id()) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    *self.next_spawn.lock().unwrap() = Some(Instant::now() + Duration::from_secs(5));
+                    return Err(if en {
+                        format!("couldn't start {}: the process did not resume", py.display())
+                    } else {
+                        format!("не удалось запустить {}: процесс не продолжил работу", py.display())
+                    });
+                }
+                log(&format!("backend started: {} pid {}, port {port} (job: {in_job})", py.display(), child.id()));
                 cfg.set_backend(port, token);
                 *self.child.lock().unwrap() = Some(child);
                 Ok(())
             }
             Err(e) => {
                 *self.next_spawn.lock().unwrap() = Some(Instant::now() + Duration::from_secs(5));
-                Err(format!("не удалось запустить {}: {e}", py.display()))
+                Err(if en {
+                    format!("couldn't start {}: {e}", py.display())
+                } else {
+                    format!("не удалось запустить {}: {e}", py.display())
+                })
             }
         }
     }
