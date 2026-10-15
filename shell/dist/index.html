@@ -9,13 +9,23 @@
 </head>
 <body class="win" data-tauri-drag-region="deep">
 <header class="cap" data-tauri-drag-region="deep">
-  <button type="button" class="cb" data-cmd="win_minimize" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg></button>
-  <button type="button" class="cb x" data-cmd="win_hide" aria-label="Скрыть в трей"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg></button>
+  <button type="button" class="cb" data-cmd="win_minimize" data-t="min" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"/></svg></button>
+  <button type="button" class="cb" id="capMax" data-cmd="win_toggle_maximize" data-t="max" aria-label="Развернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
+  <button type="button" class="cb x" data-cmd="win_hide" data-t="hide" aria-label="Скрыть в трей"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg></button>
 </header>
+<!-- Заставка — первый кадр экрана запуска (design/Launch, ui/index.html #boot): тот же вид, пока backend не ответил -->
 <main class="center" data-tauri-drag-region="deep">
-  <div class="splash">
-    <span class="tile" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 256 256" fill="currentColor"><path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"/><path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"/></svg></span>
-    <span class="lbl"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"/><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"/></svg><span>Запускаю SemSearch…</span></span>
+  <div class="bin">
+    <span class="blogo" aria-hidden="true"><svg width="72" height="72" viewBox="0 0 256 256" fill="currentColor"><path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"/><g class="bdot"><path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"/></g></svg></span>
+    <h1 class="btitle">SemSearch</h1>
+    <p class="bsub" data-t="starting">Запускаю SemSearch…</p>
+    <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="2" data-t-label="progress" aria-label="Запуск"><div></div></div>
+    <div class="bsteps">
+      <div class="bstep active"><span class="bi"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"/><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"/></svg></span><span class="bl" data-t="index">Открываю индекс</span></div>
+      <div class="bstep"><span class="bi"><span class="wait"></span></span><span class="bl" data-t="model">Загружаю модель</span></div>
+      <div class="bstep"><span class="bi"><span class="wait"></span></span><span class="bl" data-t="vectors">Загружаю векторы в память</span></div>
+      <div class="bstep"><span class="bi"><span class="wait"></span></span><span class="bl" data-t="watch">Включаю слежение за файлами</span></div>
+    </div>
     <p id="status" class="status" role="status"></p>
   </div>
 </main>

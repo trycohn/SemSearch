@@ -2,14 +2,15 @@
    Строки из API (имена, пути, фрагменты) НИКОГДА не вставляются как HTML — только textContent. */
 (function () {
   'use strict';
-  const SS = (window.SS = {});
+  const SS = (window.SS = window.SS || {}); /* i18n.js подключается раньше и уже положил сюда язык */
+  if (!SS.lang) SS.lang = () => 'ru';
 
   /* ---------- токен, Tauri ---------- */
   const meta = document.querySelector('meta[name="semsearch-token"]');
   SS.token = meta ? meta.getAttribute('content') || '' : '';
   SS.tauri = window.__TAURI__ && window.__TAURI__.core ? window.__TAURI__ : null;
   SS.invoke = (cmd, args) =>
-    SS.tauri ? SS.tauri.core.invoke(cmd, args || {}) : Promise.reject(new Error('Tauri недоступен'));
+    SS.tauri ? SS.tauri.core.invoke(cmd, args || {}) : Promise.reject(new Error('no Tauri'));
   SS.listen = (ev, cb) => {
     if (SS.tauri && SS.tauri.event) SS.tauri.event.listen(ev, cb).catch(() => {});
   };
@@ -56,8 +57,9 @@
     return url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + encodeURIComponent(SS.token);
   };
 
-  /* ---------- форматирование (по-русски) ---------- */
+  /* ---------- форматирование (по языку интерфейса: ru — «3 412», «2,4 МБ», «9 мар»; en — «3,412», «2.4 MB», «Mar 9») ---------- */
   const NB = ' ';
+  const en = () => SS.lang() === 'en';
   SS.pl = (n, f) => {
     n = Math.abs(Math.floor(n));
     const a = n % 10, b = n % 100;
@@ -66,37 +68,44 @@
   SS.num = (n) => {
     if (n === null || n === undefined || isNaN(n)) return '0';
     const s = String(Math.round(Math.abs(n)));
-    return (n < 0 ? '−' : '') + s.replace(/\B(?=(\d{3})+(?!\d))/g, NB);
+    return (n < 0 ? '−' : '') + s.replace(/\B(?=(\d{3})+(?!\d))/g, en() ? ',' : NB);
   };
-  const dec1 = (v) => v.toFixed(1).replace('.', ',');
+  const dec1 = (v) => (en() ? v.toFixed(1) : v.toFixed(1).replace('.', ','));
   SS.size = (b) => {
     if (b === null || b === undefined || isNaN(b)) return '';
-    if (b < 1024) return Math.round(b) + NB + 'Б';
+    const U = en() ? ['B', 'KB', 'MB', 'GB', 'TB'] : ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    if (b < 1024) return Math.round(b) + NB + U[0];
     const kb = b / 1024;
-    if (kb < 999.5) return Math.round(kb) + NB + 'КБ';
-    const units = ['МБ', 'ГБ', 'ТБ'];
-    let v = kb / 1024, i = 0;
-    while (v >= 999.5 && i < units.length - 1) { v /= 1024; i++; }
-    return (v < 99.95 ? dec1(v) : String(Math.round(v))) + NB + units[i];
+    if (kb < 999.5) return Math.round(kb) + NB + U[1];
+    let v = kb / 1024, i = 2;
+    while (v >= 999.5 && i < U.length - 1) { v /= 1024; i++; }
+    return (v < 99.95 ? dec1(v) : String(Math.round(v))) + NB + U[i];
   };
   SS.bigNum = (n) => {
-    if (n >= 1e6) return dec1(n / 1e6).replace(/,0$/, '') + NB + 'млн';
+    if (n >= 1e6) return dec1(n / 1e6).replace(/[.,]0$/, '') + NB + (en() ? 'M' : 'млн');
     return SS.num(n);
   };
   const MON = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
   const MONG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   SS.dateShort = (ts, withYear) => {
     if (!ts) return '';
     const d = new Date(ts * 1000);
+    const year = withYear || d.getFullYear() !== new Date().getFullYear();
+    if (en()) return MON_EN[d.getMonth()] + NB + d.getDate() + (year ? ', ' + d.getFullYear() : '');
     let s = d.getDate() + NB + MON[d.getMonth()];
-    if (withYear || d.getFullYear() !== new Date().getFullYear()) s += NB + d.getFullYear();
+    if (year) s += NB + d.getFullYear();
     return s;
   };
   SS.dateLong = (ts) => {
     if (!ts) return '';
     const d = new Date(ts * 1000);
-    return d.getDate() + ' ' + MONG[d.getMonth()] + ' ' + d.getFullYear() + ', ' +
-      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    if (en()) {
+      const h12 = d.getHours() % 12 || 12;
+      return MON_EN[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() + ', ' + h12 + ':' + mm + NB + (d.getHours() < 12 ? 'AM' : 'PM');
+    }
+    return d.getDate() + ' ' + MONG[d.getMonth()] + ' ' + d.getFullYear() + ', ' + String(d.getHours()).padStart(2, '0') + ':' + mm;
   };
   SS.dur = (sec) => {
     if (sec === null || sec === undefined || isNaN(sec)) return '';
@@ -107,15 +116,15 @@
   SS.ago = (ts) => {
     if (!ts) return '';
     const d = Date.now() / 1000 - ts;
-    if (d < 60) return 'только что';
-    if (d < 3600) return Math.floor(d / 60) + ' мин назад';
-    if (d < 86400) return Math.floor(d / 3600) + ' ч назад';
+    if (d < 60) return en() ? 'just now' : 'только что';
+    if (d < 3600) return Math.floor(d / 60) + (en() ? ' min ago' : ' мин назад');
+    if (d < 86400) return Math.floor(d / 3600) + (en() ? ' h ago' : ' ч назад');
     return SS.dateShort(ts);
   };
   SS.drives = (list) => {
     list = (list || []).filter(Boolean);
     if (list.length <= 1) return list[0] || '';
-    return list.slice(0, -1).join(', ') + ' и ' + list[list.length - 1];
+    return list.slice(0, -1).join(', ') + (en() ? ' and ' : ' и ') + list[list.length - 1];
   };
   SS.light = (hex, t) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;

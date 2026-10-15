@@ -5,7 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const el = {};
   ['win', 'caps', 'capMin', 'capMax', 'capHide', 'sbox', 'ibar', 'simchip', 'q', 'clr', 'ssep', 'imgb', 'imgfile', 'tabs', 'main',
-    'results', 'pane', 'start', 'chips', 'fix', 'fixRows', 'eta', 'kgrid', 'dropovl', 'st', 'mid', 'pauseb', 'pauseLbl', 'setb'].forEach((id) => (el[id] = $(id)));
+    'results', 'pane', 'start', 'chips', 'fix', 'fixRows', 'eta', 'kgrid', 'dropovl', 'st', 'mid', 'pauseb', 'pauseLbl', 'setb',
+    'boot', 'bLogo', 'bDot', 'bErrIco', 'bTitle', 'bSub', 'bBar', 'bFill', 'bSteps', 'bErr', 'bRetry', 'bLog', 'bNames', 'bByName', 'bByName2', 'bFoot'
+  ].forEach((id) => (el[id] = $(id)));
 
   const devCaps = /caps/.test(location.hash);
   const S = {
@@ -13,7 +15,6 @@
     resp: null, counts: null, flat: [], sel: -1, err: 0, errText: '',
     status: null, settings: null, pv: null
   };
-  const PH = el.q.getAttribute('placeholder');
 
   /* ---------- окно: запуск 320 мс, показ 160 мс, скрытие 120 мс (сначала анимация, потом win_hide) ---------- */
   const winDone = (e) => { if (e.target === el.win) el.win.classList.remove('w-launch', 'w-in'); };
@@ -171,8 +172,8 @@
     if (!sim) return;
     el.simchip.append(
       sim.thumb ? h('img.sim-th', { src: sim.thumb, alt: '' }) : h('span.sim-th'),
-      h('span.sim-t', { text: 'похоже на ' + sim.label, title: sim.label }),
-      h('button', { type: 'button', 'aria-label': 'Убрать картинку' }, svg(ic.x, { s: 10, sw: 2.4 })));
+      h('span.sim-t', { text: SS.t('img.similar', { name: sim.label || SS.t('img.anImage') }), title: sim.label || '' }),
+      h('button', { type: 'button', 'aria-label': SS.t('img.remove') }, svg(ic.x, { s: 10, sw: 2.4 })));
     el.simchip.classList.remove('pop');
     void el.simchip.offsetWidth;
     el.simchip.classList.add('pop');
@@ -199,7 +200,7 @@
     S.simChunk = null;
     S.counts = null;
     setChip(null);
-    el.q.placeholder = PH;
+    el.q.placeholder = SS.t('q.ph');
   }
   function clearQuery() {
     exitMode();
@@ -270,10 +271,10 @@
       try {
         await SS.api('/api/open', { body: { path: it.path, reveal: name === 'reveal' } });
       } catch (e) {
-        SS.toast(e.status === 404 ? 'Файл не найден — возможно, его переместили' : 'Не удалось открыть файл');
+        SS.toast(SS.t(e.status === 404 ? 'toast.notFound' : 'toast.openFail'));
       }
     } else if (name === 'copy') {
-      SS.toast((await SS.copy(it.path)) ? 'Путь скопирован' : 'Не удалось скопировать путь');
+      SS.toast(SS.t((await SS.copy(it.path)) ? 'toast.copied' : 'toast.copyFail'));
     } else if (name === 'similar') {
       const kind = S.pv && S.pv.kind ? S.pv.kind : it.kind;
       const can = S.pv ? !!S.pv.can_similar : kind === 'image' || kind === 'video';
@@ -284,9 +285,9 @@
   }
   function searchImage(f) {
     if (!f) return;
-    if (!/^image\//.test(f.type || '')) { SS.toast('Нужна картинка: JPG, PNG, WebP…'); return; }
+    if (!/^image\//.test(f.type || '')) { SS.toast(SS.t('img.need')); return; }
     const named = f.name && f.name !== 'image.png';
-    enterMode('image', { file: f, label: named ? f.name : 'картинку', thumb: URL.createObjectURL(f), blob: true });
+    enterMode('image', { file: f, label: named ? f.name : '', thumb: URL.createObjectURL(f), blob: true });
   }
 
   /* ---------- шапка/подвал/старт ---------- */
@@ -309,12 +310,12 @@
     footerPainted = true;
     const n = s && s.names;
     el.mid.textContent = isStart() ? R.device(s)
-      : nameTab ? (n && n.drives && n.drives.length > 1 ? 'По имени ищутся все выбранные диски, включая AppData и Program Files' : 'По имени ищется весь диск, включая AppData и Program Files')
+      : nameTab ? SS.t(n && n.drives && n.drives.length > 1 ? 'mid.allDrives' : 'mid.oneDrive')
       : R.summary(s);
     el.pauseb.hidden = !s;
     const manual = !!(s && s.paused && s.paused.reason === 'manual');
     el.pauseb.classList.toggle('paused', manual);
-    el.pauseLbl.textContent = manual ? 'Продолжить' : 'Пауза';
+    el.pauseLbl.textContent = SS.t(manual ? 'foot.resume' : 'foot.pause');
     el.sbox.classList.toggle('dim', !!(s && !s.ready));
   }
   let keysFor = null;
@@ -326,6 +327,149 @@
     const hk = (S.settings && S.settings.hotkey) || 'ctrl+alt+s';
     if (keysFor !== hk) { keysFor = hk; R.keys(el.kgrid, hk, !!SS.tauri || devCaps); }
   }
+
+  /* ---------- экран запуска (design/Launch): шаги из /api/status → boot, пока модель не готова ---------- */
+  const BOOT_W = { index: 4, download: 56, model: 26, vectors: 9, watch: 5 };
+  const boot = { on: true, leaving: false, ready: false, keys: '', step: null, stepAt: 0, hk: '' };
+  const bootKeys = (s) => ['index'].concat(s && s.boot && s.boot.first_run ? ['download'] : [], ['model', 'vectors', 'watch']);
+  /* «на видеокарте» / «на процессоре» — в пометке справа, а не в названии шага: иначе оно повторяется дважды */
+  const bootLabel = (k) => SS.t('boot.s.' + k);
+  function bootNote(k, state, s) {
+    const b = (s && s.boot) || {};
+    if (k === 'index' && state === 'done') {
+      const n = s && s.kinds ? Object.keys(s.kinds).reduce((a, x) => a + ((s.kinds[x] && s.kinds[x].total) || 0), 0) : 0;
+      return n ? SS.tn('boot.n.files', n) : '';
+    }
+    if (k === 'download') {
+      const d = b.download;
+      if (state === 'active' && d) return d.total ? SS.t('boot.n.of', { a: SS.size(d.done || 0), b: SS.size(d.total) }) : SS.t('boot.n.got', { a: SS.size(d.done || 0) });
+      return state === 'done' ? (d && d.total ? SS.size(d.total) : '') : SS.t('boot.n.once');
+    }
+    if (k === 'model' && state === 'done') {
+      if (s.device === 'cuda') return SS.t('boot.n.gpu');
+      return SS.t(b.gpu_note ? 'boot.n.' + b.gpu_note : 'boot.n.cpu');
+    }
+    if (k === 'vectors' && state === 'done' && typeof b.chunks === 'number') return SS.tn('boot.n.chunks', b.chunks);
+    return '';
+  }
+  function bootIcon(state) {
+    if (state === 'done') return R.check(16, 2.4);
+    if (state === 'active') return R.ring(16, 2.6);
+    if (state === 'failed') return svg(ic.x, { s: 16, sw: 2.4, cls: 'pop' });
+    return h('span.wait');
+  }
+  function bootPaint() {
+    if (!boot.on) return;
+    const s = S.status;
+    const b = (s && s.boot) || {};
+    const err = !!(s && !s.ready && (s.state === 'error' || s.error));
+    const ready = !!(s && s.ready);
+    const keys = bootKeys(s);
+    let idx = ready ? keys.length : s ? keys.indexOf(b.step) : 0;
+    if (idx < 0 && err) idx = keys.indexOf(b.error_kind === 'download' && keys.indexOf('download') >= 0 ? 'download' : 'model');
+    if (idx < 0) idx = 0;
+    if (b.step !== boot.step) { boot.step = b.step; boot.stepAt = performance.now(); }
+    /* строки: пересобираются, только если сменился сам список (появился шаг «скачиваю модель») */
+    const sig = keys.join(',') + '|' + SS.lang();
+    if (sig !== boot.keys) {
+      const fresh = !boot.keys;
+      boot.keys = sig;
+      el.bSteps.textContent = '';
+      keys.forEach((k, i) => {
+        const row = h('div.bstep' + (fresh ? '.rs' : ''), { 'data-k': k }, h('span.bi'), h('span.bl'), h('span.bn'));
+        if (fresh) row.style.animationDelay = 250 + i * 60 + 'ms';
+        el.bSteps.appendChild(row);
+      });
+    }
+    Array.from(el.bSteps.children).forEach((row, i) => {
+      const k = row.getAttribute('data-k');
+      const state = i < idx ? 'done' : i === idx ? (err ? 'failed' : 'active') : 'wait';
+      if (row.getAttribute('data-s') !== state) {
+        row.setAttribute('data-s', state);
+        row.className = 'bstep ' + state + (row.classList.contains('rs') ? ' rs' : '');
+        const bi = row.querySelector('.bi');
+        bi.textContent = '';
+        bi.appendChild(bootIcon(state));
+      }
+      row.querySelector('.bl').textContent = bootLabel(k, s);
+      row.querySelector('.bn').textContent = err && state === 'failed' && b.error_kind === 'download' ? '' : bootNote(k, state, s);
+    });
+    el.bLogo.hidden = err;
+    el.bErrIco.hidden = !err;
+    el.bDot.setAttribute('class', 'bdot ' + (ready ? 'settle' : 'orbit'));
+    el.bTitle.textContent = err ? SS.t(b.error_kind === 'download' ? 'boot.errDownload' : 'boot.errOther')
+      : ready ? SS.t('boot.ready') : SS.t(b.first_run ? 'boot.firstRun' : 'boot.title');
+    el.bSub.textContent = err ? SS.t(b.error_kind === 'download' ? 'boot.errDownloadNote' : 'boot.errOtherNote')
+      : ready ? SS.t(b.first_run ? 'boot.openingFirst' : 'boot.opening')
+      : s ? bootLabel(keys[idx], s) + '…' : SS.t('boot.starting');
+    el.bSub.title = err && s.error ? s.error : '';
+    el.bBar.hidden = err;
+    el.bErr.hidden = !err;
+    el.bNames.hidden = ready || err;
+    /* полоса: сделанные шаги + доля текущего (скачивание — по байтам, остальное ползёт к 90% своей доли) */
+    const sum = keys.reduce((a, k) => a + BOOT_W[k], 0);
+    let pct = 100;
+    if (!ready) {
+      const base = keys.slice(0, idx).reduce((a, k) => a + BOOT_W[k], 0);
+      const cur = keys[idx];
+      const d = b.download;
+      const frac = cur === 'download' && d && d.total ? Math.min(0.98, (d.done || 0) / d.total)
+        : Math.min(0.9, 1 - Math.exp(-(performance.now() - boot.stepAt) / 7000));
+      pct = Math.round(((base + BOOT_W[cur] * frac) / sum) * 100);
+    }
+    el.bFill.style.width = pct + '%';
+    el.bBar.setAttribute('aria-valuenow', String(pct));
+    const hk = SS.caps((S.settings && S.settings.hotkey) || 'ctrl+alt+s').join('+');
+    el.bFoot.textContent = SS.tauri ? SS.t('boot.foot', { hk: hk }) : '';
+    el.boot.classList.remove('pre');
+    if (ready && !boot.ready) {
+      boot.ready = true;
+      setTimeout(() => bootLeave(false), SS.reduced() ? 0 : 900);
+    }
+  }
+  /* экран запуска уходит вверх (300 мс), а окно поиска под ним в это же время проявляется из прозрачного.
+     Пока экран запуска на месте, окно поиска скрыто (.booting): иначе при уходе оно сначала просвечивало бы
+     целиком, а потом его собственная анимация начиналась бы с нуля — двойное мигание. */
+  const under = () => [document.querySelector('.sbar'), $('body'), $('ft')].filter(Boolean);
+  el.win.classList.add('booting');
+  function bootLeave(byName) {
+    if (!boot.on || boot.leaving) return;
+    boot.leaving = true;
+    if (byName) S.tab = 'name';
+    chrome();
+    const done = () => {
+      boot.on = false;
+      el.boot.hidden = true;
+      el.boot.classList.remove('leave');
+      el.q.focus();
+    };
+    el.win.classList.remove('booting');
+    if (SS.reduced()) { done(); return; }
+    under().forEach((x) => {
+      x.classList.add('reveal');
+      SS.after(x, 320, () => x.classList.remove('reveal'));
+    });
+    el.boot.classList.add('leave');
+    SS.after(el.boot, 300, done);
+  }
+  function bootSkip() {
+    boot.on = false;
+    el.boot.hidden = true;
+    el.win.classList.remove('booting');
+  }
+  el.bByName.addEventListener('click', () => bootLeave(true));
+  /* пришли с заставки оболочки (#boot): экран запуска продолжает её кадр, без повторного появления */
+  if (/(^|[#&])boot($|&)/.test(location.hash)) {
+    el.win.classList.remove('w-launch');
+    el.boot.classList.add('calm');
+    bootPaint();
+  }
+  el.bByName2.addEventListener('click', () => bootLeave(true));
+  el.bRetry.addEventListener('click', async () => {
+    try { await SS.api('/api/boot/retry', { body: {} }); } catch (e) { if (e.status !== 409) SS.toast(SS.t('boot.retryFail')); }
+    pollStatus();
+  });
+  el.bLog.addEventListener('click', () => { SS.api('/api/open_log', { body: {} }).catch(() => {}); });
 
   /* ---------- статус (раз в 1 с во время индексации, иначе 2 с; только пока окно видно) ---------- */
   let stT = 0, stBusy = false, readyT = 0;
@@ -342,11 +486,27 @@
       } finally {
         stBusy = false;
       }
+      /* окно открыли, когда модель уже готова, — экрана запуска нет вовсе */
+      if (boot.on && !boot.ready && !boot.keys && S.status && S.status.ready) bootSkip();
+      else bootPaint();
       footer();
+      syncMload();
       if (isStart()) startScreen();
     }
+    const loading = !S.status || !S.status.ready;
     const busy = S.status && (S.status.state === 'indexing' || S.status.state === 'loading' || (S.status.names && !S.status.names.ready));
-    stT = setTimeout(pollStatus, busy ? 1000 : 2000);
+    stT = setTimeout(pollStatus, boot.on && loading ? 400 : busy ? 1000 : 2000);
+  }
+  /* запуск упал, а экран запуска пропустили: «Повторить» прямо в результатах, плашка сама сменится на загрузку */
+  async function retryBoot(btn) {
+    btn.disabled = true;
+    try { await SS.api('/api/boot/retry', { body: {} }); } catch (e) { if (e.status !== 409) SS.toast(SS.t('boot.retryFail')); }
+    btn.disabled = false;
+    await pollStatus();
+  }
+  function syncMload() {
+    const box = el.results.querySelector('.mload:not([data-done])');
+    if (box && box.hasAttribute('data-fail') !== !!R.bootFail(S.status)) box.replaceWith(R.modelLoading(S.status, S.settings, false));
   }
   /* модель догрузилась: галочка «Готово — можно искать», затем повтор запроса */
   function modelReady() {
@@ -362,7 +522,9 @@
     try {
       S.settings = await SS.api('/api/settings');
       SS.applyTheme(S.settings.theme, S.settings.accent);
+      SS.setLang(S.settings.lang, S.settings.lang_system);
       if (isStart()) startScreen();
+      bootPaint();
     } catch (e) { /* backend ещё не готов */ }
   }
 
@@ -400,6 +562,8 @@
     if (b) setTab(b.getAttribute('data-tab'));
   });
   el.results.addEventListener('click', (e) => {
+    const rb = e.target.closest('[data-retry]');
+    if (rb) { retryBoot(rb); return; }
     const go = e.target.closest('[data-go]');
     if (go) {
       let t = go.getAttribute('data-go');
@@ -422,8 +586,8 @@
   el.pauseb.addEventListener('click', async () => {
     const manual = !!(S.status && S.status.paused && S.status.paused.reason === 'manual');
     el.pauseb.classList.toggle('paused', !manual);
-    el.pauseLbl.textContent = manual ? 'Пауза' : 'Продолжить';
-    try { await SS.api('/api/pause', { body: { paused: !manual } }); } catch (e) { SS.toast('Не удалось переключить паузу'); }
+    el.pauseLbl.textContent = SS.t(manual ? 'foot.pause' : 'foot.resume');
+    try { await SS.api('/api/pause', { body: { paused: !manual } }); } catch (e) { SS.toast(SS.t('foot.pauseFail')); }
     pollStatus();
   });
   el.setb.addEventListener('click', SS.openSettings);
@@ -447,6 +611,7 @@
       else clearQuery();
       return;
     }
+    if (boot.on) return; /* экран запуска: поле поиска под ним */
     if (isStart()) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       if (e.altKey) return;
@@ -488,7 +653,7 @@
     const files = Array.from(e.dataTransfer.files || []);
     const f = files.find((x) => /^image\//.test(x.type));
     if (f) searchImage(f);
-    else if (files.length) SS.toast('Нужна картинка: JPG, PNG, WebP…');
+    else if (files.length) SS.toast(SS.t('img.need'));
   });
   document.addEventListener('paste', (e) => {
     const items = e.clipboardData ? Array.from(e.clipboardData.items || []) : [];
@@ -510,7 +675,7 @@
     const maxIcon = () => w && w.isMaximized().then((m) => {
       $('icoMax').hidden = m;
       $('icoRestore').hidden = !m;
-      el.capMax.setAttribute('aria-label', m ? 'Восстановить' : 'Развернуть');
+      el.capMax.setAttribute('aria-label', SS.t(m ? 'win.restore' : 'win.max'));
     }).catch(() => {});
     if (w) { maxIcon(); w.onResized(maxIcon).catch(() => {}); }
   }
@@ -528,6 +693,20 @@
     loadSettings();
   });
   window.addEventListener('focus', () => { if (!document.hidden) loadSettings(); });
+
+  /* смена языка (в настройках или другим окном): статичная разметка уже переведена (i18n.js), остальное — перерисовать */
+  SS.onLang(() => {
+    el.q.placeholder = S.mode === 'text' ? SS.t('q.ph') : '';
+    if (S.sim) setChip(S.sim);
+    keysFor = null;
+    cache.clear();
+    pvCache.clear();
+    if (el.tabs.querySelector('.tl')) R.tabs(el.tabs, S.counts, S.tab, '');
+    chrome();
+    if (!isStart()) schedule(0);
+    bootPaint();
+    if (SS.tauri) SS.invoke('set_lang', { lang: SS.lang() }).catch(() => {});
+  });
 
   chrome();
   el.q.focus();

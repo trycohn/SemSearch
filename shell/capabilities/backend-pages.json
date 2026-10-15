@@ -24,6 +24,7 @@
     "allow-get-autostart",
     "allow-set-autostart",
     "allow-get-hotkey",
-    "allow-set-hotkey"
+    "allow-set-hotkey",
+    "allow-set-lang"
   ]
 }

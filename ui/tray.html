@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="semsearch-token" content="__SEMSEARCH_TOKEN__">
-<title>SemSearch — меню в трее</title>
+<title data-i18n="title.tray">SemSearch — меню в трее</title>
 <link rel="stylesheet" href="/ui/tray.css">
+<script src="/ui/i18n.js"></script>
 <script src="/ui/common.js"></script>
 <script src="/ui/render.js" defer></script>
 <script src="/ui/tray.js" defer></script>
@@ -16,16 +17,16 @@
 <span class="logo"><svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"></path><path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"></path></svg></span>
 <div class="hb">
 <div class="t">SemSearch</div>
-<div class="s" id="st">Подключаюсь…</div>
+<div class="s" id="st" data-i18n="tray.connecting">Подключаюсь…</div>
 <div class="bar" id="bar" role="progressbar" aria-valuemin="0" hidden><div id="barFill"></div></div>
 </div>
 </div>
-<button class="mi st" role="menuitem" id="mOpen" style="animation-delay:.04s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg><span class="l b">Открыть поиск</span><span class="k" id="hk">Ctrl+Alt+S</span></button>
-<button class="mi st" role="menuitem" id="mPause" style="animation-delay:.08s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path id="pauseIco" d="M9 5v14 M15 5v14"></path></svg><span class="l" id="pauseLbl">Пауза индексации</span></button>
-<button class="mi st" role="menuitem" id="mRescan" style="animation-delay:.12s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7"></path></svg><span class="l">Пересканировать</span></button>
-<button class="mi st" role="menuitem" id="mSettings" style="animation-delay:.16s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg><span class="l">Настройки</span></button>
+<button class="mi st" role="menuitem" id="mOpen" style="animation-delay:.04s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg><span class="l b" data-i18n="tray.open">Открыть поиск</span><span class="k" id="hk">Ctrl+Alt+S</span></button>
+<button class="mi st" role="menuitem" id="mPause" style="animation-delay:.08s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path id="pauseIco" d="M9 5v14 M15 5v14"></path></svg><span class="l" id="pauseLbl" data-i18n="tray.pause">Пауза индексации</span></button>
+<button class="mi st" role="menuitem" id="mRescan" style="animation-delay:.12s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7"></path></svg><span class="l" data-i18n="tray.rescan">Пересканировать</span></button>
+<button class="mi st" role="menuitem" id="mSettings" style="animation-delay:.16s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg><span class="l" data-i18n="tray.settings">Настройки</span></button>
 <div class="sep st" role="separator" style="animation-delay:.2s"></div>
-<button class="mi st" role="menuitem" id="mQuit" style="animation-delay:.2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9 M6.5 6.5a8 8 0 1 0 11 0"></path></svg><span class="l">Выйти из SemSearch</span></button>
+<button class="mi st" role="menuitem" id="mQuit" style="animation-delay:.2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9 M6.5 6.5a8 8 0 1 0 11 0"></path></svg><span class="l" data-i18n="tray.quit">Выйти из SemSearch</span></button>
 </div>
 </body>
 </html>

@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="semsearch-token" content="__SEMSEARCH_TOKEN__">
-<title>SemSearch — поиск</title>
+<title data-i18n="title.main">SemSearch — поиск</title>
 <link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/ui/main.css">
 <link rel="stylesheet" href="/ui/filetypes/filetypes.css">
+<script src="/ui/i18n.js"></script>
 <script src="/ui/common.js"></script>
 <script src="/ui/filetypes/filetypes.js"></script>
 <script src="/ui/render.js" defer></script>
@@ -17,9 +18,9 @@
 <div class="win w-launch" id="win">
 
 <div class="caps" id="caps" hidden>
-<button class="cap" id="capMin" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
-<button class="cap" id="capMax" aria-label="Развернуть"><svg id="icoMax" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg><svg id="icoRestore" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" hidden><path d="M2.5 2.5V2A1.5 1.5 0 0 1 4 .5h4A1.5 1.5 0 0 1 9.5 2v4A1.5 1.5 0 0 1 8 7.5h-.5" fill="none" stroke="currentColor" stroke-width="1"></path><rect x="0.5" y="2.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
-<button class="cap x" id="capHide" aria-label="Скрыть в трей" title="Скрыть в трей (Esc)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" id="capMin" data-i18n-attr="aria-label:win.min" aria-label="Свернуть"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" id="capMax" data-i18n-attr="aria-label:win.max" aria-label="Развернуть"><svg id="icoMax" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg><svg id="icoRestore" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" hidden><path d="M2.5 2.5V2A1.5 1.5 0 0 1 4 .5h4A1.5 1.5 0 0 1 9.5 2v4A1.5 1.5 0 0 1 8 7.5h-.5" fill="none" stroke="currentColor" stroke-width="1"></path><rect x="0.5" y="2.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" id="capHide" data-i18n-attr="aria-label:win.hide;title:win.hideTip" aria-label="Скрыть в трей" title="Скрыть в трей (Esc)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
 </div>
 
 <div class="sbar" data-tauri-drag-region="deep">
@@ -28,11 +29,11 @@
 <span class="ibar" id="ibar" aria-hidden="true" hidden><i></i></span>
 <svg class="sico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13z M15.5 15.5L20 20"></path></svg>
 <span class="simchip" id="simchip" hidden></span>
-<label for="q" class="sr">Запрос</label>
-<input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Что ищем? Опишите файл своими словами">
-<button class="clr" id="clr" aria-label="Очистить запрос" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+<label for="q" class="sr" data-i18n="q.label">Запрос</label>
+<input id="q" type="text" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:q.ph" placeholder="Что ищем? Опишите файл своими словами">
+<button class="clr" id="clr" data-i18n-attr="aria-label:q.clear" aria-label="Очистить запрос" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
 <span class="ssep" id="ssep" aria-hidden="true" hidden></span>
-<button class="imgb" id="imgb" aria-label="Искать по картинке" title="Искать по картинке — или перетащите её в окно, или Ctrl+V"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
+<button class="imgb" id="imgb" data-i18n-attr="aria-label:img.btn;title:img.tip" aria-label="Искать по картинке" title="Искать по картинке — или перетащите её в окно, или Ctrl+V"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 8.5h.01"></path></svg></button>
 <input type="file" id="imgfile" accept="image/*" hidden>
 </div>
 </div>
@@ -42,48 +43,69 @@
 <div class="body" id="body">
 <div class="main" id="main" hidden>
 <div class="results" id="results"></div>
-<aside class="pane" id="pane" aria-label="Просмотр файла" hidden></aside>
+<aside class="pane" id="pane" data-i18n-attr="aria-label:pane.label" aria-label="Просмотр файла" hidden></aside>
 </div>
 
 <div class="start" id="start">
 <div class="start-in">
 <div class="hero">
-<h1>Ищите так, как описали бы файл человеку</h1>
+<h1 data-i18n="start.h1">Ищите так, как описали бы файл человеку</h1>
 <div class="chips" id="chips">
-<button class="chip">договор про крышу</button>
-<button class="chip">кот на балконе</button>
-<button class="chip">где парсил JSON с ретраями</button>
-<button class="chip">скриншот с ошибкой CUDA</button>
+<button class="chip" data-i18n="start.ex1">договор про крышу</button>
+<button class="chip" data-i18n="start.ex2">кот на балконе</button>
+<button class="chip" data-i18n="start.ex3">где парсил JSON с ретраями</button>
+<button class="chip" data-i18n="start.ex4">скриншот с ошибкой CUDA</button>
 </div>
-<p>Картинку можно перетащить в окно или вставить через Ctrl+V — найдутся похожие фото и кадры из видео.</p>
+<p data-i18n="start.hint">Картинку можно перетащить в окно или вставить через Ctrl+V — найдутся похожие фото и кадры из видео.</p>
 </div>
 
 <div class="srow">
 <section class="fix" id="fix" aria-labelledby="first-ix" hidden>
-<div class="fix-h"><h2 id="first-ix">Первая индексация</h2><span id="eta"></span></div>
+<div class="fix-h"><h2 id="first-ix" data-i18n="start.first">Первая индексация</h2><span id="eta"></span></div>
 <div id="fixRows"></div>
-<p>Искать уже можно — найдётся всё, что успело проиндексироваться. Пока запущена игра или фильм на весь экран, индексация сама встаёт на паузу.</p>
+<p data-i18n="start.firstNote">Искать уже можно — найдётся всё, что успело проиндексироваться. Пока запущена игра или фильм на весь экран, индексация сама встаёт на паузу.</p>
 </section>
 
 <section class="keys" aria-labelledby="keys-h">
-<div class="fix-h"><h2 id="keys-h">Клавиши</h2><span>меняются в настройках</span></div>
+<div class="fix-h"><h2 id="keys-h" data-i18n="start.keys">Клавиши</h2><span data-i18n="start.keysNote">меняются в настройках</span></div>
 <div class="kgrid" id="kgrid"></div>
 </section>
 </div>
 </div>
 </div>
 
-<div class="dropovl" id="dropovl" hidden><span class="frame" aria-hidden="true"></span><div class="dc"><span class="fly" aria-hidden="true"><span></span></span><span class="dt">Отпустите — найду похожие фото и кадры</span></div></div>
+<div class="dropovl" id="dropovl" hidden><span class="frame" aria-hidden="true"></span><div class="dc"><span class="fly" aria-hidden="true"><span></span></span><span class="dt" data-i18n="img.drop">Отпустите — найду похожие фото и кадры</span></div></div>
 </div>
 
 <footer class="foot" id="ft">
 <span class="st" id="st"></span>
 <span class="mid" id="mid"></span>
 <span class="fb">
-<button class="pausebtn" id="pauseb" hidden><span class="pico" aria-hidden="true"><svg class="ip1" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5v14 M15 5v14"></path></svg><svg class="ip2" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"></path></svg></span><span id="pauseLbl">Пауза</span></button>
-<button class="setb" id="setb" aria-label="Настройки" title="Настройки"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
+<button class="pausebtn" id="pauseb" hidden><span class="pico" aria-hidden="true"><svg class="ip1" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5v14 M15 5v14"></path></svg><svg class="ip2" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"></path></svg></span><span id="pauseLbl" data-i18n="foot.pause">Пауза</span></button>
+<button class="setb" id="setb" data-i18n-attr="aria-label:foot.settings;title:foot.settings" aria-label="Настройки" title="Настройки"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
 </span>
 </footer>
+
+<!-- экран запуска (design/Launch): поверх окна, пока модель не готова; main.js показывает и убирает его -->
+<div class="boot pre" id="boot" data-tauri-drag-region="deep">
+<div class="bcenter" data-tauri-drag-region="deep">
+<div class="bin" id="bootIn">
+<span class="blogo" id="bLogo" aria-hidden="true"><svg width="72" height="72" viewBox="0 0 256 256" fill="currentColor"><path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"></path><g class="bdot orbit" id="bDot"><path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"></path></g></svg></span>
+<span class="berrico" id="bErrIco" aria-hidden="true" hidden><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 7v6 M12 16.5h.01 M10.3 3.6L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path></svg></span>
+<h1 class="btitle" id="bTitle">SemSearch</h1>
+<p class="bsub" id="bSub" role="status" aria-live="polite"></p>
+<div class="bbar" id="bBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-attr="aria-label:boot.progress" aria-label="Запуск"><div id="bFill"></div></div>
+<div class="bsteps" id="bSteps"></div>
+<div class="berr" id="bErr" hidden>
+<button class="prim" id="bRetry" type="button" data-i18n="boot.retry">Повторить</button>
+<button class="btn2" id="bByName2" type="button" data-i18n="boot.byName">Искать по имени</button>
+<p><span data-i18n="boot.noModel">Поиск по имени работает и без модели</span> · <button class="lnk" id="bLog" type="button" data-i18n="boot.logLink">открыть журнал</button></p>
+</div>
+<div class="bnames" id="bNames"><span data-i18n="boot.names">Пока ждём — поиск по имени уже работает</span><button class="btn2" id="bByName" type="button" data-i18n="boot.byName">Искать по имени</button></div>
+</div>
+</div>
+<div class="bfoot" id="bFoot"></div>
+</div>
 </div>
 </body>
 </html>

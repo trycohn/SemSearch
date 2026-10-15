@@ -99,6 +99,7 @@ DEFAULT_CONFIG = {
     "hotkey": "ctrl+alt+s",
     "theme": "system",  # system | light | dark
     "accent": "#005fb8",
+    "lang": "system",  # system | ru | en — язык интерфейса; system — как в Windows (русский или английский)
     # Пауза индексации: полноэкранное приложение (игра, фильм), запущенный процесс из списка, работа от батареи
     "pause_on_fullscreen": True,
     "pause_processes": [],
@@ -251,7 +252,7 @@ def derive_config(cfg):
 
 EDITABLE = {  # ключ -> тип; только их можно менять через POST /api/settings
     "content_roots": list, "name_drives": list, "exclude_dirs": list, "hotkey": str, "theme": str, "accent": str,
-    "pause_on_fullscreen": bool, "pause_processes": list, "pause_on_battery": bool,
+    "lang": str, "pause_on_fullscreen": bool, "pause_processes": list, "pause_on_battery": bool,
     "video_frame_every_sec": int, "video_max_frames": int, "audio_segment_sec": int, "audio_max_segments": int,
     "max_text_mb": int, "max_pdf_pages": int, "foreign_code": str,
 }
@@ -480,35 +481,94 @@ def _arch_ok(cap, archs):
     return False
 
 
-def _usable_gpu(torch):
-    """-> (название, capability) видеокарты, на которой можно считать, иначе None (причина — в журнале).
+def _usable_gpu(torch, why=None):
+    """-> (название, capability) видеокарты, на которой можно считать, иначе None (причина — в журнале,
+    код причины — в список why: "none" — CUDA нет, "unsupported" — карта не поддерживается сборкой torch).
     is_available() мало: torch для CUDA 12.8 собран под sm_75+, и на GTX 10xx (sm_61) ядра не запускаются."""
+    why = why if why is not None else []
     try:
         if not torch.cuda.is_available():
             log.info("CUDA недоступна (torch %s) — модель считает на процессоре", torch.__version__)
+            why.append("none")
             return None
         name, cap = torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)
         archs = torch.cuda.get_arch_list()
     except Exception as ex:
         log.warning("CUDA не отвечает (%s: %s) — модель считает на процессоре", type(ex).__name__, ex)
+        why.append("failed")
         return None
     if not _arch_ok(cap, archs):
         log.warning("видеокарта %s (sm_%d%d) не поддерживается этой сборкой torch %s (есть: %s) — "
                     "модель считает на процессоре", name, *cap, torch.__version__, " ".join(archs) or "—")
+        why.append("unsupported")
         return None
     return name, cap
 
 
-def _load_model(device, dtype):
+def _load_model(device, dtype, on_download=None):
     """Скачанную модель грузим без сети: иначе huggingface_hub при каждом запуске спрашивает Hugging Face,
-    не вышла ли новая версия. Нет её в кэше (первый запуск, оборванная загрузка) — тогда качаем."""
+    не вышла ли новая версия. Нет её в кэше (первый запуск, оборванная загрузка) — тогда качаем
+    (on_download() — сигнал экрану запуска, что начинается скачивание)."""
     from sentence_transformers import SentenceTransformer
 
     kw = {"device": device, "model_kwargs": {"torch_dtype": dtype}}
     try:
         return SentenceTransformer(MODEL_ID, local_files_only=True, **kw)
     except OSError:
+        if on_download:
+            on_download()
         return SentenceTransformer(MODEL_ID, **kw)
+
+
+# ------------------------------------------------ скачивание модели (первый запуск): что уже есть и сколько качать
+
+def model_cached():
+    """Есть ли модель в кэше Hugging Face (по config.json). Не удалось проверить — считаем, что есть:
+    экран запуска не должен обещать скачивание, которого не будет."""
+    try:
+        from huggingface_hub import try_to_load_from_cache
+
+        return isinstance(try_to_load_from_cache(MODEL_ID, "config.json"), str)
+    except Exception:
+        return True
+
+
+def model_cache_bytes():
+    """-> (байт в кэше модели, идёт ли докачка: есть *.incomplete).
+    Файл качается в blobs\\<etag>.incomplete. Без символических ссылок (обычный Windows без режима разработчика)
+    huggingface_hub переносит готовый файл из blobs в snapshots, поэтому считаем обе папки, а ссылки — нет:
+    иначе после каждого скачанного файла счётчик на экране запуска падал бы обратно."""
+    try:
+        from huggingface_hub import constants
+
+        d = os.path.join(constants.HF_HUB_CACHE, "models--" + MODEL_ID.replace("/", "--"))
+    except Exception:
+        return 0, False
+    total, partial = 0, False
+    for root, _, files in os.walk(d):
+        for name in files:
+            p = os.path.join(root, name)
+            try:
+                if os.path.islink(p):
+                    continue
+                total += os.lstat(p).st_size
+            except OSError:
+                continue
+            partial = partial or name.endswith(".incomplete")
+    return total, partial
+
+
+def model_download_total():
+    """Сколько весит модель (байт) по данным Hugging Face, без вариантов ONNX/OpenVINO и картинок README.
+    Сеть недоступна — None (экран запуска покажет только скачанное)."""
+    try:
+        from huggingface_hub import HfApi
+
+        info = HfApi().model_info(MODEL_ID, files_metadata=True)
+        skip = re.compile(r"^(onnx|openvino)/|\.(md|png|jpe?g|gif)$|^\.gitattributes$", re.I)
+        return sum((s.size or 0) for s in info.siblings or () if not skip.search(s.rfilename)) or None
+    except Exception:
+        return None
 
 
 def _fuse_rmsnorm(model, torch):
@@ -551,7 +611,8 @@ def _fuse_rmsnorm(model, torch):
 class Embedder:
     """Одна модель на процесс; индексатор и поиск делят её через lock."""
 
-    def __init__(self):
+    def __init__(self, on_download=None):
+        """on_download() — модели нет в кэше, начинается скачивание (для экрана запуска)."""
         import throttle
 
         throttle.init()  # низкий приоритет GPU для процесса — до создания CUDA-контекста
@@ -560,19 +621,29 @@ class Embedder:
         self.throttle = throttle
         self.torch = torch
         self.device, self.model = "cpu", None
-        gpu = _usable_gpu(torch)
+        # Почему модель на процессоре (для экрана запуска): None — видеокарты нет или всё на ней;
+        # "unsupported" — карта не поддерживается сборкой torch; "busy" — не хватило видеопамяти; "failed" — другое
+        self.gpu_note = None
+        why = []
+        gpu = _usable_gpu(torch, why)
+        if not gpu and why and why[0] != "none":
+            self.gpu_note = why[0]
         if gpu:
             name, cap = gpu
             # bfloat16 — с Ampere (8.0); fp16 Gemma не держит, поэтому на более старых картах — float32
             dtype = torch.bfloat16 if cap >= (8, 0) else torch.float32
             try:
-                self.model = _load_model("cuda", dtype)
+                self.model = _load_model("cuda", dtype, on_download)
                 self.model.encode(["проверка"], show_progress_bar=False)  # ядра под эту карту действительно есть
                 self.device = "cuda"
                 log.info("модель на видеокарте %s (sm_%d%d), %s", name, *cap, str(dtype).replace("torch.", ""))
             except Exception as ex:
+                if isinstance(ex, OSError) and not model_cached():
+                    raise  # модель не скачалась: на процессоре будет то же самое
                 log.warning("видеокарта %s (sm_%d%d): модель не запустилась (%s: %s) — считаю на процессоре",
                             name, *cap, type(ex).__name__, str(ex)[:300])
+                oom = isinstance(ex, getattr(torch.cuda, "OutOfMemoryError", ())) or "out of memory" in str(ex).lower()
+                self.gpu_note = "busy" if oom else "failed"
                 self.model = None
         if self.device == "cpu":
             if gpu:  # отдать видеопамять, занятую неудачной попыткой
@@ -583,7 +654,7 @@ class Embedder:
                     pass
             # Не больше половины логических ядер: фоновая индексация не должна занимать процессор целиком
             torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
-            self.model = _load_model("cpu", torch.float32)
+            self.model = _load_model("cpu", torch.float32, on_download)
             log.info("модель на процессоре, потоков: %d", torch.get_num_threads())
         else:
             throttle.attach(self.model, torch)  # дробит фоновые порции на короткие всплески по слоям

@@ -8,7 +8,7 @@
     clearTimeout(timer);
     try { st = await SS.api('/api/status'); } catch (e) { st = null; }
     const info = R.status(st);
-    $('st').textContent = info.check ? 'Индекс актуален' : info.text;
+    $('st').textContent = info.kind === 'done' ? SS.t('tray.done') : info.text;
     $('st').title = info.text;
     const bar = $('bar');
     bar.hidden = info.pct === undefined;
@@ -20,7 +20,7 @@
     }
     const manual = !!(st && st.paused && st.paused.reason === 'manual');
     $('pauseIco').setAttribute('d', manual ? SS.ic.play : SS.ic.pause);
-    $('pauseLbl').textContent = manual ? 'Продолжить индексацию' : 'Пауза индексации';
+    $('pauseLbl').textContent = SS.t(manual ? 'tray.resume' : 'tray.pause');
     $('mPause').disabled = !st;
     if (!document.hidden) timer = setTimeout(refresh, 2000);
   }
@@ -28,6 +28,7 @@
     try {
       const s = await SS.api('/api/settings');
       SS.applyTheme(s.theme, s.accent);
+      SS.setLang(s.lang, s.lang_system);
       $('hk').textContent = SS.caps(s.hotkey || 'ctrl+alt+s').join('+');
     } catch (e) { /* backend ещё не готов */ }
   }
@@ -91,6 +92,7 @@
     settings();
   });
   SS.listen('tray-shown', () => { play(); refresh(); settings(); });
+  SS.onLang(() => refresh());
 
   refresh();
   settings();

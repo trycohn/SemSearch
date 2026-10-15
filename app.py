@@ -17,6 +17,7 @@ import webbrowser
 from ctypes import wintypes
 
 import core
+import i18n
 
 _moved = core.migrate_legacy(core.APP_DIR, core.DATA_DIR)  # до журнала, баз и настроек: старая раскладка → папка данных
 core.setup_logging()
@@ -27,6 +28,12 @@ if os.environ.get("SEMSEARCH_DATA_DIR", "").strip() and not core.abs_env("SEMSEA
     log.warning("SEMSEARCH_DATA_DIR — не абсолютный путь, не учитываю (как shell и движок)")
 cfg = core.load_config()
 IN_SHELL = os.environ.get("SEMSEARCH_SHELL") == "1"  # запущены из SemSearch.exe: окно, трей и клавишу ведёт он
+_lang = {"v": i18n.resolve(cfg.get("lang"))}
+
+
+def L():
+    """Язык подписей, которые собирает backend (крошки, типы, «стр. 3», ошибки): "ru" | "en" (config "lang")."""
+    return _lang["v"]
 
 
 def _port_state(port):
@@ -122,6 +129,10 @@ CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe
        "connect-src 'self'; frame-ancestors 'none'")
 
 STATE = {"ready": False, "error": None}
+# Шаги запуска для экрана запуска (docs/API.md, /api/status → boot): index → [download] → model → vectors → watch.
+# step — текущий шаг (None — запуск закончен); при ошибке остаётся тот, на котором упали.
+BOOT = {"step": "index", "first_run": False, "download": None, "gpu_note": None, "chunks": None,
+        "error_kind": None, "attempt": 0}
 emb = store = indexer = None
 conn = core.connect()
 db_lock = threading.Lock()
@@ -195,18 +206,51 @@ def reap_orphans():
             continue
 
 
+def _watch_download(attempt):
+    """Пока модель качается: сколько уже в кэше и сколько всего. Кончились .incomplete и размер не растёт —
+    скачивание закончилось, дальше модель грузится в память (шаг model)."""
+    base, _ = core.model_cache_bytes()
+    total = core.model_download_total()
+    BOOT["download"] = {"done": 0, "total": (total - base) if total and total > base else total}
+    last, still = -1, 0
+    while BOOT["step"] == "download" and BOOT["attempt"] == attempt:
+        have, partial = core.model_cache_bytes()
+        done = max(0, have - base)
+        BOOT["download"] = dict(BOOT["download"], done=done)
+        still = still + 1 if have == last and not partial and done > 0 else 0
+        if still >= 3:
+            BOOT["step"] = "model"
+            break
+        last = have
+        time.sleep(0.5)
+
+
 def boot():
     global emb, store, indexer
+    BOOT.update(step="index", download=None, gpu_note=None, chunks=None, error_kind=None, attempt=BOOT["attempt"] + 1)
+    attempt = BOOT["attempt"]
     try:
         reap_orphans()
     except Exception:
         log.exception("не удалось проверить осиротевшие процессы")
+
+    def downloading():
+        BOOT.update(step="download", first_run=True)
+        log.info("модели нет в кэше — скачиваю %s", core.MODEL_ID)
+        threading.Thread(target=_watch_download, args=(attempt,), name="download-watch", daemon=True).start()
+
     try:
+        BOOT["first_run"] = not core.model_cached()
+        BOOT["step"] = "model"
         t0 = time.time()
-        emb = core.Embedder()
+        if emb is None:  # повтор после сбоя на следующем шаге: модель уже в памяти
+            emb = core.Embedder(on_download=downloading)
+        BOOT.update(step="vectors", gpu_note=emb.gpu_note)
         store = core.VecStore(emb.device)
         n = store.load(conn)
+        BOOT["chunks"] = n
         log.info("модель загружена за %.0f с, векторов: %d", time.time() - t0, n)
+        BOOT["step"] = "watch"
         indexer = Indexer(cfg, emb, store)
         indexer.engine_active = names.reachable
         indexer.manual_pause = os.environ.get("SEMSEARCH_PAUSED") == "1"  # для отладки: поднять без нагрузки на GPU
@@ -216,9 +260,13 @@ def boot():
             except Exception:
                 log.exception("не удалось включить отслеживание изменений — остаются периодические обходы")
         indexer.start()
+        BOOT["step"] = None
         STATE["ready"] = True
     except Exception as ex:
         log.exception("не удалось запустить")
+        # Модель не скачалась (нет сети, оборвалось) — экран запуска скажет про интернет, а не про сбой
+        net = BOOT["step"] == "download" or (BOOT["first_run"] and isinstance(ex, (OSError, ConnectionError)))
+        BOOT["error_kind"] = "download" if net else "other"
         STATE["error"] = f"{type(ex).__name__}: {ex}"
 
 
@@ -234,20 +282,36 @@ async def guard(request: Request, call_next):
     if (path.startswith("/api/") and path != "/api/ping") or path.startswith("/thumb/"):
         token = request.headers.get("x-semsearch-token") or request.query_params.get("t") or ""
         if not secrets.compare_digest(token, TOKEN):
-            return JSONResponse({"detail": "нет токена"}, status_code=403)
+            return JSONResponse({"detail": i18n.error("no_token", L())}, status_code=403)
         origin = request.headers.get("origin")
         if origin and origin not in ORIGINS:
-            return JSONResponse({"detail": "чужой источник"}, status_code=403)
-    return await call_next(request)
+            return JSONResponse({"detail": i18n.error("foreign_origin", L())}, status_code=403)
+    response = await call_next(request)
+    # Скрипты и стили интерфейса — всегда сверять с диском (ETag, ответ 304): иначе WebView2 после обновления
+    # SemSearch какое-то время берёт старый main.css из кэша вместе с новым main.js
+    if path.startswith("/ui/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # ------------------------------------------------ страницы
+
+_ASSET = re.compile(r'"(/ui/[\w./-]+\.(?:css|js))"')
+
+
+def _versioned(m):
+    """/ui/main.css -> /ui/main.css?v=<время изменения>: новая версия файла — новый адрес, мимо кэша WebView2."""
+    try:
+        return f'"{m.group(1)}?v={int(os.path.getmtime(os.path.join(UI_DIR, m.group(1)[4:])))}"'
+    except OSError:
+        return m.group(0)
+
 
 def _page(name):
     p = os.path.join(UI_DIR, name)
     if os.path.exists(p):
         with open(p, encoding="utf-8") as f:
-            html = f.read().replace("__SEMSEARCH_TOKEN__", TOKEN)
+            html = _ASSET.sub(_versioned, f.read().replace("__SEMSEARCH_TOKEN__", TOKEN))
     else:
         html = "<!doctype html><meta charset=utf-8><title>SemSearch</title><p>Интерфейс ещё собирается.</p>"
     return HTMLResponse(html, headers={"Cache-Control": "no-store", "Content-Security-Policy": CSP,
@@ -281,12 +345,11 @@ def _rows(sql, args=()):
 
 def _need_ready():
     if not STATE["ready"]:
-        raise HTTPException(503, STATE["error"] or "модель ещё загружается")
+        raise HTTPException(503, STATE["error"] or i18n.error("loading", L()))
 
 
 def _loc(label):
-    label = label or ""
-    return "фрагм. " + label.split()[-1] if label.startswith("фрагмент") else label
+    return i18n.loc(label, L())
 
 
 def _hit(kind, cid, loc, label, snippet, duration=None):
@@ -297,13 +360,13 @@ def _hit(kind, cid, loc, label, snippet, duration=None):
         if len(snippet or "") >= 299:
             text += "…"
     elif kind == "video":
-        text = "кадр совпал с запросом"
+        text = i18n.video_hit(L())
     t_end = None
     if kind == "audio":
         t_end = loc + cfg["audio_segment_sec"]
         if duration:
             t_end = min(t_end, duration)
-        text = f"отрезок {meta.ts(loc)}–{meta.ts(t_end)}" + (f" из {meta.ts(duration)}" if duration else "")
+        text = i18n.audio_hit(meta.ts(loc), meta.ts(t_end), meta.ts(duration) if duration else None, L())
     return {"chunk": cid, "loc": _loc(label), "t": float(loc) if kind in ("video", "audio") else None,
             "t_end": float(t_end) if t_end is not None else None, "text": text}
 
@@ -349,7 +412,7 @@ def _cards(hits):
         c = cards.get(fid)
         if c is None:
             c = cards[fid] = {"id": f"f{fid}", "kind": kind, "name": name, "ext": meta.ext_of(name), "path": path,
-                              "crumbs": meta.crumbs(path), "size": size, "mtime": mtime, "score": round(float(cos), 4),
+                              "crumbs": meta.crumbs(path, L()), "size": size, "mtime": mtime, "score": round(float(cos), 4),
                               "hits": [], "thumb": f"/thumb/{cid}" if kind in ("image", "video") else None,
                               "duration": dur}
         if len(c["hits"]) < 3:
@@ -375,7 +438,7 @@ def _name_items(q, limit):
         log.exception("поиск по имени")
         return 0, []
     items = [{"id": "n:" + r["path"], "kind": "name", "name": r["name"], "ext": meta.ext_of(r["name"]),
-              "path": r["path"], "crumbs": meta.crumbs(r["path"]), "size": r.get("size"), "mtime": r.get("mtime"),
+              "path": r["path"], "crumbs": meta.crumbs(r["path"], L()), "size": r.get("size"), "mtime": r.get("mtime"),
               "score": 0.0, "hits": [], "thumb": None, "duration": None}
              for r in rows if not r.get("dir")]
     return total, items
@@ -431,7 +494,7 @@ def _scores(q: str, kind: str = "text"):
 @app.get("/api/search")
 def search(q: str = "", tab: str = "all"):
     if tab not in TABS:
-        raise HTTPException(400, "неизвестная вкладка")
+        raise HTTPException(400, i18n.error("bad_tab", L()))
     t0, q = time.time(), q.strip()[:500]
     if not q:
         return _response(q, tab, t0, {})
@@ -459,7 +522,7 @@ def similar(chunk: int, tab: str = "image"):
     t0 = time.time()
     v = store.vector(chunk)
     if v is None:
-        raise HTTPException(404, "фрагмент не найден")
+        raise HTTPException(404, i18n.error("no_chunk", L()))
     return _media_response(v, tab, t0)
 
 
@@ -473,7 +536,7 @@ async def search_image(file: UploadFile = File(...), tab: str = "image"):
         im.thumbnail((768, 768))
         im = im.convert("RGB")
     except Exception:
-        raise HTTPException(400, "это не картинка")
+        raise HTTPException(400, i18n.error("not_image", L()))
     return _media_response(emb.images([im])[0], tab, t0)
 
 
@@ -483,7 +546,7 @@ async def search_image(file: UploadFile = File(...), tab: str = "image"):
 def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
     row = _rows("SELECT id, kind, status, duration, err, copy_of FROM files WHERE path=?", (path,))
     if not (row or _known(path)) or not os.path.isfile(path):
-        raise HTTPException(404, "файл не найден")
+        raise HTTPException(404, i18n.error("no_file", L()))
     st = os.stat(path)
     name = os.path.basename(path)
     ext = meta.ext_of(name)
@@ -500,12 +563,12 @@ def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
              else "skipped" if status == core.ST_SKIPPED
              else "outside" if core.kind_of("." + ext.lower()) else "unsupported")
     k = kind if indexed else "name"
-    out = {"path": path, "name": name, "ext": ext, "kind": k, "crumbs": meta.crumbs(path), "size": st.st_size,
-           "mtime": st.st_mtime, "ctime": st.st_ctime, "type": meta.type_name(ext), "taken": None, "duration": None,
+    out = {"path": path, "name": name, "ext": ext, "kind": k, "crumbs": meta.crumbs(path, L()), "size": st.st_size,
+           "mtime": st.st_mtime, "ctime": st.st_ctime, "type": meta.type_name(ext, L()), "taken": None, "duration": None,
            "pages": None, "dims": None, "page_label": None, "hit_pos": None, "hits": [], "code": None, "marks": None,
            "wave": None, "seg": None, "dupes": [], "thumb": None, "can_similar": k in ("image", "video"),
            "indexed": indexed, "state": state,
-           "reason": err if status in (core.ST_FAILED, core.ST_SKIPPED) else None, "copy_of": copy_path}
+           "reason": i18n.reason(err, L()) if status in (core.ST_FAILED, core.ST_SKIPPED) else None, "copy_of": copy_path}
     if indexed:
         all_chunks = _rows("SELECT id, loc, label, snippet FROM chunks WHERE file_id=? ORDER BY loc", (fid,))
         by_id = {c[0]: c for c in all_chunks}
@@ -521,12 +584,12 @@ def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
                 page = int(best[2].split()[-1]) if (best[2] or "").startswith("стр.") else 1
                 out["pages"] = pages
                 if pages:
-                    out["type"] += f", {pages} {meta.plural(pages, ('страница', 'страницы', 'страниц'))}"
-                    out["page_label"] = f"стр. {page} из {pages}"
+                    out["type"] += ", " + i18n.pages(pages, L())
+                    out["page_label"] = i18n.page_label(page, pages, L())
                     out["hit_pos"] = round((page - 1) / max(pages - 1, 1), 4)
             else:
                 n = len(all_chunks)
-                out["page_label"] = f"фрагмент {int(best[1]) + 1} из {n}"
+                out["page_label"] = i18n.chunk_label(int(best[1]) + 1, n, L())
                 out["hit_pos"] = round(best[1] / max(n - 1, 1), 4)
         elif k == "code" and best:
             out["code"] = preview.code_window(path, best[3])
@@ -551,11 +614,11 @@ def preview_ep(path: str, chunk: int | None = None, chunks: str | None = None):
     # Сначала точные копии по содержимому (exact: true), потом просто файлы с таким же именем
     dupes = []
     if indexed and fid is not None:
-        dupes = [{"path": p, "crumbs": meta.crumbs(p), "exact": True} for (p,) in _rows(
+        dupes = [{"path": p, "crumbs": meta.crumbs(p, L()), "exact": True} for (p,) in _rows(
             "SELECT path FROM files WHERE (copy_of=? OR id=?) AND path<>? ORDER BY path LIMIT 20", (fid, fid, path))]
     try:
         seen = {d["path"] for d in dupes} | {path}
-        dupes += [{"path": d["path"], "crumbs": meta.crumbs(d["path"]), "exact": False}
+        dupes += [{"path": d["path"], "crumbs": meta.crumbs(d["path"], L()), "exact": False}
                   for d in names.same_name(name, 8) if d["path"] not in seen]
     except Exception:
         log.exception("поиск копий %s", name)
@@ -589,7 +652,7 @@ async def open_file(request: Request):
     body = await request.json()
     path = str(body.get("path", ""))
     if not _known(path) or not os.path.exists(path):
-        raise HTTPException(404, "файл не найден")
+        raise HTTPException(404, i18n.error("no_file", L()))
     if body.get("reveal"):
         subprocess.Popen(["explorer.exe", "/select,", path])
     else:
@@ -687,7 +750,18 @@ def status():
                   "updated": n_updated, "scan": ix.get("names_scan"), "progress": n_progress},
         "eta_sec": indexer.eta(remaining) if indexer and state == "indexing" else None,
         "watching": bool(ix.get("watching")), "throttle": _throttle_state(), "index_bytes": _index_bytes(),
+        "boot": {k: BOOT[k] for k in ("step", "first_run", "download", "gpu_note", "chunks", "error_kind")},
     }
+
+
+@app.post("/api/boot/retry")
+def boot_retry():
+    """Запуск упал (например, модель не скачалась без интернета) — попробовать ещё раз, не перезапуская программу."""
+    if STATE["ready"] or not STATE["error"]:
+        raise HTTPException(409, i18n.error("not_failed", L()))
+    STATE["error"] = None
+    threading.Thread(target=boot, name="boot", daemon=True).start()
+    return {"ok": True}
 
 
 @app.post("/api/pause")
@@ -723,13 +797,13 @@ def settings_get():
         n = _rows("SELECT count(*) FROM files WHERE path >= ? AND path < ?", (lo, hi))[0][0]
         roots.append({"path": r, "files": n})
     failed = _rows("SELECT count(*) FROM files WHERE status=2")[0][0]
-    keys = ("exclude_dirs", "hotkey", "theme", "accent", "pause_on_fullscreen", "pause_processes", "pause_on_battery",
+    keys = ("exclude_dirs", "hotkey", "theme", "accent", "lang", "pause_on_fullscreen", "pause_processes", "pause_on_battery",
             "video_frame_every_sec", "video_max_frames", "audio_segment_sec", "audio_max_segments", "max_text_mb",
             "max_pdf_pages", "foreign_code")
     skipped = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_SKIPPED,))[0][0]
     copies = _rows("SELECT count(*) FROM files WHERE status=?", (core.ST_COPY,))[0][0]
     return {"content_roots": roots, "drives": {"available": core.fixed_drives(), "selected": cfg["name_drives"]},
-            **{k: cfg[k] for k in keys},
+            **{k: cfg[k] for k in keys}, "lang_system": i18n.system_lang(),
             "info": {"model": "EmbeddingGemma 2", "device": emb.device if emb else None,
                      "index_bytes": _index_bytes(), "rescan_minutes": cfg["rescan_minutes"],
                      "name_rescan_minutes": cfg["name_rescan_minutes"], "failed": failed,
@@ -746,7 +820,7 @@ def _validate(key, value):
         roots = [os.path.normpath(str(p)) for p in value]
         bad = [p for p in roots if not os.path.isdir(p)]
         if bad or not roots:
-            raise HTTPException(400, f"нет такой папки: {bad[0] if bad else '—'}")
+            raise HTTPException(400, i18n.error("no_folder", L(), bad[0] if bad else "—"))
         return roots
     if key == "name_drives":
         if value is None:  # все несъёмные диски — как без ключа в config.json
@@ -754,12 +828,12 @@ def _validate(key, value):
         allowed = {d["drive"] for d in core.fixed_drives()}
         drives = [str(d).upper().rstrip("\\/") for d in value]
         if not drives or any(d not in allowed for d in drives):
-            raise HTTPException(400, "такого диска нет")
+            raise HTTPException(400, i18n.error("no_drive", L()))
         return drives
     if key in ("exclude_dirs", "pause_processes"):
         items = [str(x).strip() for x in value if str(x).strip()]
         if any(not _name_re.match(x) for x in items):
-            raise HTTPException(400, "в списке есть недопустимое имя")
+            raise HTTPException(400, i18n.error("bad_name", L()))
         return items
     if key == "foreign_code":
         if value not in ("skip", "last", "normal"):
@@ -767,15 +841,19 @@ def _validate(key, value):
         return value
     if key == "theme":
         if value not in ("system", "light", "dark"):
-            raise HTTPException(400, "неизвестная тема")
+            raise HTTPException(400, i18n.error("bad_theme", L()))
+        return value
+    if key == "lang":
+        if value not in ("system", "ru", "en"):
+            raise HTTPException(400, i18n.error("bad_lang", L()))
         return value
     if key == "accent":
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(value)):
-            raise HTTPException(400, "цвет в формате #rrggbb")
+            raise HTTPException(400, i18n.error("bad_color", L()))
         return value
     if key == "hotkey":
         if not re.fullmatch(r"[a-z0-9]+(\+[a-z0-9]+){1,3}", str(value).lower()):
-            raise HTTPException(400, "сочетание вида ctrl+alt+s")
+            raise HTTPException(400, i18n.error("bad_hotkey", L()))
         return str(value).lower()
     typ = core.EDITABLE[key]
     if typ is bool:
@@ -784,7 +862,7 @@ def _validate(key, value):
         lo, hi = LIMITS[key]
         v = int(value)
         if not lo <= v <= hi:
-            raise HTTPException(400, f"{key}: от {lo} до {hi}")
+            raise HTTPException(400, i18n.error("range", L(), key, lo, hi))
         return v
     return value
 
@@ -801,6 +879,8 @@ async def settings_post(request: Request):
         return {"ok": True, "restart": False}
     core.save_config(changes)
     cfg.update(changes)
+    if "lang" in changes:
+        _lang["v"] = i18n.resolve(changes["lang"])
     if indexer:
         indexer.refresh_config()
     else:
@@ -816,7 +896,7 @@ async def settings_post(request: Request):
 def failed(limit: int = 200):
     total = _rows("SELECT count(*) FROM files WHERE status=2")[0][0]
     items = _rows("SELECT path, err FROM files WHERE status=2 ORDER BY path LIMIT ?", (max(1, min(limit, 2000)),))
-    return {"total": total, "items": [{"path": p, "err": e} for p, e in items]}
+    return {"total": total, "items": [{"path": p, "err": i18n.reason(e, L())} for p, e in items]}
 
 
 @app.get("/api/processes")
