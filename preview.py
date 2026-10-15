@@ -8,6 +8,8 @@ from threading import Lock
 
 import numpy as np
 
+import winfs
+
 log = logging.getLogger("preview")
 
 
@@ -36,7 +38,7 @@ def pdf_pages(path, mtime):
         try:
             from pypdf import PdfReader
 
-            return len(PdfReader(path).pages)
+            return len(PdfReader(winfs.long_path(path)).pages)
         except Exception:
             return None
     return _cache.get_or(("pages", path, mtime), calc)
@@ -48,7 +50,7 @@ def image_info(path, mtime):
         try:
             from PIL import Image
 
-            with Image.open(path) as im:
+            with Image.open(winfs.long_path(path)) as im:
                 w, h = im.size
                 exif = im.getexif()
                 raw = exif.get_ifd(0x8769).get(36867) or exif.get(306)  # DateTimeOriginal / DateTime
@@ -65,7 +67,7 @@ def video_info(path, mtime):
         try:
             import av
 
-            with av.open(path) as c:
+            with av.open(winfs.long_path(path)) as c:
                 s = c.streams.video[0] if c.streams.video else None
                 dur = c.duration / 1e6 if c.duration else None
                 return (s.width, s.height, dur) if s else (None, None, dur)
@@ -81,7 +83,7 @@ def waveform(path, mtime, bins=44, max_sec=600):
             import av
 
             rate, buf, total = 4000, [], 0
-            with av.open(path) as c:
+            with av.open(winfs.long_path(path)) as c:
                 rs = av.AudioResampler(format="flt", layout="mono", rate=rate)
                 for fr in c.decode(c.streams.audio[0]):
                     for r in rs.resample(fr):
@@ -111,7 +113,7 @@ def _norm(s):
 def code_window(path, snippet, size=8):
     """~8 строк файла вокруг начала фрагмента; hl — строки, с которых фрагмент начинается."""
     try:
-        with open(path, "rb") as f:
+        with open(winfs.long_path(path), "rb") as f:
             raw = f.read(2 * 1024 * 1024)
         try:
             text = raw.decode("utf-8-sig")

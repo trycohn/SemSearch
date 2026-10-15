@@ -5,6 +5,7 @@ import threading
 import time
 
 import core
+import winfs
 
 log = logging.getLogger("names")
 CAP = 5000  # в запасном индексе больше совпадений не считаем — точное число даёт движок
@@ -12,7 +13,7 @@ CAP = 5000  # в запасном индексе больше совпадени
 
 def _stat(path):
     try:
-        st = os.stat(path)
+        st = os.stat(winfs.long_path(path))
         return st.st_size, st.st_mtime, st.st_ctime
     except OSError:
         return None, None, None

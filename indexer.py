@@ -15,20 +15,26 @@ import numpy as np
 import core
 import extract
 import throttle
+import winfs
 
 log = logging.getLogger("indexer")
 
-# Атрибуты, при которых файл нельзя трогать: ссылки/junction и облачные заглушки OneDrive
-# (чтение такой заглушки скачает файл из облака).
-_REPARSE = 0x400
-_CLOUD = 0x1000 | 0x40000 | 0x400000  # OFFLINE | RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS
 NAME_EXCLUDE_DIRS = ["$Recycle.Bin", "System Volume Information", "WinSxS"]
 QUIET_SEC = 3  # файл должен «успокоиться» (докопироваться/докачаться), прежде чем его индексировать
 
 
-def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop, smart=False):
+def _moved(old, new):
+    """Время изменения файла поменялось? Допуск 1 с (разное разрешение файловых систем); ровно на час — нет: FAT/exFAT
+    (флешки, карты памяти) хранят местное время, и при смене летнего времени оно «уезжает» на час у всех файлов."""
+    d = abs(old - new)
+    return d > 1 and abs(d - 3600) > 2
+
+
+def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop, smart=False, names=False):
     """Быстрый обход через os.scandir. Отдаёт (path, name, size, mtime).
-    smart — пропускать папки сборки и зависимостей, узнавая их по соседним файлам проекта (core.is_build_dir)."""
+    smart — пропускать папки сборки и зависимостей, узнавая их по соседним файлам проекта (core.is_build_dir).
+    Не трогает ссылки/junction (петли) и облачные заглушки OneDrive без данных на диске (winfs.skip_entry);
+    names — обход для индекса имён: файлы-заглушки в нём нужны (читать их не придётся)."""
     excl = {d.lower() for d in exclude_dirs}
     excl_paths = tuple(os.path.normcase(p) for p in exclude_paths)
     stack = list(roots)
@@ -36,31 +42,32 @@ def walk(roots, exclude_dirs, exclude_paths, skip_dot_dirs, should_stop, smart=F
         if should_stop():
             return
         d = stack.pop()
+        sd = winfs.long_path(d)  # папки глубже 247 знаков иначе не открываются; пути в индексе — без префикса \\?\
         try:
-            with os.scandir(d) as it:
+            with os.scandir(sd) as it:
                 entries = list(it)
         except OSError:
             continue
-        names = [e.name for e in entries] if smart else ()
+        siblings = [e.name for e in entries] if smart else ()
         for e in entries:
             try:
                 st = e.stat(follow_symlinks=False)
             except OSError:
                 continue
-            attrs = getattr(st, "st_file_attributes", 0)
-            if attrs & _REPARSE:
+            if winfs.skip_entry(st, keep_cloud_files=names):
                 continue
+            path = e.path if sd is d else os.path.join(d, e.name)
             if stat.S_ISDIR(st.st_mode):
                 low = e.name.lower()
                 if low in excl or (skip_dot_dirs and e.name.startswith(".")):
                     continue
-                if excl_paths and os.path.normcase(e.path).startswith(excl_paths):
+                if excl_paths and os.path.normcase(path).startswith(excl_paths):
                     continue
-                if smart and core.is_build_dir(e.name, names, e.path):
+                if smart and core.is_build_dir(e.name, siblings, winfs.long_path(path)):
                     continue
-                stack.append(e.path)
-            elif not attrs & _CLOUD:
-                yield e.path, e.name, st.st_size, st.st_mtime
+                stack.append(path)
+            else:
+                yield path, e.name, st.st_size, st.st_mtime
 
 
 def build_names(gen, roots):
@@ -69,7 +76,7 @@ def build_names(gen, roots):
     conn = core.connect_names()
     sql = f"INSERT OR IGNORE INTO names_t_{gen}(path, name) VALUES (?,?)"
     buf = []
-    for path, name, _, _ in walk(roots, NAME_EXCLUDE_DIRS, [], False, lambda: False):
+    for path, name, _, _ in walk(roots, NAME_EXCLUDE_DIRS, [], False, lambda: False, names=True):
         buf.append((path, name))
         if len(buf) >= 20000:
             with conn:
@@ -104,8 +111,17 @@ class Indexer(threading.Thread):
         # Картинки/видео/аудио декодируются в C-коде без GIL — хватает потоков.
         # PDF и документы разбираются на чистом Python — в отдельных процессах, иначе они душат поток,
         # который кормит видеокарту.
-        self.pool = ThreadPoolExecutor(6, thread_name_prefix="extract", initializer=throttle.background_thread)
-        self.procs = ProcessPoolExecutor(max(2, min(6, (os.cpu_count() or 4) // 3)), initializer=extract.worker_init)
+        # Много параллельных чтений ускоряют SSD, но тормозят HDD, флешки и сеть (головки прыгают между файлами)
+        try:
+            slow = any(winfs.is_slow_volume(r) for r in cfg["content_roots"])
+        except Exception:
+            slow = False
+        if slow:
+            log.info("папки поиска на HDD, съёмном или сетевом диске — читаю файлы в меньшее число потоков")
+        self.pool = ThreadPoolExecutor(3 if slow else 6, thread_name_prefix="extract",
+                                       initializer=throttle.background_thread)
+        self.procs = ProcessPoolExecutor(2 if slow else max(2, min(6, (os.cpu_count() or 4) // 3)),
+                                         initializer=extract.worker_init)
         self.changes = {}  # path -> время последнего события (для содержимого)
         self.changes_lock = threading.Lock()
         self.name_ops = deque()  # ("add"|"del", path) для индекса имён
@@ -146,14 +162,18 @@ class Indexer(threading.Thread):
             time.sleep(3)
         return time.time() - t0
 
-    # Сколько секунд в среднем уходит на файл, пока своих замеров нет (RTX 4070 SUPER)
+    # Сколько секунд в среднем уходит на файл, пока своих замеров нет (замер на RTX 4070 SUPER)
     DEFAULT_RATES = {"text": 0.12, "code": 0.025, "image": 0.045, "audio": 1.5, "video": 10.0}
 
     def eta(self, remaining):
         """remaining: {вид: сколько файлов осталось} -> секунд до конца или None."""
         if not any(remaining.values()):
             return None
-        return int(sum(n * self.rates.get(k, self.DEFAULT_RATES[k]) for k, n in remaining.items()))
+        # На другом железе (процессор вместо видеокарты) таблица врёт в разы: виды, до которых дело ещё не дошло,
+        # оцениваем по ней, но с поправкой на то, во сколько раз эта машина отличается от неё на уже измеренных
+        ratios = [r / self.DEFAULT_RATES[k] for k, r in self.rates.items() if r > 0 and k in self.DEFAULT_RATES]
+        scale = sum(ratios) / len(ratios) if ratios else 1.0
+        return int(sum(n * self.rates.get(k, self.DEFAULT_RATES[k] * scale) for k, n in remaining.items()))
 
     def refresh_config(self):
         """Настройки поменяли из интерфейса: пересчитать производное и перечитать папки."""
@@ -209,9 +229,12 @@ class Indexer(threading.Thread):
 
     def run(self):
         core.lower_priority()
-        # Ошибки модели могли быть временными (нехватка памяти, исправленный баг) — даём таким файлам ещё попытку
+        # Ошибки модели могли быть временными (нехватка памяти, исправленный баг), как и ошибки чтения: файл был
+        # занят программой или антивирусом, диск отключён, путь был длиннее 259 знаков — даём таким файлам ещё попытку
         with self.conn:
-            retry = self.conn.execute("UPDATE files SET status=0, err=NULL WHERE status=2 AND err LIKE 'модель:%'").rowcount
+            retry = self.conn.execute("UPDATE files SET status=0, err=NULL WHERE status=2 AND (err LIKE 'модель:%' "
+                                      "OR err LIKE 'PermissionError:%' OR err LIKE 'FileNotFoundError:%' "
+                                      "OR err LIKE 'OSError:%')").rowcount
         if retry:
             log.info("повторно в очередь после ошибок модели: %d", retry)
         threading.Thread(target=self.names_loop, name="names", daemon=True).start()
@@ -317,6 +340,14 @@ class Indexer(threading.Thread):
                     self.changes[p] = time.time()
                 self.wake.set()
 
+    def _away_roots(self):
+        """Папки поиска, которых сейчас нет: отключённая флешка, недоступный сетевой диск. Пропавшие ещё до запуска
+        лежат в cfg["content_roots_missing"] (их заполняет app). Файлы в них не пропали, а недоступны: индекс не стираем
+        (иначе после возвращения диска всё считалось бы заново) и читать их не пытаемся."""
+        exists = getattr(core, "_dir_exists", os.path.isdir)  # у core — с ограничением по времени для сетевых папок
+        missing = list(self.cfg.get("content_roots_missing") or ())
+        return [r for r in self.cfg["content_roots"] if not exists(r)] + missing
+
     def scan_content(self):
         self.full_scan_requested = False  # запрошенный обход — вот он
         self.state.update(phase="scan", current="")
@@ -335,7 +366,7 @@ class Indexer(threading.Thread):
             status, prio, why = self._policy(kind, name, tag)
             if old is None:
                 new.append((path, name, kind, size, mtime, status, prio, tag, why))
-            elif old[1] != size or abs(old[2] - mtime) > 1:
+            elif old[1] != size or _moved(old[2], mtime):
                 changed.append((old[0], size, mtime, status, prio, tag, why))
             else:
                 status, prio, why = self._content_verdict(kind, old, tag, status, prio, why)
@@ -344,7 +375,8 @@ class Indexer(threading.Thread):
                     repol.append((old[0], old[3], status, prio, tag, why))
         if self.stop_flag:
             return
-        gone = [v[0] for p, v in known.items() if p not in seen]
+        away = self._away_roots()
+        gone = [v[0] for p, v in known.items() if p not in seen and not (away and core.under(p, away))]
         if len(gone) > max(1000, len(known) // 2):
             # Разом «пропало» больше половины индекса — так бывает, если источник списка ответил не полностью
             # (движок ещё строит индекс). Перепроверяем своим обходом, прежде чем стирать посчитанное.
@@ -353,7 +385,7 @@ class Indexer(threading.Thread):
                                                self.cfg["exclude_paths"], True, lambda: self.stop_flag, smart=True)}
             if self.stop_flag:
                 return
-            gone = [v[0] for p, v in known.items() if p not in really]
+            gone = [v[0] for p, v in known.items() if p not in really and not (away and core.under(p, away))]
             log.warning("после перепроверки пропало %d", len(gone))
         with self.conn:
             self.conn.executemany("INSERT INTO files(path, name, kind, size, mtime, status, prio, tag, err) "
@@ -415,23 +447,23 @@ class Indexer(threading.Thread):
         n = 0
         with self.conn:
             for p in ready:
-                if os.path.isdir(p):
+                try:
+                    st = os.stat(winfs.long_path(p), follow_symlinks=False)
+                except (FileNotFoundError, NotADirectoryError):
+                    n += self._delete_under(p)
+                    continue
+                except OSError:  # занят, нет доступа, том отключён: не значит «удалён» — оставляем, обход разберётся
+                    continue
+                if winfs.skip_entry(st):  # ссылка, junction, облачная заглушка
+                    continue
+                if stat.S_ISDIR(st.st_mode):
                     if self._in_scope(p, True):
                         for path, name, size, mtime in walk([p], self.cfg["exclude_dirs"], self.cfg["exclude_paths"],
                                                             True, lambda: self.stop_flag, smart=True):
                             n += self._upsert(path, name, size, mtime)
-                elif os.path.isfile(p):
-                    if not self._in_scope(p, False):
-                        continue
-                    try:
-                        st = os.stat(p, follow_symlinks=False)
-                    except OSError:
-                        continue
-                    if getattr(st, "st_file_attributes", 0) & (_REPARSE | _CLOUD):
-                        continue
-                    n += self._upsert(p, os.path.basename(p), st.st_size, st.st_mtime)
-                else:
-                    n += self._delete_under(p)
+                elif stat.S_ISREG(st.st_mode):
+                    if self._in_scope(p, False):
+                        n += self._upsert(p, os.path.basename(p), st.st_size, st.st_mtime)
         if n:
             log.info("изменения на диске: %d", n)
         return n
@@ -456,7 +488,7 @@ class Indexer(threading.Thread):
                               "VALUES (?,?,?,?,?,?,?,?,?)", (path, name, kind, size, mtime, status, prio, tag, why))
             return 1
         fid, old_size, old_mtime, _ = row
-        if old_size == size and abs(old_mtime - mtime) <= 1:
+        if old_size == size and not _moved(old_mtime, mtime):
             return 0
         self._drop_chunks(fid)
         self.conn.execute("UPDATE files SET size=?, mtime=?, status=?, prio=?, tag=?, err=?, hash=NULL, copy_of=NULL "
@@ -553,15 +585,18 @@ class Indexer(threading.Thread):
         if not total:
             return
         batch_files = {"text": 32, "code": 32, "image": 32, "audio": 4, "video": 1}
+        away = self._away_roots()  # один раз на проход: проверка недоступной сетевой папки занимает секунды
         # Сначала обычные файлы всех видов, потом отложенные (prio 1: возможно чужой код) — они не задерживают ваши
         for prio in (0, 1):
             for kind in self.ORDER:
-                if self._process_kind(kind, prio, batch_files[kind]) is False:
+                if self._process_kind(kind, prio, batch_files[kind], away) is False:
                     return
 
-    def _process_kind(self, kind, prio, n):
+    def _process_kind(self, kind, prio, n, away=()):
         rows = self.conn.execute("SELECT id, path, kind, mtime FROM files WHERE status=0 AND kind=? AND prio=?",
                                  (kind, prio)).fetchall()
+        if away:  # файлы с отключённого диска не пытаемся читать: все «не прочитались» бы навсегда
+            rows = [r for r in rows if not core.under(r[1], away)]
         if not rows:
             return True
         self.state["phase"] = kind
@@ -745,10 +780,17 @@ class Indexer(threading.Thread):
                 op, p = self.name_ops.popleft()
                 if op == "del":
                     core.names_delete(conn, g, p)
-                elif os.path.isdir(p):
-                    for path, _, _, _ in walk([p], NAME_EXCLUDE_DIRS, [], False, lambda: self.stop_flag):
+                    continue
+                try:
+                    st = os.stat(winfs.long_path(p), follow_symlinks=False)
+                except OSError:
+                    continue
+                if winfs.skip_entry(st, keep_cloud_files=True):  # ссылка, junction, папка-заглушка
+                    continue
+                if stat.S_ISDIR(st.st_mode):
+                    for path, _, _, _ in walk([p], NAME_EXCLUDE_DIRS, [], False, lambda: self.stop_flag, names=True):
                         core.names_add(conn, g, path)
-                elif os.path.isfile(p):
+                elif stat.S_ISREG(st.st_mode):
                     core.names_add(conn, g, p)
 
     def scan_names(self, conn):

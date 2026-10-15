@@ -19,10 +19,12 @@ What is applied
   of N tokens is one burst whatever the number of texts.
 - Profile, re-evaluated before every sub-batch (input/lock checks cached 0.25 s; NVML runs in a 1 Hz
   daemon thread):
-    full   - no keyboard/mouse input for IDLE_AFTER s, or the session is locked: maximum throughput;
+    full   - no keyboard/mouse input for IDLE_AFTER s, or the session is locked, and not on battery /
+             Battery Saver: maximum throughput;
     gentle - user at the PC (or another process is decoding video);
     strong - other processes keep the GPU busy (NVML per-process SM utilization >= OTHERS_STRONG,
              e.g. a windowed game).
+  The sub-batch sizes above are tuned for a fast card; on a slower one they shrink by themselves (BURST_MS).
 - CPU: background_process() / background_thread() -> IDLE priority + Windows background mode
   (very low I/O and memory priority) for extraction workers / threads.
 
@@ -49,6 +51,13 @@ PROFILES = {
     "gentle": {"bs": 0.25, "tokens": 2048, "duty": 1.0, "split": 2},
     "strong": {"bs": 0.125, "tokens": 1024, "duty": 0.5, "split": 2},
 }
+# The numbers above were measured on an RTX 4070 SUPER (bursts there: ~1 ms gentle, ~0.5 ms strong). A GPU several times
+# slower would hold the desktop for several times longer, so the sub-batch of "gentle" / "strong" is scaled down
+# (never below 1/16) while the average burst (without the longest one) stays above twice its target in ms, and
+# back up when it falls below half of it. The first WARMUP background sub-batches are not measured (cuBLAS, graphs).
+BURST_MS = {"gentle": 3.0, "strong": 1.5}
+SCALE_MIN = 1 / 16
+WARMUP = 3
 GPU_PRIORITY = "idle"
 
 _PRIO = {"idle": 0, "below_normal": 1, "normal": 2, "above_normal": 3, "high": 4}
@@ -65,6 +74,8 @@ _cls = ("gentle", 0.0)  # cached classification, monotonic time
 _last_end = 0.0       # end of the previous background sub-batch (perf_counter)
 _last_gap = 0.0       # pause still owed after it
 _gpu_base = None      # priority set by init()
+_scale = {n: 1.0 for n in BURST_MS}  # measured share of the profile's bs / tokens (see BURST_MS)
+_warm = WARMUP
 _monitor = None
 trace = None          # benchmarks: a list -> (seconds, module class) of every GPU burst
 stats = {"busy": 0.0, "bursts": 0}  # benchmarks: total background GPU-burst time / count
@@ -72,27 +83,36 @@ stats = {"busy": 0.0, "bursts": 0}  # benchmarks: total background GPU-burst tim
 try:
     _k32 = ctypes.WinDLL("kernel32")
     _u32 = ctypes.WinDLL("user32")
-    _gdi = ctypes.WinDLL("gdi32")
     _k32.GetCurrentProcess.restype = wintypes.HANDLE
     _k32.GetCurrentThread.restype = wintypes.HANDLE
     _k32.GetTickCount.restype = wintypes.DWORD
     _k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     _k32.SetThreadPriority.argtypes = [wintypes.HANDLE, ctypes.c_int]
-    _gdi.D3DKMTSetProcessSchedulingPriorityClass.argtypes = [wintypes.HANDLE, ctypes.c_int]
-    _gdi.D3DKMTSetProcessSchedulingPriorityClass.restype = ctypes.c_long
-    _gdi.D3DKMTGetProcessSchedulingPriorityClass.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_int)]
-    _gdi.D3DKMTGetProcessSchedulingPriorityClass.restype = ctypes.c_long
     _u32.OpenInputDesktop.restype = wintypes.HANDLE
     _u32.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     _u32.GetUserObjectInformationW.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
                                               ctypes.POINTER(wintypes.DWORD)]
     _u32.CloseDesktop.argtypes = [wintypes.HANDLE]
 except Exception:  # not Windows
-    _k32 = _u32 = _gdi = None
+    _k32 = _u32 = None
+try:  # separately: a Windows build without the D3DKMT entry points only loses the GPU priority, not the rest
+    _gdi = ctypes.WinDLL("gdi32")
+    _gdi.D3DKMTSetProcessSchedulingPriorityClass.argtypes = [wintypes.HANDLE, ctypes.c_int]
+    _gdi.D3DKMTSetProcessSchedulingPriorityClass.restype = ctypes.c_long
+    _gdi.D3DKMTGetProcessSchedulingPriorityClass.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_int)]
+    _gdi.D3DKMTGetProcessSchedulingPriorityClass.restype = ctypes.c_long
+except Exception:
+    _gdi = None
 
 
 class _LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+class _POWER_STATUS(ctypes.Structure):
+    _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte),
+                ("BatteryLifePercent", ctypes.c_ubyte), ("SystemStatusFlag", ctypes.c_ubyte),
+                ("BatteryLifeTime", wintypes.DWORD), ("BatteryFullLifeTime", wintypes.DWORD)]
 
 
 # ------------------------------------------------------------------ process / thread priorities
@@ -167,6 +187,17 @@ def user_idle_seconds():
     return 0.0
 
 
+def saving_power():
+    """Laptop on battery or with Battery Saver on: "full" would drain it, so the user-away profile stays "gentle"."""
+    try:
+        s = _POWER_STATUS()
+        if _k32.GetSystemPowerStatus(ctypes.byref(s)):
+            return s.ACLineStatus == 0 or bool(s.SystemStatusFlag & 1)
+    except Exception:
+        pass
+    return False
+
+
 def session_locked():
     """Locked workstation / secure desktop: the input desktop is not 'Default'."""
     try:
@@ -191,8 +222,25 @@ class Nvml:
 
         pynvml.nvmlInit()
         self.n = pynvml
-        self.h = pynvml.nvmlDeviceGetHandleByIndex(int(os.environ.get("SEMSEARCH_GPU", "0")))
+        self.h = pynvml.nvmlDeviceGetHandleByIndex(self._index(pynvml))
         self.pid = os.getpid()
+
+    @staticmethod
+    def _index(nv):
+        """NVML index of the card torch computes on. CUDA numbers cards fastest-first, NVML by PCI bus, so with two
+        NVIDIA cards "0" may be the wrong one: match by UUID. SEMSEARCH_GPU forces an index."""
+        env = os.environ.get("SEMSEARCH_GPU", "").strip()
+        if env.isdigit():
+            return int(env)
+        try:
+            want = "GPU-" + str(_torch.cuda.get_device_properties(_torch.cuda.current_device()).uuid)
+            for i in range(nv.nvmlDeviceGetCount()):
+                got = nv.nvmlDeviceGetUUID(nv.nvmlDeviceGetHandleByIndex(i))
+                if (got.decode() if isinstance(got, bytes) else got).lower() == want.lower():
+                    return i
+        except Exception:
+            pass
+        return 0
 
     def usage(self, window=2.0):
         """-> (others SM %, ours SM %, others video-decoder %) averaged over the last `window` s."""
@@ -218,6 +266,7 @@ def _monitor_loop():
         nv = Nvml()
     except Exception:
         return  # no NVML: never "strong", video rule off
+    fails = 0
     while True:
         try:
             others, _, dec = nv.usage()
@@ -227,8 +276,12 @@ def _monitor_loop():
                 _strong_until = now + HOLD
             if dec >= 1.0:
                 _video_until = now + HOLD
+            fails = 0
         except Exception:
-            pass
+            fails += 1
+            if fails >= 30:  # this card / driver gives no per-process utilization (NotSupported): go on without it
+                _others = 0.0
+                return
         time.sleep(1.0)
 
 
@@ -239,7 +292,7 @@ def _classify():
         return _cls[0]
     if now < _strong_until:
         s = "strong"
-    elif now >= _video_until and (user_idle_seconds() >= IDLE_AFTER or session_locked()):
+    elif now >= _video_until and (user_idle_seconds() >= IDLE_AFTER or session_locked()) and not saving_power():
         s = "full"
     else:
         s = "gentle"
@@ -333,6 +386,7 @@ def _sync_point(st, name):
         busy = now - st["t"]
         st["busy"] += busy
         st["bursts"] += 1
+        st["peak"] = max(st["peak"], busy)
         if trace is not None:
             trace.append((busy, name))
         if st["duty"] < 1.0:
@@ -349,13 +403,35 @@ def _owed_pause(p):
             time.sleep(min(gap, 2.0))
 
 
+def _k():
+    """Measured share of the current profile's sub-batch (see BURST_MS); 1.0 for "full" and for benchmarks."""
+    return _scale.get(_state, 1.0) if _forced is None else 1.0
+
+
+def _adapt(st):
+    """After a background sub-batch: tune _scale of the profile it ran in from the average burst length."""
+    global _warm
+    target = BURST_MS.get(st.get("name"))
+    if target is None or _forced is not None or st["bursts"] < 4:
+        return
+    if _warm > 0:
+        _warm -= 1
+        return
+    avg = (st["busy"] - st["peak"]) / (st["bursts"] - 1) * 1e3  # the longest burst is often a one-off stall
+    s = _scale[st["name"]]
+    if avg > 2 * target:
+        _scale[st["name"]] = max(SCALE_MIN, s * target / avg)
+    elif avg < target / 2 and s < 1.0:
+        _scale[st["name"]] = min(1.0, s * 1.5)
+
+
 def batch_size(default):
     """Before a background sub-batch (outside the model lock): waits out the pause still owed by the
     previous sub-batch and returns the sub-batch size for the current profile."""
     try:
         p = _profile()
         _owed_pause(p)
-        return max(1, int(round(default * p["bs"])))
+        return max(1, int(round(default * p["bs"] * _k())))
     except Exception:
         return default
 
@@ -365,7 +441,7 @@ def tokens(default):
     try:
         p = _profile()
         _owed_pause(p)
-        return int(p.get("tokens", default))
+        return max(64, int(p.get("tokens", default) * _k()))
     except Exception:
         return default
 
@@ -376,10 +452,10 @@ def background():
     global _last_end, _last_gap
     try:
         p = _profile()
-        st = {"split": int(p.get("split", 0)), "duty": float(p["duty"]), "busy": 0.0, "bursts": 0,
-              "t": time.perf_counter()}
+        st = {"split": int(p.get("split", 0)), "duty": float(p["duty"]), "busy": 0.0, "bursts": 0, "peak": 0.0,
+              "t": time.perf_counter(), "name": _state}
     except Exception:
-        st = {"split": 0, "duty": 1.0, "busy": 0.0, "bursts": 0, "t": time.perf_counter()}
+        st = {"split": 0, "duty": 1.0, "busy": 0.0, "bursts": 0, "peak": 0.0, "t": time.perf_counter()}
     _tls.bg = st
     try:
         yield
@@ -393,6 +469,10 @@ def background():
         _last_end = now
         stats["busy"] += st["busy"] + tail
         stats["bursts"] += st["bursts"] + 1
+        try:
+            _adapt(st)
+        except Exception:
+            pass
 
 
 def force(profile=None):

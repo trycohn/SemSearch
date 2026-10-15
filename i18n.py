@@ -13,8 +13,8 @@ _LANG_RUSSIAN = 0x19  # PRIMARYLANGID
 def system_lang():
     try:
         return "ru" if ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF == _LANG_RUSSIAN else "en"
-    except Exception:
-        return "ru"
+    except Exception:  # язык не определился — как «иначе» в описании выше
+        return "en"
 
 
 def resolve(pref):
@@ -160,6 +160,7 @@ _REASONS_EN = {
     "чужой код: скачанный архив исходников": "third-party code: downloaded source archive",
     "разбор не уложился в 3 минуты": "reading took more than 3 minutes",
     "сбой разбора файла": "the file reader crashed",
+    "файл только в облаке, на диске его нет": "the file is only in the cloud, not on this disk",
 }
 
 
@@ -172,6 +173,9 @@ def reason(text, lang):
         return _REASONS_EN[t]
     if t.startswith("модель: "):
         return "model: " + t[len("модель: "):]
+    head, _, rest = t.partition(": ")
+    if rest in _REASONS_EN:  # своя причина внутри исключения: «OSError: файл только в облаке…»
+        return f"{head}: {_REASONS_EN[rest]}"
     return t
 
 
