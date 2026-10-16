@@ -39,4 +39,41 @@ fn main() {
 "#;
     let windows = tauri_build::WindowsAttributes::new().app_manifest(manifest);
     tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows)).expect("tauri-build failed");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        describe_as_setup();
+    }
+}
+
+/// Version resource: product name "SemSearch" (productName in tauri.conf.json; code signing wants the project's
+/// name on every file), file description "SemSearch Setup" (Task Manager, Properties). tauri-build writes both
+/// from productName, so its resource.rc is compiled again, with the description changed, into the same
+/// OUT_DIR\resource.lib it has already passed to the linker.
+fn describe_as_setup() {
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
+    let rc = out.join("resource.rc");
+    let lib = out.join("resource.lib");
+    let text = std::fs::read_to_string(&rc).expect("OUT_DIR\\resource.rc of tauri-build");
+    let from = r#"VALUE "FileDescription", "SemSearch""#;
+    assert!(
+        text.matches(from).count() == 1 && lib.is_file(),
+        "tauri-build's resource has changed: no single {from} in {} or no {}",
+        rc.display(),
+        lib.display()
+    );
+    std::fs::write(&rc, text.replace(from, r#"VALUE "FileDescription", "SemSearch Setup""#)).expect("resource.rc");
+    // the same rc.exe embed-resource uses for tauri-build ($RC, else the Windows SDK's)
+    let exe = std::env::var_os("RC")
+        .map(std::path::PathBuf::from)
+        .or_else(|| embed_resource::find_windows_sdk_tool("rc.exe"))
+        .unwrap_or_else(|| "rc.exe".into());
+    let ok = std::process::Command::new(&exe)
+        .arg("/fo")
+        .arg(&lib)
+        .arg("/I")
+        .arg(&out)
+        .arg(&rc)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    assert!(ok, "{} could not compile {}", exe.display(), rc.display());
 }

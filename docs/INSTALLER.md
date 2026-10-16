@@ -207,7 +207,10 @@ CPython 3.11, x86_64 windows-msvc install_only; закреплённые URL и 
 `pack append`: полезная нагрузка дописывается к **неподписанному** голому exe
 (`[exe][zip][u64 длина, little-endian][8 байт "SSPAYLD1"]`) → подпись готового `dist\SemSearch-Setup-<версия>.exe` →
 `pack info` проверяет, что нагрузка находится. Каждый файл подписывается один раз (уже подписанный — ошибка сборки).
-Версия — из `shell/tauri.conf.json` (её же `build.rs` вшивает в установщик). Для разработки без упаковки:
+Версия — из `shell/tauri.conf.json` (её же `build.rs` вшивает в установщик). В свойствах всех трёх exe
+(`SemSearch.exe`, `bin\semsearch-engine.exe`, exe установщика) продукт — «SemSearch», версия продукта — эта же: так
+требует SignPath Foundation. У движка ресурс версии пишет `engine/build.rs`; у установщика `installer/build.rs` меняет
+описание файла на «SemSearch Setup» (tauri-build ставит туда productName). Для разработки без упаковки:
 `SEMSEARCH_PAYLOAD_DIR=<корень репозитория>` — ядро берёт файлы прямо оттуда (по тому же payload.txt), Python — из
 `installer\.cache\` (один раз: `installer\target\release\pack.exe python .`).
 

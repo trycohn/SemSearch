@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SemSearch Setup",
+  "productName": "SemSearch",
   "mainBinaryName": "SemSearch-Setup",
   "version": "0.0.0",
   "identifier": "com.semsearch.setup",
