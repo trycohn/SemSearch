@@ -3,7 +3,9 @@
      The artifact is installer\target\inner\ from "build-installer.cmd inner" (zipped by actions/upload-artifact).
      uninstall.exe is a copy of the bare installer exe (SemSearch-Setup.exe); it goes into the payload.
      version: "version" of shell/tauri.conf.json, passed by the workflow.
-     bin/semsearch-engine.exe has no version resource yet, so it has no product-name / product-version check. -->
+     SignPath Foundation: every signed file must have product name = the project's name and the same product version,
+     checked here. Not met yet: bin\semsearch-engine.exe has no version resource and the installer exe (so
+     uninstall.exe) says "SemSearch Setup"; until they are fixed, this configuration rejects those files. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <parameters>
     <parameter name="version" required="true" />
@@ -12,10 +14,10 @@
     <pe-file path="SemSearch.exe" product-name="SemSearch" product-version="${version}">
       <authenticode-sign />
     </pe-file>
-    <pe-file path="bin/semsearch-engine.exe">
+    <pe-file path="bin/semsearch-engine.exe" product-name="SemSearch" product-version="${version}">
       <authenticode-sign />
     </pe-file>
-    <pe-file path="uninstall.exe" product-name="SemSearch Setup" product-version="${version}">
+    <pe-file path="uninstall.exe" product-name="SemSearch" product-version="${version}">
       <authenticode-sign />
     </pe-file>
   </zip-file>
