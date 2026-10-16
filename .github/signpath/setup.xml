@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration, slug "setup": signing request 2 of 2 in .github/workflows/release.yml.
+     The artifact is dist\SemSearch-Setup-<version>.exe from "build-installer.cmd pack" (zipped by
+     actions/upload-artifact): the bare installer exe with the payload (zip + length + "SSPAYLD1") appended. The
+     signature covers the payload; the installer looks for it in front of the certificate table (docs/INSTALLER.md).
+     version: "version" of shell/tauri.conf.json, passed by the workflow. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="SemSearch-Setup-${version}.exe" product-name="SemSearch Setup" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

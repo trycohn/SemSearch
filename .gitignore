@@ -30,7 +30,8 @@ target/
 # Редакторы и система
 .vscode/
 .idea/
-.claude/settings.local.json
+# Claude Code: локальные настройки, launch.json с путями этой машины, рабочие копии веток (worktrees)
+/.claude/
 Thumbs.db
 desktop.ini
 

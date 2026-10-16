@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration, slug "inner": signing request 1 of 2 in .github/workflows/release.yml.
+     The artifact is installer\target\inner\ from "build-installer.cmd inner" (zipped by actions/upload-artifact).
+     uninstall.exe is a copy of the bare installer exe (SemSearch-Setup.exe); it goes into the payload.
+     version: "version" of shell/tauri.conf.json, passed by the workflow.
+     bin/semsearch-engine.exe has no version resource yet, so it has no product-name / product-version check. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="SemSearch.exe" product-name="SemSearch" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="bin/semsearch-engine.exe">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="uninstall.exe" product-name="SemSearch Setup" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
