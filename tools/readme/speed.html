@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SemSearch speed</title>
+<!-- The search-speed chart of the READMEs. Data: speed.js, written by tools/bench_search.py on a real computer.
+     make_readme_images.py opens it as speed.html?<ru|en>-<light|dark> on a transparent background, 860 px wide —
+     the width of a README on GitHub, so the picture is shown 1:1 and its text stays sharp (rendered at 2x).
+     Like is compared with like: by name over the whole drive on both sides; by meaning only SemSearch can search. -->
+<style>
+html,body{margin:0;background:transparent}
+.light{--text:#1f2328;--muted:#59636e;--faint:#6e7781;--grid:#e1e6eb;--ours:#005fb8;--theirs:#8c959f;--panel:#ffffff;--line:#d0d7de}
+.dark{--text:#f0f6fc;--muted:#9198a1;--faint:#848d97;--grid:#2a313a;--ours:#4c9be8;--theirs:#6e7681;--panel:#161b22;--line:#3d444d}
+body{width:860px;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
+.wrap{padding:4px 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 26px 18px;margin-bottom:14px}
+.panel h3{margin:0;font-size:22px;font-weight:600;line-height:1.25}
+.panel .sub{font-size:15.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+.rows{margin-top:18px;position:relative}
+.row{display:grid;grid-template-columns:210px 1fr;align-items:center;height:58px}
+.row .who b{display:block;font-size:17px;font-weight:600}
+.row .who span{display:block;font-size:14.5px;color:var(--muted);margin-top:2px}
+.track{position:relative;height:58px}
+.bar{position:absolute;left:0;top:21px;height:16px;border-radius:0 4px 4px 0}
+.val{position:absolute;top:15px;font-size:18px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.none{position:absolute;left:0;top:17px;font-size:17px;font-weight:600;color:var(--muted);white-space:nowrap}
+.axis{display:grid;grid-template-columns:210px 1fr;margin-top:6px}
+.ticks{position:relative;height:22px}
+.tick{position:absolute;top:0;font-size:14px;color:var(--faint);transform:translateX(-50%);white-space:nowrap}
+.tick:first-child{transform:none}
+.gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--grid)}
+.note{font-size:15.5px;color:var(--muted);margin-top:12px;line-height:1.45}
+.panel:last-child{margin-bottom:0}
+</style>
+<script src="speed.js"></script>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<script>
+const T = {
+  ru: {
+    nameH: 'Поиск по имени по всему диску C:',
+    nameSub: (n) => n + ' файлов, первые 200 совпадений по части имени',
+    ours: 'SemSearch', oursName: 'свой индекс имён',
+    win: 'Поиск Windows', winName: 'Проводник по диску C:',
+    winIndex: 'Поиск Windows', winIndexSub: (s) => 'индекс, только ' + s,
+    noteName: (s, ms) => 'Свой индекс у Windows есть только для ' + s + ' (там ответ за ' + ms +
+      '), остальной диск Проводник перебирает папку за папкой.',
+    meanH: 'Поиск по смыслу',
+    meanSub: 'Фраза вроде «договор аренды квартиры» — найти файл, даже если этих слов в нём нет',
+    oursMean: 'по смыслу', winMean: 'только по словам', cant: 'не умеет',
+    noteMean: (zero, n) => 'Windows ищет в содержимом только сами слова запроса' +
+      (zero ? ': по ' + zero + ' фразам из ' + n + ' он не нашёл ни одного файла.' : '.'),
+    ms: 'мс', s: 'с', min: 'мин', dec: ',', users: 'C:\\Users', start: 'меню «Пуск»', and: ' и ',
+  },
+  en: {
+    nameH: 'Search by name over the whole C: drive',
+    nameSub: (n) => n + ' files, first 200 matches by a part of the name',
+    ours: 'SemSearch', oursName: 'its own name index',
+    win: 'Windows Search', winName: 'Explorer over C:',
+    winIndex: 'Windows Search', winIndexSub: (s) => 'index, only ' + s,
+    noteName: (s, ms) => 'Windows has its own index only for ' + s + ' (answers in ' + ms +
+      ' there); Explorer walks the rest of the drive folder by folder.',
+    meanH: 'Search by meaning',
+    meanSub: 'A phrase like "apartment lease agreement" — find the file even when these words are not in it',
+    oursMean: 'by meaning', winMean: 'by words only', cant: 'cannot',
+    noteMean: (zero, n) => 'In file contents Windows looks only for the words of the query' +
+      (zero ? ': for ' + zero + ' of ' + n + ' phrases it found no file at all.' : '.'),
+    ms: 'ms', s: 's', min: 'min', dec: '.', users: 'C:\\Users', start: 'the Start menu', and: ' and ',
+  },
+};
+const [lang, theme] = (location.search.slice(1) || location.hash.slice(1) || 'ru-light').split('-');
+document.documentElement.className = theme;
+document.documentElement.lang = lang;
+const t = T[lang] || T.ru, D = window.SPEED, M = D.median;
+
+const num = (x, digits) => x.toFixed(digits).replace('.', t.dec);
+function fmt(ms) {
+  if (ms < 10) return num(ms, 1) + ' ' + t.ms;
+  if (ms < 1000) return Math.round(ms) + ' ' + t.ms;
+  if (ms < 60000) return num(ms / 1000, ms < 10000 ? 1 : 0) + ' ' + t.s;
+  const m = Math.floor(ms / 60000), s = Math.round((ms % 60000) / 1000);
+  return m + ' ' + t.min + (s ? ' ' + s + ' ' + t.s : '');
+}
+const big = (n) => lang === 'ru' ? (n / 1e6).toFixed(1).replace('.', ',') + ' млн' : (n / 1e6).toFixed(1) + ' million';
+function scope(urls) {
+  const parts = [];
+  if (urls.some((u) => /\\Users\\$/i.test(u))) parts.push(t.users);
+  if (urls.some((u) => /Start Menu/i.test(u))) parts.push(t.start);
+  return parts.join(t.and) || urls.map((u) => u.replace(/^file:\/\/\/|\[[^\]]+\]\\/g, '')).join(', ');
+}
+
+// the whole drive on both sides when the walk was measured; without it, the index (the note says how little it covers)
+const nameRows = [{ who: t.ours, sub: t.oursName, ms: M.name.semsearch, ours: true },
+  M.name.walk ? { who: t.win, sub: t.winName, ms: M.name.walk }
+              : { who: t.winIndex, sub: t.winIndexSub(scope(D.windows_scope)), ms: M.name.windows }];
+const meanRows = [{ who: t.ours, sub: t.oursMean, ms: M.content.semsearch, ours: true },
+                  { who: t.win, sub: t.winMean, none: t.cant }];
+
+// one log axis for both panels, between the round ticks around the fastest and the slowest result
+const all = [...nameRows, ...meanRows].map((r) => r.ms).filter(Boolean);
+const TICKS = [0.1, 1, 10, 100, 1000, 10000, 60000, 600000, 3600000];
+const lo = TICKS.filter((v) => v <= Math.min(...all) / 2).pop() || TICKS[0];  // the fastest bar still gets some length
+const hi = TICKS.find((v) => v >= Math.max(...all)) || TICKS[TICKS.length - 1];
+const ticks = TICKS.filter((v) => v >= lo && v <= hi);
+const X = (ms) => (Math.log10(ms) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo));
+const TRACK = 860 - 2 - 52 - 210 - 120;  // panel border + padding, label column, room for the value
+const tickFmt = (v) => v < 1000 ? String(v).replace('.', t.dec) + ' ' + t.ms : v < 60000 ? v / 1000 + ' ' + t.s : v / 60000 + ' ' + t.min;
+
+function panel(h, sub, rows, note) {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  let html = '<h3>' + h + '</h3><div class="sub">' + sub + '</div><div class="rows">';
+  for (const v of ticks) html += '<div class="gridline" style="left:' + (210 + X(v) * TRACK) + 'px"></div>';
+  for (const r of rows) {
+    html += '<div class="row"><div class="who"><b>' + r.who + '</b><span>' + r.sub + '</span></div><div class="track">';
+    if (r.none) {
+      html += '<div class="none">' + r.none + '</div>';
+    } else {
+      const w = Math.max(6, X(r.ms) * TRACK);
+      html += '<div class="bar" style="width:' + w + 'px;background:var(' + (r.ours ? '--ours' : '--theirs') + ')"></div>' +
+        '<div class="val" style="left:' + (w + 10) + 'px">' + fmt(r.ms) + '</div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div><div class="axis"><div></div><div class="ticks">' +
+    ticks.map((v) => '<div class="tick" style="left:' + X(v) * TRACK + 'px">' + tickFmt(v) + '</div>').join('') +
+    '</div></div><div class="note">' + note + '</div>';
+  p.innerHTML = html;
+  return p;
+}
+
+const root = document.getElementById('root');
+root.appendChild(panel(t.nameH, t.nameSub(big(D.semsearch_names)), nameRows, t.noteName(scope(D.windows_scope), fmt(M.name.windows))));
+root.appendChild(panel(t.meanH, t.meanSub, meanRows,
+  t.noteMean(D.content.windows.filter((r) => !r.n).length, D.content.windows.length)));
+</script>
+</body>
+</html>
