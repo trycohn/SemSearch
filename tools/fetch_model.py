@@ -49,6 +49,10 @@ BIG = 100 * 1024 * 1024  # файлы крупнее качаем сами с д
 CHUNK = 1024 * 1024
 PROGRESS_EVERY = 0.5  # секунд между строками прогресса: не чаще двух раз в секунду
 MSG_LIMIT = 300  # длина текста исключения в сообщении об ошибке
+# Паузы между попытками докачки, которые не принесли ни байта: после обрыва Hugging Face бывает минуту-другую
+# закрывает соединение сразу (особенно запросы без токена). Все паузы подряд — около двух минут, потом сдаёмся.
+RETRY_WAITS = (2, 5, 10, 20, 30, 30, 30)
+RETRY_AFTER_MAX = 60  # секунд: дольше по заголовку Retry-After не ждём
 
 _out_lock = threading.Lock()  # строки из потока прогресса и из главного не должны перемешиваться
 
@@ -212,9 +216,19 @@ def _files(info):
     return list(filter_repo_objects(info.siblings, ignore_patterns=IGNORE, key=lambda s: s.rfilename))
 
 
+def _retry_after(value):
+    """Заголовок Retry-After в секундах (число) -> секунды или None."""
+    try:
+        return max(0.0, min(float(value), RETRY_AFTER_MAX))
+    except (TypeError, ValueError):
+        return None
+
+
 def _download_range(url, part, size):
-    """Докачивает url в файл part с его текущего конца (Range). Обрыв посреди потока — три попытки подряд без единого
-    байта, потом исключение (сетевое: установщик покажет «Нет сети», а повторный запуск продолжит с того же места)."""
+    """Докачивает url в файл part с его текущего конца (Range). Каждая попытка заново проходит редирект Hub, так что
+    адрес на CDN свежий. Обрыв, таймаут, ответ 429 или 5xx — повтор: после попытки с данными сразу, после пустой —
+    с паузой из RETRY_WAITS (или по Retry-After). Попытки без единого байта кончились — исключение ConnectionError
+    (сетевое: установщик покажет «Нет сети», а повторный запуск продолжит с того же места)."""
     import httpx
     from huggingface_hub.utils import build_hf_headers
 
@@ -225,7 +239,7 @@ def _download_range(url, part, size):
         os.remove(part)
     fails = 0
     while disk() < size:
-        received, err = 0, None
+        received, err, wait = 0, None, None
         try:
             have = disk()
             headers = {**build_hf_headers(), "Accept-Encoding": "identity", "Range": f"bytes={have}-"}
@@ -237,23 +251,30 @@ def _download_range(url, part, size):
                     mode = "ab"
                 elif r.status_code == 200:  # Range не поддержан — файл придёт с начала
                     mode = "wb"
+                elif r.status_code == 429 or r.status_code >= 500:  # перегрузка или сбой на стороне Hub — подождать
+                    mode = None
+                    err = RuntimeError(f"HTTP {r.status_code}")
+                    wait = _retry_after(r.headers.get("retry-after"))
                 else:
-                    r.raise_for_status()  # 4xx/5xx -> HTTPStatusError, статус виден в _kind
+                    r.raise_for_status()  # прочие 4xx -> HTTPStatusError: повтор не поможет
                     raise RuntimeError(f"неожиданный ответ HTTP {r.status_code}")
-                with open(part, mode) as f:
-                    for chunk in r.iter_bytes(CHUNK):
-                        f.write(chunk)
-                        received += len(chunk)
+                if mode:
+                    with open(part, mode) as f:
+                        for chunk in r.iter_bytes(CHUNK):
+                            f.write(chunk)
+                            received += len(chunk)
         except httpx.TransportError as ex:  # обрыв, таймаут, сброс соединения
             err = ex
+        if disk() >= size:
+            break
         if received:
             fails = 0
-        else:
-            fails += 1
-            if fails >= 3:
-                raise err or RuntimeError("сервер не отдаёт данные")
-        if err and disk() < size:
-            time.sleep(min(2 * fails, 6))
+            time.sleep(1)  # оборвалось посреди потока: продолжаем почти сразу
+            continue
+        fails += 1
+        if fails > len(RETRY_WAITS):
+            raise ConnectionError(f"Hugging Face не отдаёт данные: {err or 'пустой ответ'}") from err
+        time.sleep(wait if wait is not None else RETRY_WAITS[fails - 1])
 
 
 def _sha256(path):
