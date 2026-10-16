@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>README frame</title>
+<!-- A window screenshot on a soft backdrop, the way it is shown in README.md.
+     make_readme_images.py opens it as frame.html?img=<file URL>&w=<css px>&h=<css px>&pad=<css px>&theme=<light|dark> -->
+<style>
+html,body{margin:0;background:transparent}
+.stage{display:flex;align-items:center;justify-content:center;border-radius:18px;overflow:hidden}
+.light .stage{background:
+  radial-gradient(900px 520px at 12% 0%,#d6e6f8 0%,rgba(214,230,248,0) 70%),
+  radial-gradient(760px 480px at 100% 100%,#dfe9f6 0%,rgba(223,233,246,0) 70%),
+  #f2f5f9}
+.dark .stage{background:
+  radial-gradient(900px 560px at 12% 0%,rgba(0,95,184,.42) 0%,rgba(0,95,184,0) 70%),
+  radial-gradient(760px 520px at 100% 100%,rgba(43,136,216,.20) 0%,rgba(43,136,216,0) 70%),
+  #0f141b}
+.win{border-radius:8px;overflow:hidden}
+.light .win{box-shadow:0 0 0 1px rgba(0,0,0,.10),0 2px 6px rgba(16,42,80,.08),0 22px 56px rgba(16,42,80,.24)}
+.dark .win{box-shadow:0 0 0 1px rgba(255,255,255,.10),0 2px 6px rgba(0,0,0,.35),0 24px 64px rgba(0,0,0,.60)}
+.win img{display:block}
+</style>
+</head>
+<body>
+<div class="stage"><div class="win"><img alt=""></div></div>
+<script>
+const p = new URLSearchParams(location.search);
+document.documentElement.className = p.get('theme') || 'light';
+const w = +p.get('w'), h = +p.get('h'), pad = +p.get('pad');
+const stage = document.querySelector('.stage');
+stage.style.width = w + 2 * pad + 'px';
+stage.style.height = h + 2 * pad + 'px';
+const img = document.querySelector('img');
+img.width = w;
+img.height = h;
+img.src = p.get('img');
+</script>
+</body>
+</html>

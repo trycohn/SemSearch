@@ -5,6 +5,7 @@ edition = "2021"
 # rayon 1.12 (Cargo.lock) and <[u8]>::trim_ascii need 1.80
 rust-version = "1.80"
 description = "SemSearch file-name engine: MFT/USN or walk + ReadDirectoryChangesW index served over a named pipe"
+license = "Apache-2.0"
 publish = false
 
 [[bin]]

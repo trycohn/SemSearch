@@ -5,6 +5,7 @@ edition = "2021"
 # tauri 2.12 (Cargo.lock) needs 1.90
 rust-version = "1.90"
 description = "SemSearch desktop shell (Tauri v2): frameless windows, tray, hotkey, autostart, backend supervisor"
+license = "Apache-2.0"
 publish = false
 
 [[bin]]

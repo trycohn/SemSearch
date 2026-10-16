@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SemSearch architecture</title>
+<!-- The "how it works" picture of README.md. make_readme_images.py opens it as architecture.html?<ru|en>-<light|dark>
+     on a transparent background; open it in a browser by hand to look at it. -->
+<style>
+html,body{margin:0;background:transparent}
+.light{--surface:#ffffff;--line:#d0d7de;--text:#1f2328;--muted:#59636e;--frame:#8c959f;--arrow:#6e7781;--accent:#005fb8;--tint:rgba(0,95,184,.035);--chip:#f6f8fa}
+.dark{--surface:#161b22;--line:#3d444d;--text:#f0f6fc;--muted:#9198a1;--frame:#656c76;--arrow:#8b949e;--accent:#4c9be8;--tint:rgba(76,155,232,.05);--chip:#1c2129}
+body{width:1200px;height:690px;position:relative;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--text)}
+.abs{position:absolute;box-sizing:border-box}
+.frame{left:16px;top:120px;width:1168px;height:554px;border:2px dashed var(--frame);border-radius:22px;background:var(--tint)}
+.flabel{left:44px;top:132px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.fnote{right:44px;top:134px;font-size:14px;color:var(--muted)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+.box .head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.box .head img{width:32px;height:32px;flex:none}
+.box h3{margin:0;font-size:19px;font-weight:600;line-height:1.2}
+.box .sub{font-size:13px;color:var(--muted);margin-top:2px}
+.box ul{margin:0;padding:0;list-style:none;font-size:14.5px;line-height:1.5}
+.box li{position:relative;padding-left:16px;margin-top:5px}
+.box li::before{content:'';position:absolute;left:2px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.cloud{display:flex;align-items:center;gap:12px;padding:0 20px}
+.cloud b{font-size:16px;font-weight:600}
+.cloud .sub{font-size:13px;color:var(--muted)}
+.lbl{font-size:13px;color:var(--muted);line-height:1.35;white-space:nowrap}
+.c{text-align:center;transform:translateX(-50%)}
+.disks{padding:16px 24px 20px}
+.disks .title{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.disks .title b{font-size:17px;font-weight:600}
+.disks .title span{font-size:13px;color:var(--muted)}
+.disks .row{display:flex;gap:14px}
+.chip{flex:1;height:100px;box-sizing:border-box;background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.chip img{width:24px;height:24px;display:block;margin-bottom:6px}
+.chip b{font-size:14.5px;font-weight:600;display:block}
+.chip span{font-size:12.5px;color:var(--muted)}
+svg{position:absolute;left:0;top:0}
+</style>
+</head>
+<body>
+<svg width="1200" height="690" aria-hidden="true">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="var(--arrow)"/>
+    </marker>
+  </defs>
+  <g stroke="var(--arrow)" stroke-width="2" fill="none">
+    <path d="M600 78V168" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+    <path d="M352 276H446" marker-start="url(#ah)" marker-end="url(#ah)"/>
+    <path d="M754 276H848" marker-start="url(#ah)" marker-end="url(#ah)"/>
+    <path d="M600 382V464" marker-end="url(#ah)"/>
+    <path d="M1002 382V464" marker-end="url(#ah)"/>
+  </g>
+</svg>
+
+<div class="abs frame"></div>
+<div class="abs flabel"><svg width="16" height="18" viewBox="0 0 16 18" style="position:static"><rect x="1.5" y="7.5" width="13" height="9" rx="2" fill="none" stroke="var(--text)" stroke-width="1.6"/><path d="M4.5 7.5V5a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="var(--text)" stroke-width="1.6"/></svg><span data-t="pc"></span></div>
+<div class="abs fnote" data-t="offline"></div>
+
+<div class="abs box cloud" style="left:450px;top:16px;width:300px;height:62px">
+  <svg width="30" height="22" viewBox="0 0 30 22" style="position:static;flex:none"><path d="M8 20h15a6 6 0 0 0 .6-11.97A8.5 8.5 0 0 0 7.2 9.1 5.5 5.5 0 0 0 8 20z" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linejoin="round"/></svg>
+  <div><b>Hugging Face</b><div class="sub">huggingface.co</div></div>
+</div>
+<div class="abs lbl" style="left:614px;top:88px" data-t="download"></div>
+
+<div class="abs box" style="left:48px;top:172px;width:300px;height:208px">
+  <div class="head"><img src="../../brand/icons/app/app-icon.svg" alt=""><div><h3>SemSearch.exe</h3><div class="sub">Rust · Tauri 2</div></div></div>
+  <ul data-t="shell"></ul>
+</div>
+<div class="abs box" style="left:450px;top:172px;width:300px;height:208px">
+  <div class="head"><img data-icon="python" alt=""><div><h3>Backend</h3><div class="sub">Python · FastAPI · PyTorch</div></div></div>
+  <ul data-t="backend"></ul>
+</div>
+<div class="abs box" style="left:852px;top:172px;width:300px;height:208px">
+  <div class="head"><img data-icon="rust" alt=""><div><h3 data-t="engine"></h3><div class="sub">semsearch-engine.exe · Rust</div></div></div>
+  <ul data-t="engineList"></ul>
+</div>
+
+<div class="abs lbl c" style="left:399px;top:246px">HTTP</div>
+<div class="abs lbl c" style="left:399px;top:284px">127.0.0.1</div>
+<div class="abs lbl c" style="left:801px;top:246px">named pipe</div>
+<div class="abs lbl" style="left:614px;top:412px" data-t="reads"></div>
+<div class="abs lbl" style="left:1016px;top:412px">MFT · USN</div>
+
+<div class="abs box disks" style="left:48px;top:468px;width:1104px;height:180px">
+  <div class="title"><b data-t="disks"></b><span data-t="disksSub"></span></div>
+  <div class="row">
+  <div class="chip"><img data-icon="pdf" alt=""><b data-t="docs"></b><span data-t="docsExt"></span></div>
+  <div class="chip"><img data-icon="python" alt=""><b data-t="code"></b><span data-t="codeExt"></span></div>
+  <div class="chip"><img data-icon="image" alt=""><b data-t="photo"></b><span>JPG, PNG, WEBP, GIF…</span></div>
+  <div class="chip"><img data-icon="audio" alt=""><b data-t="audio"></b><span>MP3, FLAC, M4A, OGG…</span></div>
+  <div class="chip"><img data-icon="video" alt=""><b data-t="video"></b><span>MP4, MKV, MOV, AVI…</span></div>
+  </div>
+</div>
+
+<script>
+const T = {
+  ru: {
+    pc: 'Ваш компьютер', offline: 'файлы и запросы никуда не отправляются',
+    download: 'один раз, при установке: модель EmbeddingGemma 2, ~1,5 ГБ',
+    shell: ['Окна поиска и настроек', 'Значок в трее и Ctrl+Alt+S', 'Запускает backend и следит за ним'],
+    backend: ['EmbeddingGemma 2 на видеокарте или процессоре', 'Индекс по смыслу', 'Уступает видеокарту играм'],
+    engine: 'Движок имён',
+    engineList: ['Имена всех файлов на дисках', 'Поиск по имени за миллисекунды', 'Сообщает об изменениях файлов'],
+    reads: 'читает содержимое',
+    disks: 'Ваши диски', disksSub: 'папка пользователя — по смыслу, все диски — по имени',
+    docs: 'Документы', docsExt: 'PDF и сканы, DOCX, TXT, MD',
+    code: 'Код', codeExt: '45 расширений',
+    photo: 'Фото', audio: 'Аудио', video: 'Видео',
+  },
+  en: {
+    pc: 'Your computer', offline: 'files and queries never leave it',
+    download: 'once, during setup: the EmbeddingGemma 2 model, ~1.5 GB',
+    shell: ['Search and settings windows', 'Tray icon and Ctrl+Alt+S', 'Starts and watches the backend'],
+    backend: ['EmbeddingGemma 2 on the GPU or the CPU', 'Semantic index', 'Gives the GPU back to games'],
+    engine: 'Name engine',
+    engineList: ['Names of every file on your drives', 'Search by name in milliseconds', 'Reports file changes'],
+    reads: 'reads contents',
+    disks: 'Your drives', disksSub: 'user folder by meaning, all drives by name',
+    docs: 'Documents', docsExt: 'PDF, scans, DOCX, TXT, MD',
+    code: 'Code', codeExt: '45 file extensions',
+    photo: 'Photos', audio: 'Audio', video: 'Video',
+  },
+};
+const [lang, theme] = (location.search.slice(1) || location.hash.slice(1) || 'ru-light').split('-');
+document.documentElement.className = theme;
+const t = T[lang] || T.ru;
+document.documentElement.lang = lang;
+for (const el of document.querySelectorAll('[data-t]')) {
+  const v = t[el.dataset.t];
+  if (Array.isArray(v)) el.innerHTML = v.map((s) => '<li>' + s + '</li>').join('');
+  else el.innerHTML = v;
+}
+for (const img of document.querySelectorAll('[data-icon]')) img.src = '../../ui/filetypes/' + theme + '/' + img.dataset.icon + '.svg';
+</script>
+</body>
+</html>

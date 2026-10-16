@@ -3,6 +3,7 @@
 Запуск:  .venv\\Scripts\\python.exe mock_api.py   →  http://127.0.0.1:8799/
 Сценарии статуса: /dev/scenario/<first|video|idle|paused|fullscreen|process|battery|loading>
 Тема: /dev/theme/<system|light|dark>   (токен для /dev не нужен)
+Язык: /dev/lang/<system|ru|en> — при en и демо-файлы английские (картинки README.en.md)
 """
 import math
 import mimetypes
@@ -13,6 +14,8 @@ import time
 import uvicorn
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+import i18n
 
 import functools
 
@@ -188,6 +191,113 @@ ARTS.update({201: ("roof1",), 202: ("drone",), 203: ("drone",), 204: ("drone",),
 ALL_ITEMS = MAIN + PHOTOS + VIDS + CAT_DOCS + EXTRA
 
 
+# ---------- те же файлы по-английски: при языке en (/dev/lang/en) ответы API переводятся целиком ----------
+# Подписи, которые собирает backend («стр. 3», типы, известные папки), — через i18n.py, как в app.py;
+# остальное — имена, папки и тексты демо-файлов — по словарю. Путь из ответа превью и открытия возвращаются к русскому.
+EN = {
+    # папки
+    "Дом": "Home", "Ремонт крыши": "Roof repair", "Крыша 2026": "Roof 2026", "Звукозаписи": "Recordings", "Архив 2024": "Archive 2024",
+    "Телефон": "Phone", "Кот": "Cat", "Отправить прорабу": "Send to the foreman", "Кухня": "Kitchen", "Ванная": "Bathroom",
+    "Работа": "Work", "Шаблоны Office": "Office Templates", "Архив": "Archive",
+    # файлы
+    "Договор подряда №14 — кровля.pdf": "Roof repair contract No. 14.pdf", "Смета_кровля_v3.docx": "Estimate_roofing_v3.docx",
+    "Переписка с прорабом.txt": "Messages with the foreman.txt", "Обход крыши.mp4": "Roof walkaround.mp4",
+    "Скан договора, стр. 1.jpg": "Contract scan, page 1.jpg", "Голосовая заметка 14 марта.m4a": "Voice memo, March 14.m4a",
+    "Договор про крышу — сканы.zip": "Roof contract - scans.zip", "договор_про_крышу_старый.xlsx": "roof_contract_old.xlsx",
+    "Барсик утром.jpg": "Barsik in the morning.jpg", "Скриншот 2025-05-03.png": "Screenshot 2025-05-03.png",
+    "Дача, балкон.jpg": "Cottage, balcony.jpg", "кот спит.jpg": "cat asleep.jpg", "Балкон после ремонта.jpg": "Balcony after the repair.jpg",
+    "Дача июнь.mp4": "Cottage, June.mp4", "Кот и голуби.mp4": "Cat and pigeons.mp4", "Балкон, утро.mp4": "Balcony, morning.mp4",
+    "Заметки про Барсика.txt": "Notes about Barsik.txt", "Ветпаспорт Барсика.pdf": "Barsik vet passport.pdf",
+    "Смета_кровля_v2.docx": "Estimate_roofing_v2.docx", "Смета_кровля.xlsx": "Estimate_roofing.xlsx",
+    "Смета на окна ПВХ.pdf": "Estimate for PVC windows.pdf", "Смета электрика.xlsx": "Estimate electrics.xlsx",
+    "смета-кухня-2025.pdf": "estimate-kitchen-2025.pdf", "смета_материалы.txt": "estimate_materials.txt",
+    "Смета_ванная_финал.xlsx": "Estimate_bathroom_final.xlsx", "СМЕТА ремонт офиса (копия).docx": "ESTIMATE office repair (copy).docx",
+    "Автокопия Смета_кровля_v3.asd": "AutoRecovery Estimate_roofing_v3.asd", "Шаблон сметы.dotx": "Estimate template.dotx",
+    "Скан сметы.jpg": "Estimate scan.jpg", "Скриншот 2026-09-30 CUDA error.png": "Screenshot 2026-09-30 CUDA error.png",
+    # тексты
+    "…Подрядчик обязуется выполнить работы по замене кровельного покрытия жилого дома, включая демонтаж старого шифера и монтаж металлочерепицы…":
+        "…The contractor shall replace the roof covering of the house, including removing the old slate and fitting metal roof tiles…",
+    "…Гарантийный срок на кровельные работы — 5 (пять) лет с даты подписания акта приёмки…":
+        "…The warranty on the roofing work is 5 (five) years from the date the acceptance certificate is signed…",
+    "Металлочерепица 0,5 мм — 160 м² · водосточная система · монтаж кровли и снегозадержателей по договору…":
+        "Metal roof tiles 0.5 mm — 160 m² · gutter system · roof and snow guard installation under the contract…",
+    "…по договору гарантия на крышу пять лет, если потечёт — сразу писать Андрею, он приедет и посмотрит…":
+        "…the contract gives the roof a five-year warranty; if it leaks, text Andrew right away and he will come and look…",
+    'def parse_contract(path):\n    """Стороны, сумма и сроки из договора подряда."""':
+        'def parse_contract(path):\n    """Parties, price and deadlines of a repair contract."""',
+    '    """Стороны, сумма и сроки из договора подряда."""': '    """Parties, price and deadlines of a repair contract."""',
+    '    total = find_amount(text, "Цена договора")': '    total = find_amount(text, "Contract price")',
+    "…кот опять сидит на балконе и смотрит на голубей, сетку на балкон поставить до лета…":
+        "…the cat is sitting on the balcony again, watching the pigeons; put a net on the balcony before summer…",
+    "…кот, 4 года, окрас рыжий; гуляет на застеклённом балконе…": "…cat, 4 years old, ginger; walks on the glazed balcony…",
+    "…итого по смете: материалы, работа, доставка; смета согласована с прорабом…":
+        "…estimate total: materials, labour, delivery; the estimate is agreed with the foreman…",
+    # /api/failed
+    "PDF зашифрован паролем": "the PDF is password-protected", "файл занят другой программой": "the file is in use by another program",
+    "повреждённый архив DOCX": "damaged DOCX archive", "не удалось декодировать видео": "could not decode the video",
+    "слишком большой текст": "the text is too large",
+}
+EN_DIRS = {ru: i18n.KNOWN_DIRS["en"][k] for k, ru in i18n.KNOWN_DIRS["ru"].items()}
+EN_TYPES = {ru: i18n.type_name(ext.lower(), "en") for ext, ru in TYPES.items()}
+EN_QUERY = {"roof": "крыш", "contract": "договор", "cat": "кот", "balcony": "балкон", "estimate": "смет",
+            "json": "json", "retr": "ретра", "cuda": "cuda", "screenshot": "скрин"}
+BACK = {}  # английский путь -> русский: превью и открытие ищут файл по пути из выдачи
+
+
+def lang():
+    return SETTINGS["lang"] if SETTINGS["lang"] in i18n.LANGS else SETTINGS["lang_system"]
+
+
+def en_str(s):
+    if s in EN:
+        return EN[s]
+    if "\\" in s:  # путь или id вида "n:C:\…"
+        out = "\\".join(en_str(p) if p else p for p in s.split("\\"))
+        BACK[out] = s
+        return out
+    if " › " in s:
+        return " › ".join(en_str(p) for p in s.split(" › "))
+    if s in EN_DIRS:
+        return EN_DIRS[s]
+    m = re.fullmatch(r"(стр\.|фрагмент) (\d+) из (\d+)", s)
+    if m:
+        return (i18n.page_label if m.group(1) == "стр." else i18n.chunk_label)(m.group(2), m.group(3), "en")
+    m = re.fullmatch(r"отрезок (\S+)–(\S+) из (\S+)", s)
+    if m:
+        return i18n.audio_hit(*m.groups(), "en")
+    if s == i18n.video_hit("ru"):
+        return i18n.video_hit("en")
+    if s.startswith("файл_"):  # список «Не удалось прочитать»
+        return "file_" + s[5:]
+    head, _, tail = s.partition(", ")  # "PDF-документ, 18 страниц", "Видео MP4, 1920 × 1080"
+    if head in EN_TYPES:
+        m = re.fullmatch(r"(\d+) страниц[аы]?", tail)
+        return EN_TYPES[head] + (", " + (i18n.pages(int(m.group(1)), "en") if m else tail) if tail else "")
+    return i18n.loc(s, "en")
+
+
+def en(obj):
+    if isinstance(obj, str):
+        return en_str(obj)
+    if isinstance(obj, list):
+        return [en(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: en(v) for k, v in obj.items()}
+    return obj
+
+
+def localized(obj):
+    return en(obj) if lang() == "en" else obj
+
+
+def ru_query(q):
+    """Английский запрос -> русские ключевые слова, по которым подобраны демо-ответы ("cat on the balcony" -> "кот балкон")."""
+    if lang() != "en":
+        return q
+    ql = q.lower()
+    return " ".join(v for k, v in EN_QUERY.items() if k in ql) or q
+
+
 # ---------- поиск ----------
 def resp(q, tab, items, counts, ms):
     return {"q": q, "tab": tab, "ms": ms, "counts": counts, "name_scope": "C:", "items": items}
@@ -212,7 +322,7 @@ def words(q):
 
 
 def search(q, tab):
-    ql = q.lower()
+    ql = ru_query(q).lower()
     if "крыш" in ql or "договор" in ql:
         items, names, ms = MAIN, [n1, n2], 42
     elif "кот" in ql or "балкон" in ql:
@@ -220,7 +330,7 @@ def search(q, tab):
     elif "смет" in ql:
         items, names, ms = SMETA_ALL, NAMES, 31
     else:
-        ws = words(q)
+        ws = words(ql)
         hay = lambda i: (i["name"] + " " + " ".join(h["text"] for h in i["hits"])).lower()
         items = [i for i in ALL_ITEMS if ws and any(w in hay(i) for w in ws)]
         names = [i for i in ALL_ITEMS + NAMES if ws and all(w in i["name"].lower() for w in ws)]
@@ -430,11 +540,12 @@ def api_search(q: str = "", tab: str = "all"):
         time.sleep(STATE["delay"])
     if (STATE["scenario"] == "loading" or not scenario(STATE["scenario"])["ready"]) and tab != "name":
         return JSONResponse({"detail": "модель ещё загружается"}, 503)
-    return search(q, tab)
+    return localized(search(q, tab))
 
 
 @app.get("/api/preview")
 def api_preview(path: str, chunks: str = "", chunk: int = None):
+    path = BACK.get(path, path)
     inf = INFO.get(path)
     if not inf:
         return JSONResponse({"detail": "неизвестный путь"}, 404)
@@ -444,31 +555,32 @@ def api_preview(path: str, chunks: str = "", chunk: int = None):
     hits = [h for h in it["hits"] if h["text"] and (not want or h["chunk"] in want)]
     w = [round(abs(math.sin(i * 1.7) * 0.6 + math.sin(i * 0.45) * 0.4), 3) for i in range(44)] if kind == "audio" else None
     th = it["thumb"]
-    return {"path": path, "name": it["name"], "ext": it["ext"], "kind": kind, "crumbs": it["crumbs"], "size": it["size"],
+    return localized({"path": path, "name": it["name"], "ext": it["ext"], "kind": kind, "crumbs": it["crumbs"], "size": it["size"],
             "mtime": it["mtime"], "ctime": inf.get("ctime"), "type": inf.get("type", ""), "taken": inf.get("taken"), "duration": it["duration"],
             "pages": inf.get("pages"), "dims": inf.get("dims"), "page_label": inf.get("page_label") if want else None,
             "hit_pos": inf.get("hit_pos") if want else None, "hits": hits, "code": inf.get("code"), "marks": inf.get("marks"),
             "wave": w, "seg": inf.get("seg"), "dupes": inf.get("dupes", []), "thumb": (th + "?size=640") if th else None,
-            "can_similar": kind in ("image", "video"), "indexed": inf.get("indexed", kind != "name")}
+            "can_similar": kind in ("image", "video"), "indexed": inf.get("indexed", kind != "name")})
 
 
 @app.get("/api/similar")
 def api_similar(chunk: int, tab: str = "image"):
-    return media_resp(tab)
+    return localized(media_resp(tab))
 
 
 @app.post("/api/search_image")
 async def api_search_image(tab: str = "image", file: UploadFile = File(...)):
     data = await file.read()
     print("search_image:", file.filename, file.content_type, len(data), "байт")
-    return media_resp(tab)
+    return localized(media_resp(tab))
 
 
 @app.post("/api/open")
 async def api_open(request: Request):
     body = await request.json()
     print("open:", body)
-    if body.get("path") not in INFO and not any(n["path"] == body.get("path") for n in NAMES):
+    path = BACK.get(body.get("path"), body.get("path"))
+    if path not in INFO and not any(n["path"] == path for n in NAMES):
         return JSONResponse({"detail": "файл не найден"}, 404)
     return {"ok": True}
 
@@ -537,8 +649,9 @@ async def api_settings_set(request: Request):
 @app.get("/api/failed")
 def api_failed(limit: int = 200):
     errs = ["PDF зашифрован паролем", "файл занят другой программой", "повреждённый архив DOCX", "не удалось декодировать видео", "слишком большой текст"]
-    items = [{"path": H + "\\Documents\\Архив\\файл_%03d.%s" % (i, ["pdf", "docx", "mp4", "txt"][i % 4]), "err": errs[i % 5]} for i in range(min(limit, 214))]
-    return {"total": 214, "items": items}
+    items = [{"path": H + "\\Documents\\Архив\\файл_%03d.%s" % (i, ["pdf", "docx", "mp4", "txt"][i % 4]), "err": i18n.reason(errs[i % 5], lang())}
+             for i in range(min(limit, 214))]
+    return localized({"total": 214, "items": items})
 
 
 @app.get("/api/processes")
