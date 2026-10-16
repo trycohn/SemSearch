@@ -2802,6 +2802,7 @@ dependencies = [
 name = "semsearch-installer"
 version = "0.1.0"
 dependencies = [
+ "embed-resource",
  "flate2",
  "globset",
  "rustls",

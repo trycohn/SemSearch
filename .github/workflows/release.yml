@@ -201,9 +201,6 @@ jobs:
 
 # ---- SignPath signing (SignPath Foundation, free for open source)
 # Before uncommenting the SignPath steps above:
-#  0. Every signed file must say product name "SemSearch" and product version = the release version (SignPath
-#     Foundation; .github/signpath/*.xml check it). SemSearch.exe does; bin\semsearch-engine.exe has no version
-#     resource yet and the installer exe says "SemSearch Setup", so those two need fixing first.
 #  1. SignPath approves the project and creates it in their organization. In its project:
 #     - trusted build system "GitHub.com" linked to the project;
 #     - artifact configurations with the slugs "inner" and "setup": the XML of .github/signpath/inner.xml and

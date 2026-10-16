@@ -4,7 +4,7 @@
      actions/upload-artifact): the bare installer exe with the payload (zip + length + "SSPAYLD1") appended. The
      signature covers the payload; the installer looks for it in front of the certificate table (docs/INSTALLER.md).
      version: "version" of shell/tauri.conf.json, passed by the workflow. Product name must be the project's name
-     (SignPath Foundation); the installer exe says "SemSearch Setup" for now, see inner.xml. -->
+     (SignPath Foundation), see inner.xml. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <parameters>
     <parameter name="version" required="true" />

@@ -4,8 +4,8 @@
      uninstall.exe is a copy of the bare installer exe (SemSearch-Setup.exe); it goes into the payload.
      version: "version" of shell/tauri.conf.json, passed by the workflow.
      SignPath Foundation: every signed file must have product name = the project's name and the same product version,
-     checked here. Not met yet: bin\semsearch-engine.exe has no version resource and the installer exe (so
-     uninstall.exe) says "SemSearch Setup"; until they are fixed, this configuration rejects those files. -->
+     checked here. All three say "SemSearch" and the version of shell/tauri.conf.json: SemSearch.exe by that config,
+     the engine by engine/build.rs, uninstall.exe by installer/tauri.conf.json (productName) and installer/build.rs. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <parameters>
     <parameter name="version" required="true" />
