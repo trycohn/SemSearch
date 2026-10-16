@@ -342,9 +342,9 @@ signatures or without any. Until SignPath approves the project, releases come ou
 
 | Role | What they do | Who |
 |---|---|---|
-| Committers | Change the code without a separate review | [@GITHUB_USER](https://github.com/GITHUB_USER) |
-| Reviewers | Review changes from others (pull requests) before they are accepted | [@GITHUB_USER](https://github.com/GITHUB_USER) |
-| Approvers | Decide which release gets signed and approve every signing request | [@GITHUB_USER](https://github.com/GITHUB_USER) |
+| Committers | Change the code without a separate review | [@trycohn](https://github.com/trycohn) |
+| Reviewers | Review changes from others (pull requests) before they are accepted | [@trycohn](https://github.com/trycohn) |
+| Approvers | Decide which release gets signed and approve every signing request | [@trycohn](https://github.com/trycohn) |
 
 For now all three roles are held by one person, the author of the project.
 

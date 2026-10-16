@@ -346,9 +346,9 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 | Роль | Что делает | Кто |
 |---|---|---|
-| Авторы | Меняют код без отдельной проверки | [@GITHUB_USER](https://github.com/GITHUB_USER) |
-| Рецензенты | Проверяют чужие изменения (pull request) перед тем, как их принять | [@GITHUB_USER](https://github.com/GITHUB_USER) |
-| Утверждающие | Решают, какой выпуск подписать, и утверждают каждый запрос на подпись | [@GITHUB_USER](https://github.com/GITHUB_USER) |
+| Авторы | Меняют код без отдельной проверки | [@trycohn](https://github.com/trycohn) |
+| Рецензенты | Проверяют чужие изменения (pull request) перед тем, как их принять | [@trycohn](https://github.com/trycohn) |
+| Утверждающие | Решают, какой выпуск подписать, и утверждают каждый запрос на подпись | [@trycohn](https://github.com/trycohn) |
 
 Сейчас все три роли у одного человека, автора проекта.
 
