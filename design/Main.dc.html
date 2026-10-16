@@ -19,29 +19,30 @@ a{color:#005fb8}a:hover{color:#003e7a}
 .row:hover,.tile:hover,.tab:hover,.ghost:hover,.cap:hover,.btn2:hover{background:var(--hover)}
 .cap.x:hover{background:#c42b1c;color:#ffffff}
 .prim:hover{filter:brightness(1.08)}
+.upd{text-decoration:none;transition:background-color .12s}.upd:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)!important}.upd:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 @media (max-width:760px){.pane{border-left:0!important;border-top:1px solid var(--line)}.sbar{padding-right:16px!important;padding-top:40px!important}}
 </style>
 </helmet>
-<div class="win {{themeClass}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+<div class="win {{themeClass}}" lang="{{lang}}" style="--accent: {{acc}}; --onAccent: {{onAcc}}; position: relative; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
 
 <div style="position: absolute; top: 0; right: 0; display: flex; z-index: 2">
-<button class="cap" aria-label="Свернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
-<button class="cap" aria-label="Развернуть" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
-<button class="cap x" aria-label="Скрыть в трей" title="Скрыть в трей (Esc)" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="{{t.min}}" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap" aria-label="{{t.max}}" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"></rect></svg></button>
+<button class="cap x" aria-label="{{t.hide}}" title="{{t.hideTip}}" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
 </div>
 
 <div class="sbar" style="display: flex; align-items: center; gap: 8px; padding: 14px 156px 10px 16px">
 <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 8px">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex: none; color: var(--accent)"><path d="{{ic.search}}"></path></svg>
-<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Запрос</label>
-<input id="q" type="text" autocomplete="off" value="{{q}}" onChange="{{onQ}}" placeholder="Что ищем? Опишите файл своими словами" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
-<button class="ghost" aria-label="Очистить запрос" onClick="{{clearQ}}" style="flex: none; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.x}}"></path></svg></button>
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">{{t.query}}</label>
+<input id="q" type="text" autocomplete="off" value="{{q}}" onChange="{{onQ}}" placeholder="{{t.ph}}" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 18px">
+<button class="ghost" aria-label="{{t.clear}}" onClick="{{clearQ}}" style="flex: none; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.x}}"></path></svg></button>
 <span aria-hidden="true" style="flex: none; width: 1px; height: 22px; background: var(--line)"></span>
-<button class="ghost" aria-label="Искать по картинке" title="Искать по картинке — или перетащите её в окно, или Ctrl+V" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.image}}"></path></svg></button>
+<button class="ghost" aria-label="{{t.byImage}}" title="{{t.byImageTip}}" style="flex: none; width: 36px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.image}}"></path></svg></button>
 </div>
 </div>
 
-<div role="tablist" aria-label="Что искать" style="display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto">
+<div role="tablist" aria-label="{{t.tabsLabel}}" style="display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto">
 <sc-for list="{{tabs}}" as="t" hint-placeholder-count="7">
 <button class="tab" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 6px 6px 0 0; background: transparent; {{t.style}}"><span>{{t.label}}</span><span style="font-size: 12px; font-weight: 400; color: var(--faint)">{{t.count}}</span><sc-if value="{{t.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 50%; bottom: 0; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--accent)"></span></sc-if></button>
 </sc-for>
@@ -112,7 +113,7 @@ a{color:#005fb8}a:hover{color:#003e7a}
 </div>
 
 <sc-if value="{{showPreview}}" hint-placeholder-val="{{true}}">
-<aside class="pane" aria-label="Просмотр файла" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 20px 20px; border-left: 1px solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 16px">
+<aside class="pane" aria-label="{{t.preview}}" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 20px 20px; border-left: 1px solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 16px">
 <div style="position: relative; height: 210px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); overflow: hidden">
 <sc-if value="{{pv.isText}}" hint-placeholder-val="{{true}}">
 <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
@@ -138,13 +139,13 @@ a{color:#005fb8}a:hover{color:#003e7a}
 <div aria-hidden="true" style="display: flex; align-items: center; gap: 3px; height: 110px">
 <sc-for list="{{pv.wave}}" as="b" hint-placeholder-count="44"><span style="display: block; width: 4px; border-radius: 2px; {{b.style}}"></span></sc-for>
 </div>
-<span style="font-size: 12px; color: var(--muted)">совпал отрезок 0:30–1:00 из 1:52</span>
+<span style="font-size: 12px; color: var(--muted)">{{t.audioSeg}}</span>
 </div>
 </sc-if>
 <sc-if value="{{pv.isName}}" hint-placeholder-val="{{false}}">
 <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 32px; text-align: center">
 <svg width="56" height="56" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex: none; display: block; color: {{pv.ft.c}}"><path fill="currentColor" fill-rule="{{pv.ft.r1}}" opacity="{{pv.ft.o1}}" d="{{pv.ft.d1}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r2}}" opacity="{{pv.ft.o2}}" d="{{pv.ft.d2}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r3}}" opacity="{{pv.ft.o3}}" d="{{pv.ft.d3}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r4}}" opacity="{{pv.ft.o4}}" d="{{pv.ft.d4}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r5}}" opacity="{{pv.ft.o5}}" d="{{pv.ft.d5}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r6}}" opacity="{{pv.ft.o6}}" d="{{pv.ft.d6}}"></path><path fill="currentColor" fill-rule="{{pv.ft.r7}}" opacity="{{pv.ft.o7}}" d="{{pv.ft.d7}}"></path></svg>
-<span style="font-size: 13px; color: var(--muted)">Найдено по имени. Содержимое файлов {{pv.ext}} не индексируется.</span>
+<span style="font-size: 13px; color: var(--muted)">{{pv.nameOnly}}</span>
 </div>
 </sc-if>
 </div>
@@ -162,7 +163,7 @@ a{color:#005fb8}a:hover{color:#003e7a}
 <h2 style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere">{{pv.name}}</h2>
 <div style="display: flex; align-items: flex-start; gap: 6px; margin-top: 4px">
 <span style="flex: 1; min-width: 0; padding-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{pv.path}}</span>
-<button class="ghost" aria-label="Копировать путь" title="Копировать путь (Ctrl+Shift+C)" style="flex: none; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button>
+<button class="ghost" aria-label="{{t.copy}}" title="{{t.copyTip}}" style="flex: none; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button>
 </div>
 </div>
 
@@ -182,9 +183,9 @@ a{color:#005fb8}a:hover{color:#003e7a}
 </sc-if>
 
 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: auto">
-<button class="prim" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--accent); color: var(--onAccent); font-weight: 600"><span>Открыть</span><span style="font-size: 12px; font-weight: 400; opacity: .85">Enter</span></button>
-<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Показать в папке</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Enter</span></button>
-<sc-if value="{{pv.canSimilar}}" hint-placeholder-val="{{false}}"><button class="btn2" style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>Найти похожие</span><span style="font-size: 12px; color: var(--muted)">Ctrl+F</span></button></sc-if>
+<button class="prim" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--accent); color: var(--onAccent); font-weight: 600"><span>{{t.open}}</span><span style="font-size: 12px; font-weight: 400; opacity: .85">Enter</span></button>
+<button class="btn2" style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>{{t.folder}}</span><span style="font-size: 12px; color: var(--muted)">Ctrl+Enter</span></button>
+<sc-if value="{{pv.canSimilar}}" hint-placeholder-val="{{false}}"><button class="btn2" style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface)"><span>{{t.similar}}</span><span style="font-size: 12px; color: var(--muted)">Ctrl+F</span></button></sc-if>
 </div>
 </aside>
 </sc-if>
@@ -192,25 +193,29 @@ a{color:#005fb8}a:hover{color:#003e7a}
 
 <footer style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; padding: 4px 8px 4px 16px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted)">
 <span style="display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap">
-<sc-if value="{{running}}" hint-placeholder-val="{{true}}"><span role="progressbar" aria-label="Индексация видео" aria-valuemin="0" aria-valuemax="612" aria-valuenow="482" style="display: block; width: 72px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; width: 79%; height: 100%; background: var(--accent)"></span></span></sc-if>
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}"><span role="progressbar" aria-label="{{t.ixVideo}}" aria-valuemin="0" aria-valuemax="612" aria-valuenow="482" style="display: block; width: 72px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; width: 79%; height: 100%; background: var(--accent)"></span></span></sc-if>
 <span>{{statusText}}</span>
 </span>
-<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">В индексе: 3 412 документов · 41 870 файлов кода · 18 204 фото · 1 377 аудио · 482 видео · 2,1 млн имён на C:</span>
+<span style="flex: 1 1 260px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.counts}}</span>
+<sc-if value="{{update}}" hint-placeholder-val="{{true}}"><a class="upd" href="Inst-Update.dc.html" title="{{t.updTip}}" style="flex: none; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 9px; box-sizing: border-box; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 16.5v-9 M8 11.5l4-4 4 4"></path></svg><span>{{t.upd}}</span></a></sc-if>
 <span style="display: flex; gap: 2px">
 <button class="ghost" onClick="{{togglePause}}" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pauseIcon}}"></path></svg><span>{{pauseLabel}}</span></button>
-<button class="ghost" aria-label="Настройки" title="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.sliders}}"></path></svg></button>
+<button class="ghost" aria-label="{{t.settings}}" title="{{t.settings}}" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="{{ic.sliders}}"></path></svg></button>
 </span>
 </footer>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"preview":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":960}}'>
+<script type="text/x-dc" data-dc-script data-props='{"lang":{"editor":"enum","options":["Русский","English"],"default":"Русский"},"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"preview":{"editor":"boolean","default":true},"update":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":960}}'>
 class Component extends DCLogic {
   renderVals() {
     const st = this.state || {};
     const tab = st.tab || 'all';
     const selId = st.sel || 'd1';
     const paused = !!st.paused;
-    const q = st.q ?? 'договор про крышу';
+    const en = this.props.lang === 'English';
+    const t = en ? { min: 'Minimize', max: 'Maximize', hide: 'Hide to tray', hideTip: 'Hide to tray (Esc)', query: 'Query', ph: 'What are you looking for? Describe the file in your own words', clear: 'Clear query', byImage: 'Search by image', byImageTip: 'Search by image — or drag one into the window, or Ctrl+V', tabsLabel: 'What to search', preview: 'File preview', audioSeg: 'matched segment 0:30–1:00 of 1:52', copy: 'Copy path', copyTip: 'Copy path (Ctrl+Shift+C)', open: 'Open', folder: 'Show in folder', similar: 'Find similar', ixVideo: 'Indexing videos', upd: 'Update to 0.5', updTip: 'Version 0.5 is out and already downloaded. Click to update', counts: 'Indexed: 3,412 documents · 41,870 code files · 18,204 photos · 1,377 audio · 482 videos · 2.1 M names on C:', settings: 'Settings' }
+      : { min: 'Свернуть', max: 'Развернуть', hide: 'Скрыть в трей', hideTip: 'Скрыть в трей (Esc)', query: 'Запрос', ph: 'Что ищем? Опишите файл своими словами', clear: 'Очистить запрос', byImage: 'Искать по картинке', byImageTip: 'Искать по картинке — или перетащите её в окно, или Ctrl+V', tabsLabel: 'Что искать', preview: 'Просмотр файла', audioSeg: 'совпал отрезок 0:30–1:00 из 1:52', copy: 'Копировать путь', copyTip: 'Копировать путь (Ctrl+Shift+C)', open: 'Открыть', folder: 'Показать в папке', similar: 'Найти похожие', ixVideo: 'Индексация видео', upd: 'Обновить до 0.5', updTip: 'Вышла версия 0.5, она уже скачана. Нажмите, чтобы обновить', counts: 'В индексе: 3 412 документов · 41 870 файлов кода · 18 204 фото · 1 377 аудио · 482 видео · 2,1 млн имён на C:', settings: 'Настройки' };
+    const q = st.q ?? (en ? 'roof repair contract' : 'договор про крышу');
     const dark = !!this.props.dark;
     const accent = this.props.accent ?? '#005fb8';
     const light = (hex, t) => {
@@ -281,6 +286,24 @@ class Component extends DCLogic {
       { id: 'n1', kind: 'name', ext: 'ZIP', name: 'Договор про крышу — сканы.zip', dir: H + '\\Downloads', crumbs: 'Загрузки', size: '18,6 МБ', date: '16 мар', type: 'Архив ZIP', changed: '16 марта 2026, 10:44' },
       { id: 'n2', kind: 'name', ext: 'XLSX', name: 'договор_про_крышу_старый.xlsx', dir: H + '\\Documents\\Архив 2024', crumbs: 'Документы › Архив 2024', size: '31 КБ', date: '3 окт 2024', type: 'Таблица Excel', changed: '3 октября 2024, 16:20' }
     ];
+    if (en) {
+      const roofEn = H + '\\Documents\\Home\\Roof repair';
+      const EN = {
+        d1: { name: 'Contract No. 14 — roofing.pdf', dir: roofEn, crumbs: 'Documents › Home › Roof repair', size: '2.4 MB', date: 'Mar 12', type: 'PDF document, 18 pages', changed: 'Mar 12, 2026, 6:40 PM', page: 'p. 3 of 18', hits: [{ loc: 'p. 3', text: '…The Contractor shall replace the roof covering of the house, including removal of the old slate and installation of metal tiles…' }, { loc: 'p. 7', text: '…The warranty on roofing work is 5 (five) years from the date the acceptance certificate is signed…' }] },
+        d2: { name: 'Roof_estimate_v3.docx', dir: roofEn, crumbs: 'Documents › Home › Roof repair', size: '86 KB', date: 'Mar 9', type: 'Word document', changed: 'Mar 9, 2026, 11:02 AM', page: 'chunk 2 of 4', hits: [{ loc: 'chunk 2', text: 'Metal tiles 0.5 mm — 160 m² · gutter system · roof and snow guard installation under the contract…' }] },
+        d3: { name: 'Chat with the contractor.txt', crumbs: 'Desktop', size: '4 KB', date: 'Apr 2', type: 'Text file', changed: 'Apr 2, 2026, 9:15 PM', page: 'chunk 1 of 1', hits: [{ loc: 'chunk 1', text: '…the contract gives a five-year warranty on the roof; if it leaks, message Andrew right away and he’ll come and take a look…' }] },
+        c1: { size: '12 KB', date: 'Feb 28', changed: 'Feb 28, 2026, 2:37 AM', hits: [{ loc: 'chunk 3', text: 'def parse_contract(path):\n    """Parties, price and deadlines from a work contract."""' }], code: ['import re', '', 'def parse_contract(path):', '    """Parties, price and deadlines from a work contract."""', '    text = read_pdf(path)', '    parties = re.findall(PARTY_RE, text)', '    total = find_amount(text, "Contract price")', '    return Contract(parties, total, find_terms(text))'] },
+        i1: { dir: H + '\\Pictures\\Roof 2026', crumbs: 'Pictures › Roof 2026', size: '3.8 MB', date: 'Mar 15', changed: 'Mar 15, 2026, 2:06 PM' },
+        v1: { name: 'Roof walkaround.mp4', crumbs: 'Videos', size: '412 MB', date: 'Mar 15', type: 'MP4 video, 1920 × 1080', changed: 'Mar 15, 2026, 2:20 PM', hits: [{ loc: '1:20', text: 'frame matched the query' }, { loc: '2:40', text: 'frame matched the query' }, { loc: '3:50', text: 'frame matched the query' }] },
+        i2: { name: 'Contract scan, p. 1.jpg', dir: roofEn, crumbs: 'Documents › Home › Roof repair', size: '1.1 MB', date: 'Mar 12', changed: 'Mar 12, 2026, 6:52 PM' },
+        i3: { dir: H + '\\Pictures\\Roof 2026', crumbs: 'Pictures › Roof 2026', size: '4.0 MB', date: 'Mar 15', changed: 'Mar 15, 2026, 2:07 PM' },
+        i4: { dir: H + '\\Pictures\\Roof 2026', crumbs: 'Pictures › Roof 2026', size: '3.5 MB', date: 'Mar 15', changed: 'Mar 15, 2026, 6:31 PM' },
+        a1: { name: 'Voice note March 14.m4a', dir: H + '\\Documents\\Sound recordings', crumbs: 'Documents › Sound recordings', size: '2.1 MB', date: 'Mar 14', type: 'M4A audio', changed: 'Mar 14, 2026, 9:12 AM', hits: [{ loc: '0:30', text: 'segment 0:30–1:00 of 1:52' }] },
+        n1: { name: 'Roof repair contract — scans.zip', crumbs: 'Downloads', size: '18.6 MB', date: 'Mar 16', type: 'ZIP archive', changed: 'Mar 16, 2026, 10:44 AM' },
+        n2: { name: 'roof_repair_contract_old.xlsx', dir: H + '\\Documents\\Archive 2024', crumbs: 'Documents › Archive 2024', size: '31 KB', date: 'Oct 3, 2024', type: 'Excel spreadsheet', changed: 'Oct 3, 2024, 4:20 PM' }
+      };
+      D.forEach(d => Object.assign(d, EN[d.id] || {}));
+    }
     const words = q.toLowerCase().split(/[\s_—-]+/).filter(w => w.length > 1);
     const esc = w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const parts = s => {
@@ -298,7 +321,7 @@ class Component extends DCLogic {
         ring: sel ? 'box-shadow: 0 0 0 2px var(--accent);' : '',
         isVideo: d.kind === 'video',
         loc: d.loc || (d.hits ? d.hits[0].loc : ''),
-        snip: d.kind === 'audio' ? 'Совпал отрезок 0:30–1:00 · длительность 1:52' : (d.hits ? d.hits[0].text.replace(/\n\s*/g, ' ') : ''),
+        snip: d.kind === 'audio' ? (en ? 'Matched segment 0:30–1:00 · length 1:52' : 'Совпал отрезок 0:30–1:00 · длительность 1:52') : (d.hits ? d.hits[0].text.replace(/\n\s*/g, ' ') : ''),
         snipFont: isCode ? "font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px;" : '',
         parts: parts(d.name)
       });
@@ -306,7 +329,7 @@ class Component extends DCLogic {
     const of = k => items.filter(i => k === 'all' || i.kind === k);
     const docs = items.filter(i => i.kind === 'text' || i.kind === 'code');
     const media = items.filter(i => i.kind === 'image' || i.kind === 'video');
-    const TABS = [['all', 'Всё'], ['text', 'Документы'], ['code', 'Код'], ['image', 'Фото'], ['video', 'Видео'], ['audio', 'Аудио'], ['name', 'По имени']];
+    const TABS = en ? [['all', 'All'], ['text', 'Documents'], ['code', 'Code'], ['image', 'Photos'], ['video', 'Video'], ['audio', 'Audio'], ['name', 'By name']] : [['all', 'Всё'], ['text', 'Документы'], ['code', 'Код'], ['image', 'Фото'], ['video', 'Видео'], ['audio', 'Аудио'], ['name', 'По имени']];
     const tabs = TABS.map(([k, label]) => ({
       label, on: k === tab, count: String(of(k).length),
       style: k === tab ? 'color: var(--text); font-weight: 600' : 'color: var(--muted)',
@@ -315,10 +338,10 @@ class Component extends DCLogic {
     let sections;
     if (tab === 'all') {
       sections = [
-        { title: 'Документы и код', note: String(docs.length), rows: true, items: docs },
-        { title: 'Фото и видео', note: String(media.length), grid: true, items: media.slice(0, 5), gridStyle: 'grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))', more: 'Все фото и видео', morePick: () => this.setState({ tab: 'image', sel: 'i1' }) },
-        { title: 'Аудио', note: '1', rows: true, items: of('audio') },
-        { title: 'Только по имени', note: 'содержимое этих файлов не индексируется', names: true, items: of('name') }
+        { title: en ? 'Documents and code' : 'Документы и код', note: String(docs.length), rows: true, items: docs },
+        { title: en ? 'Photos and video' : 'Фото и видео', note: String(media.length), grid: true, items: media.slice(0, 5), gridStyle: 'grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))', more: en ? 'All photos and video' : 'Все фото и видео', morePick: () => this.setState({ tab: 'image', sel: 'i1' }) },
+        { title: en ? 'Audio' : 'Аудио', note: '1', rows: true, items: of('audio') },
+        { title: en ? 'Name only' : 'Только по имени', note: en ? 'the contents of these files aren’t indexed' : 'содержимое этих файлов не индексируется', names: true, items: of('name') }
       ];
     } else {
       const list = of(tab);
@@ -339,8 +362,8 @@ class Component extends DCLogic {
       const on = i >= 12 && i <= 23;
       return { style: 'height: ' + h + 'px; background: ' + (on ? 'var(--accent)' : 'var(--line2)') };
     });
-    const meta = [{ k: 'Тип', v: s.type }, { k: 'Размер', v: s.size }, { k: 'Изменён', v: s.changed }];
-    if (s.dur) meta.splice(2, 0, { k: 'Длительность', v: s.dur });
+    const meta = [{ k: en ? 'Type' : 'Тип', v: s.type }, { k: en ? 'Size' : 'Размер', v: s.size }, { k: en ? 'Modified' : 'Изменён', v: s.changed }];
+    if (s.dur) meta.splice(2, 0, { k: en ? 'Length' : 'Длительность', v: s.dur });
     const pv = {
       name: s.name, ft: s.ft, path: s.dir + '\\' + s.name, ext: '.' + (s.ext || '').toLowerCase(), meta,
       isText: k === 'text', isCode: k === 'code', isMedia: k === 'image' || k === 'video', isVideo: k === 'video', isAudio: k === 'audio', isName: k === 'name',
@@ -348,7 +371,8 @@ class Component extends DCLogic {
       marks: (s.marks || []).map((left, i) => ({ left, label: s.hits[i].loc })),
       code: (s.code || []).map((t, i) => ({ t: t || ' ', style: (s.codeHl || []).includes(i) ? 'background: color-mix(in srgb, var(--accent) 16%, transparent)' : '' })),
       hasHits: !!s.hits,
-      hitsTitle: k === 'video' ? 'Совпавшие моменты' : k === 'audio' ? 'Совпавший отрезок' : 'Где нашлось',
+      hitsTitle: en ? (k === 'video' ? 'Matching moments' : k === 'audio' ? 'Matching segment' : 'Where it matched') : (k === 'video' ? 'Совпавшие моменты' : k === 'audio' ? 'Совпавший отрезок' : 'Где нашлось'),
+      nameOnly: en ? 'Found by name. The contents of ' + '.' + (s.ext || '').toLowerCase() + ' files aren’t indexed.' : 'Найдено по имени. Содержимое файлов .' + (s.ext || '').toLowerCase() + ' не индексируется.',
       hits: (s.hits || []).map(h => ({ loc: h.loc, text: h.text, font: k === 'code' ? "font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px; white-space: pre-wrap" : '' })),
       canSimilar: k === 'image' || k === 'video'
     };
@@ -360,10 +384,12 @@ class Component extends DCLogic {
       acc: dark ? light(accent, 0.45) : accent,
       onAcc: dark ? '#111111' : '#ffffff',
       showPreview: this.props.preview ?? true,
-      metaLine: total + ' ' + pl(total, ['файл', 'файла', 'файлов']) + ' · ' + (tab === 'all' ? '42' : '31') + ' мс',
+      update: this.props.update ?? true,
+      t, lang: en ? 'en' : 'ru',
+      metaLine: en ? total + (total === 1 ? ' file' : ' files') + ' · ' + (tab === 'all' ? '42' : '31') + ' ms' : total + ' ' + pl(total, ['файл', 'файла', 'файлов']) + ' · ' + (tab === 'all' ? '42' : '31') + ' мс',
       running: !paused,
-      statusText: paused ? 'Индексация на паузе' : 'Индексирую видео: 482 из 612',
-      pauseLabel: paused ? 'Продолжить' : 'Пауза',
+      statusText: en ? (paused ? 'Indexing paused' : 'Indexing videos: 482 of 612') : (paused ? 'Индексация на паузе' : 'Индексирую видео: 482 из 612'),
+      pauseLabel: en ? (paused ? 'Resume' : 'Pause') : (paused ? 'Продолжить' : 'Пауза'),
       pauseIcon: paused ? ic.play : ic.pause,
       togglePause: () => this.setState({ paused: !paused })
     };
