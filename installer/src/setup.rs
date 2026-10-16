@@ -730,6 +730,7 @@ impl Setup {
         };
         let payload = json!({
             "mode": ctx.mode.as_str(), "ok": true, "mft_ok": mft_ok, "root": ctx.root, "data_dir": ctx.data,
+            "hotkey": util::hotkey_label(&ctx.data),
         });
         log(&format!("done {payload}"));
         self.emit("setup://done", payload);

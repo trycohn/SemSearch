@@ -8,7 +8,76 @@ use std::sync::{Mutex, OnceLock};
 use tauri::Url;
 
 pub const DEFAULT_PORT: u16 = 8765;
-pub const DEFAULT_HOTKEY: &str = "ctrl+alt+s";
+
+/// Ctrl+Alt+S, or Ctrl+Alt+Space when AltGr+S types a letter in one of the user's keyboard layouts (Polish "ś", Czech,
+/// Hungarian ...): AltGr is Ctrl+Alt, so a hotkey on it would take that letter away. The backend makes the same choice
+/// (core.default_hotkey) when it writes config.json; this one covers the very first start, before that file exists.
+pub fn default_hotkey() -> &'static str {
+    if altgr_types(0x53) {
+        "ctrl+alt+space"
+    } else {
+        "ctrl+alt+s"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Runs on any machine; the Russian layout (AltGr+8 types the rouble sign) is checked where it is installed.
+    #[test]
+    fn altgr_detection() {
+        assert!(matches!(super::default_hotkey(), "ctrl+alt+s" | "ctrl+alt+space"));
+        for accel in ["ctrl+alt+s", "ctrl+alt+space"] {
+            assert!(accel.parse::<tauri_plugin_global_shortcut::Shortcut>().is_ok(), "{accel}");
+        }
+        let ru = unsafe {
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetKeyboardLayoutList;
+            let mut h = [std::ptr::null_mut(); 64];
+            let n = GetKeyboardLayoutList(64, h.as_mut_ptr()).max(0) as usize;
+            h[..n].iter().any(|&x| (x as usize & 0xFFFF) == 0x0419)
+        };
+        if ru {
+            assert!(super::altgr_types(0x38));
+        }
+    }
+}
+
+/// Does AltGr (Ctrl+Alt) with virtual key `vk` type a character in any of the user's keyboard layouts?
+fn altgr_types(vk: u32) -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, MAPVK_VK_TO_VSC};
+    unsafe {
+        let n = GetKeyboardLayoutList(0, std::ptr::null_mut());
+        if n <= 0 {
+            return false;
+        }
+        let mut hkls = vec![std::ptr::null_mut(); n as usize];
+        let n = GetKeyboardLayoutList(n, hkls.as_mut_ptr()).max(0) as usize;
+        for &hkl in &hkls[..n.min(hkls.len())] {
+            let sc = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, hkl);
+            let typed = |down: &[usize]| -> Option<Vec<u16>> {
+                let mut state = [0u8; 256];
+                for &k in down {
+                    state[k] = 0x80;
+                }
+                let mut buf = [0u16; 8];
+                // flag 4: leave the keyboard state (dead keys) alone
+                let k = ToUnicodeEx(vk, sc, state.as_ptr(), buf.as_mut_ptr(), buf.len() as i32, 4, hkl);
+                match k {
+                    0 => None,
+                    k if k < 0 => Some(vec![0]), // dead key: it starts a letter too
+                    k => Some(buf[..(k as usize).min(buf.len())].to_vec()),
+                }
+            };
+            let plain = typed(&[]);
+            // VK_CONTROL, VK_MENU, VK_LCONTROL, VK_RMENU
+            if let Some(altgr) = typed(&[0x11, 0x12, 0xA2, 0xA5]) {
+                if Some(&altgr) != plain.as_ref() && (altgr == [0] || altgr.iter().all(|&c| c >= 0x20)) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
 
 /// Startup configuration (environment + `config.json`) and the backend in use (docs/API.md §1, §3).
 pub struct Config {
@@ -56,7 +125,7 @@ impl Config {
             .and_then(|v| v.get("hotkey"))
             .and_then(|v| v.as_str())
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| DEFAULT_HOTKEY.to_string());
+            .unwrap_or_else(|| default_hotkey().to_string());
         let dev_env = std::env::var("SEMSEARCH_DEV_URL").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let mut dev_url = None;
         if let Some(d) = &dev_env {

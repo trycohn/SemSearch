@@ -101,6 +101,38 @@ PROFILE_FOLDERS = ("FDD39AD0-238F-46AF-ADB4-6C85480369C7", "B4BFCC3A-DB2C-424C-B
                    "33E28130-4E1E-4676-835A-98395C3BC3BB", "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
                    "4BD8D571-6D19-48D3-BE97-422220080E43", "374DE290-123F-4565-9164-39C4925E467B")
 
+def _altgr_types(vk):
+    """Набирает ли AltGr (= Ctrl+Alt) с клавишей vk символ в какой-нибудь из раскладок пользователя (польская AltGr+S —
+    «ś», чешская, венгерская…): такое сочетание горячей клавишей занимать нельзя — буква перестанет набираться."""
+    u32 = ctypes.windll.user32
+    n = u32.GetKeyboardLayoutList(0, None)
+    hkls = (ctypes.c_void_p * max(n, 1))()
+    n = u32.GetKeyboardLayoutList(n, hkls)
+    state = (ctypes.c_ubyte * 256)()
+    buf = ctypes.create_unicode_buffer(8)
+    for hkl in hkls[:n]:
+        sc = u32.MapVirtualKeyExW(vk, 0, ctypes.c_void_p(hkl))  # MAPVK_VK_TO_VSC
+        out = []
+        for down in ((), (0x11, 0x12, 0xA2, 0xA5)):  # без модификаторов; Ctrl+Alt (левый Ctrl + правый Alt)
+            for i in range(256):
+                state[i] = 0x80 if i in down else 0
+            k = u32.ToUnicodeEx(vk, sc, state, buf, 8, 4, ctypes.c_void_p(hkl))  # 4: не трогать состояние клавиатуры
+            out.append(buf.value[:k] if k > 0 else "\0" if k < 0 else "")  # < 0 — мёртвая клавиша
+        plain, altgr = out
+        if altgr and altgr != plain and (altgr == "\0" or altgr >= " "):
+            return True
+    return False
+
+
+def default_hotkey():
+    """Ctrl+Alt+S, а если в раскладках пользователя AltGr+S набирает букву — Ctrl+Alt+Пробел. Тот же выбор делает
+    shell (util.rs default_hotkey), пока config.json ещё нет."""
+    try:
+        return "ctrl+alt+space" if _altgr_types(0x53) else "ctrl+alt+s"  # VK_S
+    except Exception:
+        return "ctrl+alt+s"
+
+
 DEFAULT_CONFIG = {
     # Где искать по содержимому (смыслу); load_config добавляет известные папки вне HOME (default_content_roots)
     "content_roots": [HOME],
@@ -116,7 +148,7 @@ DEFAULT_CONFIG = {
     "foreign_code": "skip",
     "exclude_paths": [],
     "port": 8765,
-    "hotkey": "ctrl+alt+s",
+    "hotkey": default_hotkey(),  # пишется в config.json при первом запуске
     "theme": "system",  # system | light | dark
     "accent": "#005fb8",
     "lang": "system",  # system | ru | en — язык интерфейса; system — как в Windows (русский или английский)

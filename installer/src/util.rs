@@ -325,3 +325,98 @@ pub fn shell_open(path: &Path) -> bool {
     };
     r as isize > 32
 }
+
+
+// ---------------------------------------------------------------- hotkey shown on the «done» screen
+
+/// The app's hotkey for the «done» screen: `hotkey` from `<data>\config.json` when the app already has one (update),
+/// otherwise the default the app will pick on its first start — the same rule as the shell's util::default_hotkey.
+pub fn hotkey_label(data: &Path) -> String {
+    let from_config = fs::read_to_string(data.join("config.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(t.trim_start_matches('\u{feff}')).ok())
+        .and_then(|v| v.get("hotkey").and_then(|h| h.as_str()).map(str::to_string))
+        .filter(|h| !h.trim().is_empty());
+    match from_config {
+        Some(h) => accel_label(&h),
+        None => accel_label(default_hotkey()),
+    }
+}
+
+/// "ctrl+alt+space" -> "Ctrl+Alt+Space".
+pub fn accel_label(accel: &str) -> String {
+    accel
+        .split('+')
+        .map(|p| match p.trim().to_ascii_lowercase().as_str() {
+            "ctrl" | "control" | "commandorcontrol" | "cmdorctrl" => "Ctrl".to_string(),
+            "alt" | "option" => "Alt".to_string(),
+            "shift" => "Shift".to_string(),
+            "super" | "win" | "meta" | "cmd" | "command" => "Win".to_string(),
+            k => {
+                let mut c = k.chars();
+                c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
+/// Ctrl+Alt+S, or Ctrl+Alt+Space when AltGr+S types a letter in one of the user's keyboard layouts (Polish, Czech,
+/// Hungarian ...): AltGr is Ctrl+Alt, so a hotkey on it would take that letter away. Same rule as the shell and the
+/// backend use when they pick the default.
+pub fn default_hotkey() -> &'static str {
+    if altgr_types(0x53) {
+        "ctrl+alt+space"
+    } else {
+        "ctrl+alt+s"
+    }
+}
+
+/// Does AltGr (Ctrl+Alt) with virtual key `vk` type a character in any of the user's keyboard layouts?
+fn altgr_types(vk: u32) -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, MAPVK_VK_TO_VSC};
+    unsafe {
+        let n = GetKeyboardLayoutList(0, std::ptr::null_mut());
+        if n <= 0 {
+            return false;
+        }
+        let mut hkls = vec![std::ptr::null_mut(); n as usize];
+        let n = GetKeyboardLayoutList(n, hkls.as_mut_ptr()).max(0) as usize;
+        for &hkl in &hkls[..n.min(hkls.len())] {
+            let sc = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, hkl);
+            let typed = |down: &[usize]| -> Option<Vec<u16>> {
+                let mut state = [0u8; 256];
+                for &k in down {
+                    state[k] = 0x80;
+                }
+                let mut buf = [0u16; 8];
+                // flag 4: leave the keyboard state (dead keys) alone
+                let k = ToUnicodeEx(vk, sc, state.as_ptr(), buf.as_mut_ptr(), buf.len() as i32, 4, hkl);
+                match k {
+                    0 => None,
+                    k if k < 0 => Some(vec![0]), // dead key: it starts a letter too
+                    k => Some(buf[..(k as usize).min(buf.len())].to_vec()),
+                }
+            };
+            let plain = typed(&[]);
+            // VK_CONTROL, VK_MENU, VK_LCONTROL, VK_RMENU
+            if let Some(altgr) = typed(&[0x11, 0x12, 0xA2, 0xA5]) {
+                if Some(&altgr) != plain.as_ref() && (altgr == [0] || altgr.iter().all(|&c| c >= 0x20)) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+mod hotkey_tests {
+    #[test]
+    fn labels() {
+        assert_eq!(super::accel_label("ctrl+alt+s"), "Ctrl+Alt+S");
+        assert_eq!(super::accel_label("ctrl+alt+space"), "Ctrl+Alt+Space");
+        assert_eq!(super::accel_label("CommandOrControl+Shift+F"), "Ctrl+Shift+F");
+        assert!(matches!(super::default_hotkey(), "ctrl+alt+s" | "ctrl+alt+space"));
+    }
+}
