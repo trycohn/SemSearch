@@ -1,0 +1,217 @@
+# Release build: dist\SemSearch-Setup-<version>.exe from this repository's source, on a GitHub-hosted runner.
+# A v* tag push builds it and attaches it to the GitHub Release of that tag; workflow_dispatch only builds it
+# (the workflow artifact). The tag must be v + "version" from shell/tauri.conf.json.
+#
+# The build is build-installer.cmd (docs/INSTALLER.md, «Сборка») in two stages, so that the exe files can be signed
+# between them and the finished setup after them:
+#   build-installer.cmd inner       engine + shell + installer; SemSearch.exe, bin\semsearch-engine.exe and
+#                                   uninstall.exe (a copy of the bare setup exe) go to installer\target\inner\
+#   build-installer.cmd pack [dir]  takes the signed copies from dir, packs Python + program files, appends them to the
+#                                   unsigned bare setup exe -> dist\SemSearch-Setup-<version>.exe
+# Signing is off for now: the release is unsigned. The SignPath steps below are ready, commented out; see
+# "SignPath signing" at the end of this file for what to set up before uncommenting them.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360   # the most GitHub allows; SignPath approvals (below) are waited for inside the job
+    permissions:
+      contents: write   # gh release create / upload
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Version
+        id: version
+        run: |
+          $ver = (Get-Content -Raw -Encoding UTF8 shell/tauri.conf.json | ConvertFrom-Json).version
+          if (-not $ver) { Write-Output '::error::No "version" in shell/tauri.conf.json'; exit 1 }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$ver") {
+            Write-Output "::error::Tag $env:GITHUB_REF_NAME does not match shell/tauri.conf.json version $ver (expected v$ver)"
+            exit 1
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "exe=dist/SemSearch-Setup-$ver.exe"
+          Write-Output "SemSearch $ver"
+
+      - name: Rust (stable, MSVC)
+        run: |
+          rustup toolchain install stable --profile minimal --target x86_64-pc-windows-msvc --no-self-update
+          rustup default stable
+          rustc -Vv
+          cargo -V
+
+      # Only downloaded crates (checked against the Cargo.lock checksums) are cached, not target\: release binaries
+      # are always compiled from scratch from this commit, so what gets signed is exactly this source.
+      - name: Cache cargo downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~\.cargo\registry\index
+            ~\.cargo\registry\cache
+            ~\.cargo\git\db
+          key: cargo-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock', 'shell/Cargo.lock', 'installer/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # The pinned Python (installer/python.txt); pack.exe checks its sha256 either way.
+      - name: Cache Python for the installer
+        uses: actions/cache@v6
+        with:
+          path: installer\.cache
+          key: python-${{ hashFiles('installer/python.txt') }}
+
+      # Full path: with NoDefaultCurrentDirectoryInExePath set, a bare script name is not looked up in the current folder.
+      - name: Build program files (build-installer.cmd inner)
+        run: |
+          & "$env:GITHUB_WORKSPACE\build-installer.cmd" inner
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # ---- SignPath, request 1 of 2: SemSearch.exe, bin\semsearch-engine.exe, uninstall.exe
+      # (artifact configuration .github/signpath/inner.xml). Each request waits for manual approval in SignPath.
+      # - name: Upload program files for signing
+      #   id: inner-unsigned
+      #   uses: actions/upload-artifact@v7
+      #   with:
+      #     name: inner-unsigned
+      #     path: installer/target/inner/
+      #     if-no-files-found: error
+      #     retention-days: 7
+      # - name: Sign program files (SignPath)
+      #   uses: signpath/github-action-submit-signing-request@v3
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      #     project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      #     signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      #     artifact-configuration-slug: inner
+      #     github-artifact-id: ${{ steps.inner-unsigned.outputs.artifact-id }}
+      #     parameters: |
+      #       version: ${{ toJSON(steps.version.outputs.version) }}
+      #     wait-for-completion: true
+      #     wait-for-completion-timeout-in-seconds: 7200
+      #     output-artifact-directory: ${{ runner.temp }}\signed-inner
+      # - name: Check signatures of program files
+      #   run: |
+      #     $dir = "$env:RUNNER_TEMP\signed-inner"
+      #     foreach ($f in 'SemSearch.exe', 'bin\semsearch-engine.exe', 'uninstall.exe') {
+      #       $s = Get-AuthenticodeSignature -LiteralPath (Join-Path $dir $f)
+      #       Write-Output "$f`: $($s.Status), $($s.SignerCertificate.Subject)"
+      #       if ($s.Status -ne 'Valid') { Write-Output "::error::$f is not validly signed"; exit 1 }
+      #     }
+
+      # With signed-inner present (SignPath above), the signed copies replace the built ones before packing.
+      - name: Pack the installer (build-installer.cmd pack)
+        run: |
+          $signed = "$env:RUNNER_TEMP\signed-inner"
+          if (Test-Path -LiteralPath $signed) {
+            & "$env:GITHUB_WORKSPACE\build-installer.cmd" pack $signed
+          } else {
+            & "$env:GITHUB_WORKSPACE\build-installer.cmd" pack
+          }
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Upload the installer
+        id: setup
+        uses: actions/upload-artifact@v7
+        with:
+          name: SemSearch-Setup-${{ steps.version.outputs.version }}
+          path: ${{ steps.version.outputs.exe }}
+          if-no-files-found: error
+
+      # ---- SignPath, request 2 of 2: the finished setup exe, after the payload was appended (the signature covers
+      # it; the installer finds the payload in front of the certificate table). Artifact configuration
+      # .github/signpath/setup.xml. The signed exe replaces the unsigned one in dist\ before the release.
+      # - name: Sign the installer (SignPath)
+      #   uses: signpath/github-action-submit-signing-request@v3
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      #     project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      #     signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      #     artifact-configuration-slug: setup
+      #     github-artifact-id: ${{ steps.setup.outputs.artifact-id }}
+      #     parameters: |
+      #       version: ${{ toJSON(steps.version.outputs.version) }}
+      #     wait-for-completion: true
+      #     wait-for-completion-timeout-in-seconds: 7200
+      #     output-artifact-directory: ${{ runner.temp }}\signed-setup
+      # - name: Check the signed installer
+      #   env:
+      #     EXE: ${{ steps.version.outputs.exe }}
+      #   run: |
+      #     $signed = Join-Path "$env:RUNNER_TEMP\signed-setup" (Split-Path -Leaf $env:EXE)
+      #     $s = Get-AuthenticodeSignature -LiteralPath $signed
+      #     Write-Output "$($s.Status), $($s.SignerCertificate.Subject)"
+      #     if ($s.Status -ne 'Valid') { Write-Output '::error::The installer is not validly signed'; exit 1 }
+      #     Copy-Item -LiteralPath $signed -Destination $env:EXE -Force
+      #     & installer\target\release\pack.exe info $env:EXE
+      #     if ($LASTEXITCODE) { Write-Output '::error::The signed installer does not find its payload'; exit 1 }
+      # - name: Upload the signed installer
+      #   uses: actions/upload-artifact@v7
+      #   with:
+      #     name: SemSearch-Setup-${{ steps.version.outputs.version }}-signed
+      #     path: ${{ steps.version.outputs.exe }}
+      #     if-no-files-found: error
+
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VER: ${{ steps.version.outputs.version }}
+          EXE: ${{ steps.version.outputs.exe }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          $policyEn = "$env:REPO_URL/blob/$env:BRANCH/README.en.md#code-signing-policy"
+          $policyRu = "$env:REPO_URL/blob/$env:BRANCH/README.md#политика-подписи-кода-code-signing-policy"
+          $notes = @(
+            "Installer for Windows 10 (1709+) and 11, x64: ``SemSearch-Setup-$($env:VER).exe``.",
+            '',
+            # Drop this line once the SignPath steps are on.
+            'This build is not code-signed yet, so SmartScreen may warn about it.',
+            '',
+            "Code signing policy: [English]($policyEn) · [Русский]($policyRu)"
+          ) -join "`n"
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG $env:EXE --clobber
+          } else {
+            gh release create $env:TAG $env:EXE --verify-tag --title "SemSearch $env:VER" --notes $notes --generate-notes
+          }
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# ---- SignPath signing (SignPath Foundation, free for open source)
+# Before uncommenting the SignPath steps above:
+#  1. SignPath approves the project and creates it in their organization. In its project:
+#     - trusted build system "GitHub.com" linked to the project;
+#     - artifact configurations with the slugs "inner" and "setup": the XML of .github/signpath/inner.xml and
+#       .github/signpath/setup.xml;
+#     - a signing policy (release signing) with manual approval of every request.
+#  2. In this repository, Settings -> Secrets and variables -> Actions:
+#     - secret SIGNPATH_API_TOKEN: the API token of the SignPath submitter user;
+#     - variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG.
+#  3. Uncomment the SignPath steps above and drop the "not code-signed yet" line of the release notes.
+#     Pinning signpath/github-action-submit-signing-request to a commit SHA instead of @v3 is safer: it gets the token.
+# Each release then makes two signing requests (program files, then the setup exe). Both wait for manual approval
+# in SignPath, up to wait-for-completion-timeout-in-seconds each; the job waits meanwhile (6 h at most).
+# The publisher in the signature is SignPath Foundation. SignPath requires that every job leading to the signing
+# request runs on a GitHub-hosted runner (windows-latest here).

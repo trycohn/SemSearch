@@ -207,9 +207,24 @@ CPython 3.11, x86_64 windows-msvc install_only; закреплённые URL и 
 `pack append`: полезная нагрузка дописывается к **неподписанному** голому exe
 (`[exe][zip][u64 длина, little-endian][8 байт "SSPAYLD1"]`) → подпись готового `dist\SemSearch-Setup-<версия>.exe` →
 `pack info` проверяет, что нагрузка находится. Каждый файл подписывается один раз (уже подписанный — ошибка сборки).
-Версия — из `shell/tauri.conf.json` (её же `build.rs` вшивает в установщик). Для разработки без упаковки:
+Версия — из `shell/tauri.conf.json` (её же `build.rs` вшивает в установщик). В свойствах всех трёх exe
+(`SemSearch.exe`, `bin\semsearch-engine.exe`, exe установщика) продукт — «SemSearch», версия продукта — эта же: так
+требует SignPath Foundation. У движка ресурс версии пишет `engine/build.rs`; у установщика `installer/build.rs` меняет
+описание файла на «SemSearch Setup» (tauri-build ставит туда productName). Для разработки без упаковки:
 `SEMSEARCH_PAYLOAD_DIR=<корень репозитория>` — ядро берёт файлы прямо оттуда (по тому же payload.txt), Python — из
 `installer\.cache\` (один раз: `installer\target\release\pack.exe python .`).
+
+Этапы — для подписи вне машины сборки (SignPath в CI). `build-installer.cmd inner`: всё до подписи программы
+включительно, затем `SemSearch.exe`, `bin\semsearch-engine.exe` и `uninstall.exe` кладутся в `installer\target\inner\`
+(с теми же путями) и сборка останавливается. `build-installer.cmd pack [папка]`: те же три файла, уже подписанные,
+встают из папки на свои места (без папки — берутся как есть), дальше `pack python`, `pack zip`, `pack append` и
+`pack info`; готовый exe подписывают после этапа. Без аргументов — всё сразу; `SEMSEARCH_SIGN` действует и на
+этапах (inner — три файла, pack — готовый exe).
+
+Выпуск: тег `v<версия>` (версия — из `shell/tauri.conf.json`, иначе сборка остановится) запускает
+`.github/workflows/release.yml` на windows-latest: `inner` → `pack` → `dist\SemSearch-Setup-<версия>.exe` в артефакт
+сборки и в GitHub Release этого тега. Шаги подписи SignPath там же, закомментированы (два запроса: три файла программы,
+затем готовый exe); конфигурации артефактов для проекта SignPath — `.github/signpath/inner.xml` и `setup.xml`.
 
 В zip: `app/<путь от корня репозитория>` — файлы программы, `python.tar.gz` (без сжатия), `uninstall.exe` (голый exe
 установщика, со своей подписью; шаг `copy` кладёт его в `<root>`, а без него — как раньше, exe без нагрузки),

@@ -27,7 +27,8 @@
   <a href="#usage">Usage</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
-  <a href="#development">Development</a>
+  <a href="#development">Development</a> ·
+  <a href="#code-signing-policy">Code signing policy</a>
 </p>
 
 <p align="center"><a href="README.md">Русский</a> · <b>English</b></p>
@@ -80,6 +81,7 @@ SemSearch, wait until it finishes indexing and run `.venv\Scripts\python.exe too
    That is why it needs the internet. If the connection drops, press Retry.
 
 The installer is not signed yet, so SmartScreen may warn about it. If it does, click More info and then Run anyway.
+How releases are going to be signed is described in [Code signing policy](#code-signing-policy).
 To update, run the new installer over the old version; your settings, index and model stay where they are. You can
 remove SemSearch in Apps or Add or remove programs, and choose to wipe the settings, the index and the model as well.
 
@@ -324,6 +326,45 @@ support it), the NVIDIA driver is too old (the log then suggests updating it), o
 - The environment variables (`SEMSEARCH_DATA_DIR`, `SEMSEARCH_PORT`, `SEMSEARCH_ROOT`, `SEMSEARCH_DEV_URL`,
   `SEMSEARCH_NO_BACKEND`) and how the parts talk to each other are described in [`docs/API.md`](docs/API.md).
 - The logo, icons and colours are in [`brand/`](brand/README.md).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+The signature is free: SignPath.io provides it and the certificate is issued to SignPath Foundation, so the file
+properties show SignPath Foundation as the publisher. What gets signed is the installer `SemSearch-Setup-<version>.exe`
+and the program files inside it: `SemSearch.exe`, the name engine `bin\semsearch-engine.exe` and `uninstall.exe`.
+GitHub Actions builds them from this repository's source ([`.github/workflows/release.yml`](.github/workflows/release.yml))
+when a new version is released, and a person from the list below approves every signature by hand. Files made by others
+are not signed: the Python inside the installer, PyTorch, the Python packages and the model come with their authors'
+signatures or without any. Until SignPath approves the project, releases come out unsigned.
+
+| Role | What they do | Who |
+|---|---|---|
+| Committers | Change the code without a separate review | [@trycohn](https://github.com/trycohn) |
+| Reviewers | Review changes from others (pull requests) before they are accepted | [@trycohn](https://github.com/trycohn) |
+| Approvers | Decide which release gets signed and approve every signing request | [@trycohn](https://github.com/trycohn) |
+
+For now all three roles are held by one person, the author of the project.
+
+### Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or
+the person installing or operating it. SemSearch has no telemetry and no crash reports. Files, their contents, the
+index and search queries stay on the computer: the backend accepts connections from this computer only (127.0.0.1).
+
+SemSearch goes online only for what it needs to work, and only during setup or on the first start. Once downloaded, the
+model is loaded from disk without contacting the network.
+
+| What is downloaded | From | When | Privacy policy |
+|---|---|---|---|
+| PyTorch (torch, torchvision) | download.pytorch.org | During setup | [The Linux Foundation](https://www.linuxfoundation.org/legal/privacy-policy) (PyTorch Foundation) |
+| Python packages | pypi.org, files.pythonhosted.org | During setup | [PyPI](https://policies.python.org/pypi.org/Privacy-Notice/) |
+| The EmbeddingGemma 2 model (about 1.5 GB) | huggingface.co | During setup. If you built the program yourself or the model is gone from the disk, on start | [Hugging Face](https://huggingface.co/privacy) |
+| Visual C++ Redistributable and WebView2 Runtime | Microsoft (aka.ms, go.microsoft.com) | During setup, only if they are missing. WebView2 is installed only if you agree | [Microsoft](https://www.microsoft.com/privacy/privacystatement) |
+
+These sites see what any download shows them: the IP address and the usual request headers with program versions.
 
 ## License
 
