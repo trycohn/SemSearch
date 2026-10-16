@@ -8,7 +8,76 @@ use std::sync::{Mutex, OnceLock};
 use tauri::Url;
 
 pub const DEFAULT_PORT: u16 = 8765;
-pub const DEFAULT_HOTKEY: &str = "ctrl+alt+s";
+
+/// Ctrl+Alt+S, or Ctrl+Alt+Space when AltGr+S types a letter in one of the user's keyboard layouts (Polish "ś", Czech,
+/// Hungarian ...): AltGr is Ctrl+Alt, so a hotkey on it would take that letter away. The backend makes the same choice
+/// (core.default_hotkey) when it writes config.json; this one covers the very first start, before that file exists.
+pub fn default_hotkey() -> &'static str {
+    if altgr_types(0x53) {
+        "ctrl+alt+space"
+    } else {
+        "ctrl+alt+s"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Runs on any machine; the Russian layout (AltGr+8 types the rouble sign) is checked where it is installed.
+    #[test]
+    fn altgr_detection() {
+        assert!(matches!(super::default_hotkey(), "ctrl+alt+s" | "ctrl+alt+space"));
+        for accel in ["ctrl+alt+s", "ctrl+alt+space"] {
+            assert!(accel.parse::<tauri_plugin_global_shortcut::Shortcut>().is_ok(), "{accel}");
+        }
+        let ru = unsafe {
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetKeyboardLayoutList;
+            let mut h = [std::ptr::null_mut(); 64];
+            let n = GetKeyboardLayoutList(64, h.as_mut_ptr()).max(0) as usize;
+            h[..n].iter().any(|&x| (x as usize & 0xFFFF) == 0x0419)
+        };
+        if ru {
+            assert!(super::altgr_types(0x38));
+        }
+    }
+}
+
+/// Does AltGr (Ctrl+Alt) with virtual key `vk` type a character in any of the user's keyboard layouts?
+fn altgr_types(vk: u32) -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, MapVirtualKeyExW, ToUnicodeEx, MAPVK_VK_TO_VSC};
+    unsafe {
+        let n = GetKeyboardLayoutList(0, std::ptr::null_mut());
+        if n <= 0 {
+            return false;
+        }
+        let mut hkls = vec![std::ptr::null_mut(); n as usize];
+        let n = GetKeyboardLayoutList(n, hkls.as_mut_ptr()).max(0) as usize;
+        for &hkl in &hkls[..n.min(hkls.len())] {
+            let sc = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, hkl);
+            let typed = |down: &[usize]| -> Option<Vec<u16>> {
+                let mut state = [0u8; 256];
+                for &k in down {
+                    state[k] = 0x80;
+                }
+                let mut buf = [0u16; 8];
+                // flag 4: leave the keyboard state (dead keys) alone
+                let k = ToUnicodeEx(vk, sc, state.as_ptr(), buf.as_mut_ptr(), buf.len() as i32, 4, hkl);
+                match k {
+                    0 => None,
+                    k if k < 0 => Some(vec![0]), // dead key: it starts a letter too
+                    k => Some(buf[..(k as usize).min(buf.len())].to_vec()),
+                }
+            };
+            let plain = typed(&[]);
+            // VK_CONTROL, VK_MENU, VK_LCONTROL, VK_RMENU
+            if let Some(altgr) = typed(&[0x11, 0x12, 0xA2, 0xA5]) {
+                if Some(&altgr) != plain.as_ref() && (altgr == [0] || altgr.iter().all(|&c| c >= 0x20)) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
 
 /// Startup configuration (environment + `config.json`) and the backend in use (docs/API.md §1, §3).
 pub struct Config {
@@ -56,7 +125,7 @@ impl Config {
             .and_then(|v| v.get("hotkey"))
             .and_then(|v| v.as_str())
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| DEFAULT_HOTKEY.to_string());
+            .unwrap_or_else(|| default_hotkey().to_string());
         let dev_env = std::env::var("SEMSEARCH_DEV_URL").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let mut dev_url = None;
         if let Some(d) = &dev_env {
@@ -82,12 +151,8 @@ impl Config {
                 .unwrap_or_else(|| default.to_string())
         };
         let lang = text("lang", &|s| matches!(s, "system" | "ru" | "en"), "system");
-        let theme = text("theme", &|s| matches!(s, "system" | "light" | "dark"), "system");
-        let accent = text(
-            "accent",
-            &|s| s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit()),
-            "#005fb8",
-        );
+        let theme = text("theme", &valid_theme, "system");
+        let accent = text("accent", &valid_accent, "#005fb8");
         Config { root, data, data_note, port, dev, no_backend, hotkey, hidden, lang, theme, accent, dev_url, backend }
     }
 
@@ -108,6 +173,21 @@ impl Config {
     pub fn token(&self) -> Option<String> {
         let given = if self.dev { None } else { self.backend.lock().unwrap().1.clone() };
         given.or_else(|| self.file_token())
+    }
+
+    /// "theme" and "accent" from `config.json` as they are now (the settings page changes them while the shell runs);
+    /// the values read at startup if the file cannot be read.
+    pub fn appearance(&self) -> (String, String) {
+        let json = read_config_json(&self.data, &self.root);
+        let text = |key: &str, ok: &dyn Fn(&str) -> bool, default: &str| {
+            json.as_ref()
+                .and_then(|v| v.get(key))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| ok(s))
+                .unwrap_or_else(|| default.to_string())
+        };
+        (text("theme", &valid_theme, &self.theme), text("accent", &valid_accent, &self.accent))
     }
 
     /// `<data>\token`, written by the backend at startup.
@@ -131,6 +211,14 @@ impl Config {
     }
 }
 
+fn valid_theme(s: &str) -> bool {
+    matches!(s, "system" | "light" | "dark")
+}
+
+fn valid_accent(s: &str) -> bool {
+    s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// http://127.0.0.1:<port>/
 pub fn local_url(port: u16) -> Url {
     Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap()
@@ -147,7 +235,8 @@ fn find_root() -> PathBuf {
     let start = exe.parent().map(Path::to_path_buf).unwrap_or_default();
     let mut dir = Some(start.as_path());
     while let Some(d) = dir {
-        if d.join("server.py").is_file() {
+        // server.py alone is not enough: SemSearch.exe may sit below an unrelated project that has its own server.py
+        if d.join("server.py").is_file() && d.join("app.py").is_file() {
             return d.to_path_buf();
         }
         dir = d.parent();
@@ -368,4 +457,71 @@ pub fn small_icon_size() -> i32 {
 pub fn is_foreground(hwnd: isize) -> bool {
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     unsafe { GetForegroundWindow() as isize == hwnd }
+}
+
+/// Per-monitor DPI awareness (v2) before anything is drawn: the native dialogs shown before the first window exists
+/// (WebView2 missing, ...) are otherwise bitmap-scaled and blurry at 125 % and up. tao asks for the same later, which then
+/// fails harmlessly because the awareness cannot be changed twice.
+pub fn set_dpi_aware() {
+    use windows_sys::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+}
+
+/// Native message box: the shell has no console, and before the first window exists no UI of its own.
+/// With `ok_cancel` it has two buttons; returns true when the user pressed OK.
+pub fn message_box(title: &str, text: &str, ok_cancel: bool) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDOK, MB_ICONERROR, MB_OK, MB_OKCANCEL, MB_SETFOREGROUND};
+    let (t, x) = (wide(title), wide(text));
+    let flags = MB_ICONERROR | MB_SETFOREGROUND | if ok_cancel { MB_OKCANCEL } else { MB_OK };
+    unsafe { MessageBoxW(std::ptr::null_mut(), x.as_ptr(), t.as_ptr(), flags) == IDOK }
+}
+
+/// Open a web address in the default browser.
+pub fn open_url(url: &str) {
+    use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let (verb, url) = (wide("open"), wide(url));
+    unsafe {
+        // ShellExecute may hand the address to shell extensions that need COM (only used right before the shell exits)
+        CoInitializeEx(std::ptr::null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32);
+        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), url.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
+    }
+}
+
+/// Version of the WebView2 runtime that the windows will use (Evergreen, or WEBVIEW2_BROWSER_EXECUTABLE_FOLDER).
+/// Err(None) = not installed (Windows 10 before 21H1, LTSC and Server editions come without it); Err(Some(hresult)) =
+/// the loader failed for another reason.
+pub fn webview2_version() -> Result<String, Option<i32>> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::GetAvailableCoreWebView2BrowserVersionString;
+    use windows_core::{PCWSTR, PWSTR};
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    const ERROR_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32; // HRESULT_FROM_WIN32
+    const ERROR_PATH_NOT_FOUND: i32 = 0x8007_0003_u32 as i32;
+    let mut v = PWSTR::null();
+    let res = unsafe { GetAvailableCoreWebView2BrowserVersionString(PCWSTR::null(), &mut v) };
+    let text = if !v.is_null() { unsafe { v.to_string() }.ok() } else { None };
+    if !v.is_null() {
+        unsafe { CoTaskMemFree(v.as_ptr() as *const _) };
+    }
+    match res {
+        Ok(()) => text.filter(|s| !s.is_empty()).ok_or(None),
+        Err(e) if e.code().0 == ERROR_FILE_NOT_FOUND || e.code().0 == ERROR_PATH_NOT_FOUND => Err(None),
+        Err(e) => Err(Some(e.code().0)),
+    }
+}
+
+/// Panics of any thread go to shell.log: the release build has no console, and a panicking supervisor thread would
+/// otherwise just stop restarting the backend without a trace.
+pub fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let at = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
+        let payload = info.payload();
+        let what = payload
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        log(&format!("PANIC at {at}: {what}"));
+    }));
 }

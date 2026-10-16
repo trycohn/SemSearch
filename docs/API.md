@@ -18,8 +18,13 @@
 Все части находят её одинаково; shell передаёт свою `D` backend'у, backend — движку (через окружение). Движок из задачи
 Планировщика видит `SEMSEARCH_DATA_DIR`, только если это постоянная переменная пользователя.
 
-- В `D`: `config.json`, `index.db` и `names.db` (+ `-wal`, `-shm`), `thumbs\`, `token`, `semsearch.log`, `shell.log`,
-  `engine.log` / `engine-selftest.*` (движок без прав; с правами — `<ProgramFiles>\SemSearch\logs`).
+- В `D`: `config.json`, `index.db` и `names.db` (+ `-wal`, `-shm`), `thumbs\`, `models\` (кэш Hugging Face с моделью),
+  `token`, `semsearch.log`, `shell.log`, `engine.log` / `engine-selftest.*` (движок без прав; с правами —
+  `<ProgramFiles>\SemSearch\logs`). Размер индекса в `/api/status` (`index_bytes`) — без `models\`.
+- Модель: backend (`core.py` при импорте) ставит `HF_HUB_CACHE=D\models` и `HF_XET_CACHE=D\models\xet`, если
+  пользователь не задал `HF_HUB_CACHE` / `HUGGINGFACE_HUB_CACHE`. Модель из общего кэша (`HF_HOME\hub`, по умолчанию
+  `%USERPROFILE%\.cache\huggingface\hub`) переносится в `D\models` один раз, до загрузки; на другой том — копией через
+  `<имя>.part`. Не удалось (файлы заняты) — в этот запуск модель берётся со старого места, перенос повторится.
 - Папка программы `<root>` (где `server.py`) во время работы только читается.
 - Старая раскладка (`<root>\config.json`, `<root>\data\`): backend при старте один раз переносит в `D` config.json,
   базы (вместе с `-wal`/`-shm` или никак) и `thumbs\`. Пока `D\config.json` нет, shell и движок читают `<root>\config.json`.
@@ -36,8 +41,10 @@
 | `SEMSEARCH_SHELL=1` | backend | запущен из shell: окно, трей и горячую клавишу ведёт shell |
 | `SEMSEARCH_ENGINE_PIPE` | backend, `engine_client.py` | канал отладочного движка (`--pipe <имя>`) вместо `semsearch-engine-<SessionId>`, §4 |
 | `SEMSEARCH_ROOT` | shell | папка с `server.py` вместо поиска вверх от exe |
+| `SEMSEARCH_PYTHON` | shell | полный путь к `pythonw.exe` для backend; без неё — `<root>\.venv\Scripts\pythonw.exe`, затем `<root>\runtime\pythonw.exe` |
 | `SEMSEARCH_DEV_URL` | shell | брать страницы с этого адреса (вёрстка с `mock_api.py`) |
 | `SEMSEARCH_NO_BACKEND=1` | shell | не запускать и не останавливать backend |
+| `HF_HUB_CACHE` | backend | свой кэш моделей вместо `D\models` (тогда модель не переносится) |
 
 ## 2. Backend HTTP
 
@@ -136,7 +143,7 @@ SearchResponse = {
   ```
   { "content_roots": [{ "path": str, "files": int }],
     "drives": { "available": [{ "drive": "C:", "label": str, "fs": "NTFS" }], "selected": ["C:"] },
-    "exclude_dirs": [str], "hotkey": "ctrl+alt+s", "theme": "system"|"light"|"dark", "accent": "#005fb8",
+    "exclude_dirs": [str], "hotkey": "ctrl+alt+s" (или "ctrl+alt+space", если AltGr+S набирает букву), "theme": "system"|"light"|"dark", "accent": "#005fb8",
     "lang": "system"|"ru"|"en",   // язык интерфейса; system — как в Windows (русский → ru, иначе en)
     "lang_system": "ru"|"en",      // только чтение: во что превращается system на этой машине
     "pause_on_fullscreen": bool, "pause_processes": [str], "pause_on_battery": bool,

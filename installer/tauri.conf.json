@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SemSearch Setup",
+  "mainBinaryName": "SemSearch-Setup",
+  "version": "0.0.0",
+  "identifier": "com.semsearch.setup",
+  "build": {
+    "frontendDist": "ui",
+    "windows": {
+      "staticVCRuntime": false
+    }
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["../shell/icons/32x32.png", "../shell/icons/128x128.png", "../shell/icons/icon.ico"]
+  }
+}

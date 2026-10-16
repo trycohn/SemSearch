@@ -1,4 +1,4 @@
-# torch и torchvision ставит setup.bat (сборка с CUDA или для процессора) — до этого файла
+# torch и torchvision (requirements-torch.txt) ставит setup.bat или установщик — до этого файла: сборка с CUDA или для процессора
 sentence-transformers==6.1.0
 transformers==5.19.0
 numpy==2.4.6

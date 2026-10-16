@@ -1,8 +1,8 @@
 /* Встроенные страницы оболочки: заставка запуска (первый кадр design/Launch, как #boot в ui/index.html) и запасное меню трея.
    Тема и язык — из window.__SEMSEARCH_BOOT (shell, config.json): loading.js ставит на <html> класс light/dark. */
-:root{color-scheme:light dark;--bg:#f3f3f3;--surface:#ffffff;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--line:#e1e1e1;--line2:#cfcfcf;--accent:#005fb8;--onAccent:#ffffff;--hover:#ebebeb;--mark:#005fb8;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
-@media (prefers-color-scheme:dark){:root:not(.light){--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff}}
-:root.dark{--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff;color-scheme:dark}
+:root{color-scheme:light dark;--err:#b3261e;--bg:#f3f3f3;--surface:#ffffff;--text:#1a1a1a;--muted:#5c5c5c;--faint:#666666;--line:#e1e1e1;--line2:#cfcfcf;--accent:#005fb8;--onAccent:#ffffff;--hover:#ebebeb;--mark:#005fb8;--eo:cubic-bezier(.2,0,0,1);--ei:cubic-bezier(.3,0,1,1)}
+@media (prefers-color-scheme:dark){:root:not(.light){--err:#ff8a80;--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff}}
+:root.dark{--err:#ff8a80;--bg:#202020;--surface:#2b2b2b;--text:#f2f2f2;--muted:#bdbdbd;--faint:#a8a8a8;--line:#383838;--line2:#4a4a4a;--accent:#73a7d8;--onAccent:#111111;--hover:#333333;--mark:#ffffff;color-scheme:dark}
 :root.light{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;font:14px/1.45 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;user-select:none;cursor:default}
@@ -38,6 +38,7 @@ body.win{background:var(--bg);color:var(--text);display:flex;flex-direction:colu
 @keyframes spin{to{transform:rotate(360deg)}}
 .status{margin:16px 0 0;min-height:18px;max-width:520px;padding:0 8px;text-align:center;color:var(--muted);font-size:12px;user-select:text}
 .status:empty{display:none}
+.status.err{color:var(--err);font-size:13px;font-weight:600}
 
 /* запасное меню трея (пока backend не ответил) — как design/Tray.dc.html */
 body.tray{background:transparent;color:#f2f2f2;overflow:hidden}
@@ -49,6 +50,7 @@ body.tray{background:transparent;color:#f2f2f2;overflow:hidden}
 .logo{flex:none;width:32px;height:32px;border-radius:6px;background:#73a7d8;color:#111111;display:flex;align-items:center;justify-content:center}
 .head .t{font-weight:600}
 .sub{font-size:12px;color:#c8c8c8}
+.sub.err{color:#ff8a80}
 .mi{display:flex;align-items:center;gap:12px;width:100%;height:36px;padding:0 12px;border:0;border-radius:4px;background:transparent;text-align:left;transition:background-color .12s}
 .mi:hover{background:rgba(255,255,255,.08)}
 .mi:focus-visible{outline:2px solid #73a7d8;outline-offset:-2px}

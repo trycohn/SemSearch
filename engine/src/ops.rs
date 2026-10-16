@@ -91,7 +91,8 @@ pub fn status(eng: &Engine) -> Result<String, String> {
             files += f;
             dirs += d;
         }
-        ready &= i.ready;
+        // подключённый позже диск строится в фоне и общую готовность не снимает (VolSlot::late)
+        ready &= i.ready || s.late;
         build_ms = build_ms.max(i.build_ms);
         vols.push(json!({
             "drive": i.drive, "fs": i.fs, "mode": i.mode, "files": f, "dirs": d, "ready": i.ready,
@@ -235,7 +236,10 @@ fn join(dir: &str, name: &str) -> String {
 /// Размер/время/атрибуты для файлов одного каталога: если нужна заметная доля каталога —
 /// одно перечисление FindFirstFileExW, иначе GetFileAttributesExW на каждый файл.
 fn stat_group(g: ListGroup, skip_cloud: bool, classify: bool) -> Vec<ListItem> {
-    let keep = |a: u32| a & A_DIRECTORY == 0 && !(skip_cloud && a & (A_CLOUD | A_REPARSE) != 0);
+    // skip_cloud: без заглушек (данных на диске нет), символических ссылок, junction и прочих точек повторной обработки;
+    // файлы облака с данными на диске (OneDrive «всегда хранить на устройстве», уже открывавшиеся) — точка повторной
+    // обработки с облачным тегом — берём
+    let keep = |a: u32, tag: u32| a & A_DIRECTORY == 0 && !(skip_cloud && (a & A_CLOUD != 0 || (a & A_REPARSE != 0 && !is_cloud_tag(tag))));
     // тег k-го файла группы (только с classify)
     let tag_of = |k: usize| -> (Option<Option<&'static str>>, Option<Option<Arc<str>>>) {
         if !classify {
@@ -249,9 +253,9 @@ fn stat_group(g: ListGroup, skip_cloud: bool, classify: bool) -> Vec<ListItem> {
     let mut out = Vec::with_capacity(g.names.len());
     if g.names.len() >= 4 && g.names.len() * 8 >= g.nchild as usize {
         let want: std::collections::HashMap<&str, usize> = g.names.iter().enumerate().map(|(k, s)| (s.as_str(), k)).collect();
-        let ok = for_each_dir_entry(&g.dir, |name, a, size, mtime| {
+        let ok = for_each_dir_entry(&g.dir, |name, a, size, mtime, tag| {
             if let Some(&k) = want.get(name) {
-                if keep(a) {
+                if keep(a, tag) {
                     let (tag, repo) = tag_of(k);
                     out.push(ListItem { path: join(&g.dir, name), size, mtime, attrs: a, tag, repo });
                 }
@@ -265,7 +269,9 @@ fn stat_group(g: ListGroup, skip_cloud: bool, classify: bool) -> Vec<ListItem> {
     for (k, n) in g.names.iter().enumerate() {
         let p = join(&g.dir, n);
         if let Some(st) = stat(&p) {
-            if keep(st.attrs) {
+            // тег есть только у FindFirstFile; нужен лишь для точек повторной обработки
+            let tag = if st.attrs & A_REPARSE != 0 { find_data(&p).map(|x| x.1).unwrap_or(0) } else { 0 };
+            if keep(st.attrs, tag) {
                 let (tag, repo) = tag_of(k);
                 out.push(ListItem { path: p, size: st.size, mtime: st.mtime, attrs: st.attrs, tag, repo });
             }
@@ -299,6 +305,6 @@ pub fn exists_op(eng: &Engine, req: &Value) -> Result<String, String> {
 pub fn reload_config(eng: &Arc<Engine>) -> Result<String, String> {
     let drives = config_drives(&eng.data, &eng.root);
     info!("reload_config: drives {:?}", drives);
-    eng.apply_drives(&drives);
+    eng.apply_drives(&drives, false);
     Ok(json!({"drives": drives}).to_string())
 }

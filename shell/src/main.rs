@@ -75,8 +75,9 @@ fn tr(app: &AppHandle, ru: &str, en: &str) -> String {
 fn boot_script(app: &AppHandle) -> String {
     let s = shell(app);
     let lang = *s.lang.lock().unwrap();
+    let (theme, accent) = s.cfg.appearance();
     let info = serde_json::json!({
-        "lang": lang, "sys": util::system_lang(), "theme": s.cfg.theme, "accent": s.cfg.accent,
+        "lang": lang, "sys": util::system_lang(), "theme": theme, "accent": accent,
     });
     format!("window.__SEMSEARCH_BOOT = {info};")
 }
@@ -122,8 +123,14 @@ fn initial_url(app: &AppHandle, label: &str) -> WebviewUrl {
     }
 }
 
-fn page_bg() -> Color {
-    if util::system_dark() {
+/// Window background until the page paints: the chosen theme (config.json), else Windows' app mode.
+fn page_bg(app: &AppHandle) -> Color {
+    let dark = match shell(app).cfg.appearance().0.as_str() {
+        "dark" => true,
+        "light" => false,
+        _ => util::system_dark(),
+    };
+    if dark {
         Color(32, 32, 32, 255)
     } else {
         Color(243, 243, 243, 255)
@@ -135,12 +142,14 @@ fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow> {
         .title("SemSearch")
         .initialization_script(&boot_script(app))
         .inner_size(1100.0, 760.0)
-        .min_inner_size(760.0, 520.0)
+        // must fit a 1366x768 screen at 150 % (910x512 logical px minus the taskbar): a larger minimum would push the
+        // footer off the screen
+        .min_inner_size(640.0, 420.0)
         .center()
         .prevent_overflow()
         .decorations(false)
         .shadow(true)
-        .background_color(page_bg())
+        .background_color(page_bg(app))
         .visible(visible)
         .focused(visible) // --hidden: don't take the focus from the user's current window
         .disable_drag_drop_handler() // let the page get HTML5 file drops (search by image)
@@ -154,12 +163,12 @@ fn build_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .title(tr(app, "Настройки — SemSearch", "Settings — SemSearch"))
         .initialization_script(&boot_script(app))
         .inner_size(880.0, 900.0)
-        .min_inner_size(600.0, 500.0)
+        .min_inner_size(600.0, 420.0)
         .center()
         .prevent_overflow()
         .decorations(false)
         .shadow(true)
-        .background_color(page_bg())
+        .background_color(page_bg(app))
         // Скрыто до page_ready: иначе мелькают пустой WebView2 и страница без данных
         .visible(false)
         .disable_drag_drop_handler()
@@ -211,17 +220,24 @@ fn allow_navigation(url: &Url) -> bool {
 
 /// Switch off WebView2's browser accelerator keys: Ctrl+F/F3 find bar, Ctrl+P, Ctrl+R/F5, Ctrl+±/0 zoom,
 /// F7 caret browsing, Alt+Left/Right, … Editing keys (Ctrl+C/V/X/A/Z) still work and pages still get every keydown.
+/// Also no page zoom (Ctrl+wheel, touchpad or touch-screen pinch: it would scale the page with no way back, since
+/// Ctrl+0 is off too) and no swipe navigation. The newer settings need a newer runtime and are best effort.
 fn disable_browser_keys(w: &WebviewWindow) {
     let label = w.label().to_string();
     let res = w.with_webview(move |pw| {
-        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+        use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Settings3, ICoreWebView2Settings5, ICoreWebView2Settings6};
         use windows_core::Interface;
         let r = unsafe {
-            pw.controller()
-                .CoreWebView2()
-                .and_then(|core| core.Settings())
-                .and_then(|s| s.cast::<ICoreWebView2Settings3>())
-                .and_then(|s3| s3.SetAreBrowserAcceleratorKeysEnabled(false))
+            pw.controller().CoreWebView2().and_then(|core| core.Settings()).and_then(|s| {
+                let _ = s.SetIsZoomControlEnabled(false);
+                if let Ok(s5) = s.cast::<ICoreWebView2Settings5>() {
+                    let _ = s5.SetIsPinchZoomEnabled(false);
+                }
+                if let Ok(s6) = s.cast::<ICoreWebView2Settings6>() {
+                    let _ = s6.SetIsSwipeNavigationEnabled(false);
+                }
+                s.cast::<ICoreWebView2Settings3>().and_then(|s3| s3.SetAreBrowserAcceleratorKeysEnabled(false))
+            })
         };
         if let Err(e) = r {
             log(&format!("{label}: cannot disable browser accelerator keys: {e}"));
@@ -238,6 +254,41 @@ fn hide_tray(app: &AppHandle) {
     }
 }
 
+/// A window hidden to the tray keeps its position. If the monitor it was on is gone by the time it is shown again
+/// (laptop undocked, RDP session with another resolution), Windows leaves it off-screen: bring it back to a monitor,
+/// and shrink it to the work area if it no longer fits.
+fn ensure_visible(w: &WebviewWindow) {
+    if w.is_maximized().unwrap_or(false) {
+        return;
+    }
+    let (Ok(pos), Ok(size), Ok(mons)) = (w.outer_position(), w.outer_size(), w.app_handle().available_monitors()) else {
+        return;
+    };
+    let (l, t, r, b) = (pos.x, pos.y, pos.x + size.width as i32, pos.y + size.height as i32);
+    // part of the window that lies on the monitor's work area, in px
+    let overlap = |m: &tauri::Monitor| {
+        let wa = m.work_area();
+        let (wl, wt) = (wa.position.x, wa.position.y);
+        let (wr, wb) = (wl + wa.size.width as i32, wt + wa.size.height as i32);
+        ((r.min(wr) - l.max(wl)).max(0), (b.min(wb) - t.max(wt)).max(0))
+    };
+    // reachable: enough of the window (title strip) is on some monitor to grab it
+    let reachable = mons.iter().any(|m| {
+        let (ow, oh) = overlap(m);
+        ow >= 160 && oh >= 80
+    });
+    let work = w.current_monitor().ok().flatten().or_else(|| w.primary_monitor().ok().flatten()).map(|m| m.work_area().size);
+    let too_big = work.is_some_and(|a| size.width > a.width || size.height > a.height);
+    if reachable && !too_big {
+        return;
+    }
+    log(&format!("{}: not on any monitor ({pos:?}, {size:?}) - centering", w.label()));
+    if let Some(a) = work {
+        let _ = w.set_size(PhysicalSize::new(size.width.min(a.width), size.height.min(a.height)));
+    }
+    let _ = w.center();
+}
+
 fn show_main_window(app: &AppHandle) {
     hide_tray(app);
     let Some(w) = app.get_webview_window("main") else {
@@ -245,6 +296,7 @@ fn show_main_window(app: &AppHandle) {
         return;
     };
     let _ = w.unminimize();
+    ensure_visible(&w);
     let _ = w.show();
     let _ = w.set_focus();
     let _ = app.emit_to("main", "focus-search", ());
@@ -268,6 +320,7 @@ fn open_settings(app: &AppHandle) {
     hide_tray(app);
     if let Some(w) = app.get_webview_window("settings") {
         let _ = w.unminimize();
+        ensure_visible(&w);
         let _ = w.show();
         let _ = w.set_focus();
         return;
@@ -590,14 +643,37 @@ fn repair_autostart(app: &AppHandle) {
     }
 }
 
+/// The shortcut that is registered right now; "" when none is (disabled, or another program holds it).
 #[tauri::command]
 async fn get_hotkey(app: AppHandle) -> String {
-    shell(&app).hotkey.lock().unwrap().accel.clone()
+    let s = shell(&app);
+    let hk = s.hotkey.lock().unwrap();
+    if hk.shortcut.is_some() {
+        hk.accel.clone()
+    } else {
+        String::new()
+    }
 }
 
 #[tauri::command]
 async fn set_hotkey(app: AppHandle, accel: String) -> Option<String> {
     apply_hotkey(&app, &accel).err()
+}
+
+/// The shortcut from config.json could not be registered at start (another program holds it, or the previous SemSearch is
+/// still shutting down after a restart): try again now and then, so that it starts working as soon as it is free.
+fn retry_hotkey(app: &AppHandle) {
+    let s = shell(app);
+    let accel = {
+        let hk = s.hotkey.lock().unwrap();
+        if hk.shortcut.is_some() || hk.accel.is_empty() {
+            return;
+        }
+        hk.accel.clone()
+    };
+    if apply_hotkey(app, &accel).is_ok() {
+        log("hotkey registered after a retry");
+    }
 }
 
 // ---------------------------------------------------------------- quit
@@ -645,7 +721,10 @@ fn set_status(app: &AppHandle, text: &str) {
 fn sync_windows(app: &AppHandle) {
     let s = shell(app);
     let ready = s.ready.load(Ordering::SeqCst);
-    let status = serde_json::to_string(&*s.status.lock().unwrap()).unwrap_or_default();
+    let status_text = s.status.lock().unwrap().clone();
+    // anything but the "waiting for the server" note of SEMSEARCH_NO_BACKEND is a problem: the page shows it as one
+    let is_err = !s.cfg.no_backend && !status_text.is_empty();
+    let status = serde_json::to_string(&status_text).unwrap_or_default();
     for (label, w) in app.webview_windows() {
         let Ok(cur) = w.url() else { continue };
         if cur.scheme() == "about" {
@@ -674,7 +753,7 @@ fn sync_windows(app: &AppHandle) {
                 let _ = w.navigate(t);
             }
             None if !ready => {
-                let _ = w.eval(format!("window.__semsearchStatus && window.__semsearchStatus({status})"));
+                let _ = w.eval(format!("window.__semsearchStatus && window.__semsearchStatus({status}, {is_err})"));
             }
             None => {}
         }
@@ -691,11 +770,30 @@ fn set_ready(app: &AppHandle, ready: bool, why: &str) {
     }
 }
 
+/// What the exit codes of the Windows loader mean for a backend that died before it could write its own log: a
+/// computer without the Visual C++ runtime (Python and PyTorch need it) is the usual cause.
+fn exit_hint(code: i32, en: bool) -> &'static str {
+    match code as u32 {
+        0xC000_0135 if en => ": a required DLL is missing - install the Microsoft Visual C++ Redistributable (x64)",
+        0xC000_0135 => ": не найдена библиотека - установите Microsoft Visual C++ Redistributable (x64)",
+        0xC000_007B if en => ": a library does not fit the program (32/64-bit)",
+        0xC000_007B => ": библиотека не подходит программе (32/64 бит)",
+        _ => "",
+    }
+}
+
 fn supervisor(app: AppHandle) {
     let s = shell(&app);
     let mut misses = 0u32; // consecutive probes without our backend answering
     let mut ever_ready = false;
+    let (mut hotkey_tries, mut hotkey_at) = (0u32, Instant::now() + Duration::from_secs(10));
     while !s.quitting.load(Ordering::SeqCst) {
+        if hotkey_tries < 18 && Instant::now() >= hotkey_at {
+            // every 10 s for 3 minutes
+            hotkey_tries += 1;
+            hotkey_at = Instant::now() + Duration::from_secs(10);
+            retry_hotkey(&app);
+        }
         let ready = s.ready.load(Ordering::SeqCst);
         // until ready: GET /api/ping + /api/status with the token (docs/API.md §3); afterwards only a TCP liveness
         // check. Without a backend of ours, first look for a running one on the preferred port to attach to.
@@ -744,7 +842,9 @@ fn supervisor(app: AppHandle) {
                 } else if child != ChildState::Running {
                     let wait = s.backend.spawn_wait();
                     if wait == 0 {
-                        match s.backend.spawn(&s.cfg) {
+                        // the language lock must not live through the match: the Err arm calls tr(), which takes it again
+                        let en = *s.lang.lock().unwrap() == "en";
+                        match s.backend.spawn(&s.cfg, en) {
                             Ok(()) => set_status(&app, ""),
                             Err(e) => set_status(
                                 &app,
@@ -754,8 +854,8 @@ fn supervisor(app: AppHandle) {
                     } else {
                         let en = *s.lang.lock().unwrap() == "en";
                         let code = match *s.backend.last_exit.lock().unwrap() {
-                            Some(c) if en => format!(" (code {c})"),
-                            Some(c) => format!(" (код {c})"),
+                            Some(c) if en => format!(" (code {c}{})", exit_hint(c, true)),
+                            Some(c) => format!(" (код {c}{})", exit_hint(c, false)),
                             None => String::new(),
                         };
                         let failed = { let st = s.status.lock().unwrap(); st.starts_with("Не удалось") || st.starts_with("Couldn't") };
@@ -795,7 +895,15 @@ fn setup(app: &AppHandle) {
     }
     repair_autostart(app);
     if let Err(e) = build_main(app, !s.cfg.hidden) {
-        log(&format!("main window: {e}"));
+        // WebView2 broken or too old, its data folder (%LOCALAPPDATA%\com.semsearch.desktop) not writable ...:
+        // without a window there is nothing to show, and a tray icon that does nothing would only look like a hang
+        let lang = *s.lang.lock().unwrap();
+        let log_file = s.cfg.data.join("shell.log").display().to_string();
+        fatal(
+            lang,
+            format!("Не удалось открыть окно SemSearch: {e}\n\nПроверьте, что установлен Microsoft Edge WebView2 Runtime и что есть доступ на запись в папку %LOCALAPPDATA%.\n\nПодробности: {log_file}"),
+            format!("Couldn't open the SemSearch window: {e}\n\nMake sure Microsoft Edge WebView2 Runtime is installed and that %LOCALAPPDATA% is writable.\n\nDetails: {log_file}"),
+        );
     }
     if let Err(e) = build_tray(app) {
         log(&format!("tray window: {e}"));
@@ -831,10 +939,52 @@ fn setup(app: &AppHandle) {
         .expect("supervisor thread");
 }
 
+/// A failure the shell cannot work around: say it in a dialog (the release build has no console), log it and exit.
+fn fatal(lang: &str, ru: String, en: String) -> ! {
+    let text = if lang == "en" { en } else { ru };
+    log(&format!("fatal: {text}"));
+    util::message_box("SemSearch", &text, false);
+    std::process::exit(1);
+}
+
+/// The windows are WebView2: without its runtime (Windows 10 before 21H1, LTSC, Server) nothing can be shown.
+fn check_webview2(lang: &str) {
+    const DOWNLOAD: &str = "https://developer.microsoft.com/microsoft-edge/webview2/";
+    match util::webview2_version() {
+        Ok(v) => log(&format!("WebView2 runtime {v}")),
+        // anything but "not installed" (an odd error from the loader): let the windows try and report their own error
+        Err(Some(hr)) => log(&format!("WebView2 runtime check failed: {hr:#010x}")),
+        Err(None) => {
+            log("WebView2 runtime is not installed");
+            let (title, text) = if lang == "en" {
+                (
+                    "SemSearch - WebView2 is missing",
+                    format!(
+                        "SemSearch needs the Microsoft Edge WebView2 Runtime, and it is not installed on this computer.\n\nPress OK to open the download page ({DOWNLOAD}), install the Evergreen runtime and start SemSearch again."
+                    ),
+                )
+            } else {
+                (
+                    "SemSearch — нет WebView2",
+                    format!(
+                        "Для SemSearch нужен Microsoft Edge WebView2 Runtime, но на этом компьютере его нет.\n\nНажмите OK, чтобы открыть страницу загрузки ({DOWNLOAD}), установите Evergreen-версию и запустите SemSearch снова."
+                    ),
+                )
+            };
+            if util::message_box(title, &text, true) {
+                util::open_url(DOWNLOAD);
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
 fn main() {
     util::allow_any_foreground();
+    util::set_dpi_aware();
     let cfg = Config::load();
     util::init_log(&cfg.data);
+    util::install_panic_hook();
     log(&format!(
         "start {:?}: root={} data={} port={} base={} dev={} no_backend={} hidden={}",
         std::env::current_exe().unwrap_or_default(),
@@ -851,6 +1001,7 @@ fn main() {
     }
 
     let lang = util::resolve_lang(&cfg.lang);
+    check_webview2(lang);
     let state = Shell {
         cfg,
         backend: Backend::new(),
@@ -922,7 +1073,13 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("failed to build SemSearch shell");
+        .unwrap_or_else(|e| {
+            fatal(
+                lang,
+                format!("Не удалось запустить SemSearch: {e}"),
+                format!("Couldn't start SemSearch: {e}"),
+            )
+        });
 
     app.run(|app, event| {
         if let RunEvent::ExitRequested { code: None, api, .. } = event {

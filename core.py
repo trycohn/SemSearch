@@ -10,6 +10,7 @@ import re
 import shutil
 import sqlite3
 import threading
+import time
 import types
 import uuid
 from ctypes import wintypes
@@ -73,13 +74,64 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LEGACY_CONFIG_PATH = os.path.join(APP_DIR, "config.json")  # старая раскладка: читаем, пока не перенесён
 MODEL_ID = "google/embeddinggemma-2"
 DIM = 256  # Matryoshka: 768 -> 256, индекс в 3 раза меньше почти без потери качества
+
+# Модель (кэш Hugging Face) лежит в папке данных, а не в общем %USERPROFILE%\.cache\huggingface: удаление SemSearch
+# убирает и её, а SEMSEARCH_DATA_DIR переносит её на другой диск вместе с индексом. Кэш, заданный пользователем
+# (HF_HUB_CACHE или старое HUGGINGFACE_HUB_CACHE), не трогаем. huggingface_hub читает переменные при импорте,
+# поэтому они ставятся здесь, до первой загрузки модели.
+MODELS_DIR = os.path.join(DATA_DIR, "models")
+OWN_HF_CACHE = not (os.environ.get("HF_HUB_CACHE", "").strip() or os.environ.get("HUGGINGFACE_HUB_CACHE", "").strip())
+if OWN_HF_CACHE:
+    os.environ["HF_HUB_CACHE"] = MODELS_DIR
+    os.environ.setdefault("HF_XET_CACHE", os.path.join(MODELS_DIR, "xet"))
 TEXT_TOKENS = 8192  # порция текстов без throttle (поиск, проверки): строк × длина
+# Видеопамять под порцию текстов: ~56 КБ на токен на каждый байт числа модели (замер на RTX 4070 SUPER вместе с кэшем
+# аллокатора и графами: bfloat16 ~110 КБ, float32 ~220 КБ на токен). По остатку после загрузки модели считается
+# наибольшая порция, а если места меньше VRAM_MIN_FREE — не помещается даже одна длинная строка: считаем на процессоре.
+VRAM_PER_TOKEN = 56 << 10
+VRAM_RESERVE = 256 << 20   # запас под векторы поиска, башни картинок и звука
+VRAM_MIN_FREE = 400 << 20
+# Порция держит замок модели, и поиск ждёт её конца. На процессоре (особенно слабом) порция в TEXT_TOKENS токенов
+# считалась бы десятки секунд — по пробному прогону порция сокращается так, чтобы считаться не дольше SUBBATCH_S.
+SUBBATCH_S = 2.0
 
 HOME = os.path.expanduser("~")
 # Документы, Рабочий стол, Изображения, Видео, Музыка, Загрузки — их часто переносят на другой диск
 PROFILE_FOLDERS = ("FDD39AD0-238F-46AF-ADB4-6C85480369C7", "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
                    "33E28130-4E1E-4676-835A-98395C3BC3BB", "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
                    "4BD8D571-6D19-48D3-BE97-422220080E43", "374DE290-123F-4565-9164-39C4925E467B")
+
+def _altgr_types(vk):
+    """Набирает ли AltGr (= Ctrl+Alt) с клавишей vk символ в какой-нибудь из раскладок пользователя (польская AltGr+S —
+    «ś», чешская, венгерская…): такое сочетание горячей клавишей занимать нельзя — буква перестанет набираться."""
+    u32 = ctypes.windll.user32
+    n = u32.GetKeyboardLayoutList(0, None)
+    hkls = (ctypes.c_void_p * max(n, 1))()
+    n = u32.GetKeyboardLayoutList(n, hkls)
+    state = (ctypes.c_ubyte * 256)()
+    buf = ctypes.create_unicode_buffer(8)
+    for hkl in hkls[:n]:
+        sc = u32.MapVirtualKeyExW(vk, 0, ctypes.c_void_p(hkl))  # MAPVK_VK_TO_VSC
+        out = []
+        for down in ((), (0x11, 0x12, 0xA2, 0xA5)):  # без модификаторов; Ctrl+Alt (левый Ctrl + правый Alt)
+            for i in range(256):
+                state[i] = 0x80 if i in down else 0
+            k = u32.ToUnicodeEx(vk, sc, state, buf, 8, 4, ctypes.c_void_p(hkl))  # 4: не трогать состояние клавиатуры
+            out.append(buf.value[:k] if k > 0 else "\0" if k < 0 else "")  # < 0 — мёртвая клавиша
+        plain, altgr = out
+        if altgr and altgr != plain and (altgr == "\0" or altgr >= " "):
+            return True
+    return False
+
+
+def default_hotkey():
+    """Ctrl+Alt+S, а если в раскладках пользователя AltGr+S набирает букву — Ctrl+Alt+Пробел. Тот же выбор делает
+    shell (util.rs default_hotkey), пока config.json ещё нет."""
+    try:
+        return "ctrl+alt+space" if _altgr_types(0x53) else "ctrl+alt+s"  # VK_S
+    except Exception:
+        return "ctrl+alt+s"
+
 
 DEFAULT_CONFIG = {
     # Где искать по содержимому (смыслу); load_config добавляет известные папки вне HOME (default_content_roots)
@@ -96,7 +148,7 @@ DEFAULT_CONFIG = {
     "foreign_code": "skip",
     "exclude_paths": [],
     "port": 8765,
-    "hotkey": "ctrl+alt+s",
+    "hotkey": default_hotkey(),  # пишется в config.json при первом запуске
     "theme": "system",  # system | light | dark
     "accent": "#005fb8",
     "lang": "system",  # system | ru | en — язык интерфейса; system — как в Windows (русский или английский)
@@ -153,13 +205,36 @@ OLD_DEFAULT_EXCLUDES = {"node_modules", "__pycache__", "venv", "env", "site-pack
                         "system volume information", "winsxs", "logs", "cache"}
 
 
+def is_remote(path):
+    """Путь на сетевом ресурсе (\\\\сервер\\папка или подключённый сетевой диск)."""
+    drive = os.path.splitdrive(path)[0]
+    if drive[:4] in ("\\\\?\\", "\\\\.\\"):
+        drive = drive[4:]
+    if drive.startswith("\\\\") or drive.upper().startswith("UNC\\"):
+        return True
+    return len(drive) == 2 and drive[1] == ":" and ctypes.windll.kernel32.GetDriveTypeW(drive + "\\") == 4  # REMOTE
+
+
+def _dir_exists(path, timeout=5.0):
+    """os.path.isdir, но недоступная сетевая папка (выключенный сервер, нет VPN) не вешает запуск на десятки секунд:
+    ответа нет за timeout — считаем, что папки нет."""
+    if not is_remote(path):
+        return os.path.isdir(path)
+    out = []
+    t = threading.Thread(target=lambda: out.append(os.path.isdir(path)), name="isdir", daemon=True)
+    t.start()
+    t.join(timeout)
+    return bool(out and out[0])
+
+
 def default_content_roots():
     """Папка пользователя и известные папки вне её (например, «Документы», перенесённые на D:).
-    Вложенные не дублируются: обход корня и так их пройдёт."""
+    Вложенные не дублируются: обход корня и так их пройдёт. Сетевые (перенаправление папок в организации)
+    не берём: они медленные, не сообщают об изменениях, а при выключенном сервере вешают запуск."""
     roots = [HOME]
     for folder_id in PROFILE_FOLDERS:
         p = known_folder(folder_id)
-        if p and not under(p, roots):
+        if p and not is_remote(p) and not under(p, roots):
             roots = [r for r in roots if not under(r, [p])] + [p]
     return roots
 
@@ -172,22 +247,43 @@ def _config_source():
     return None
 
 
+def _read_config(path):
+    """Содержимое config.json (словарь) или None, если файл не читается как JSON-объект (правили руками, обрыв записи).
+    Испорченный файл из папки данных переименовывается в config.json.bad: лучше начать с настроек по умолчанию,
+    чем не запускаться вовсе."""
+    try:
+        with open(path, encoding="utf-8-sig") as f:  # -sig: Блокнот и PowerShell пишут BOM
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+        raise ValueError("в файле не объект JSON")
+    except (OSError, ValueError) as ex:  # ValueError — и JSONDecodeError, и UnicodeDecodeError
+        log.warning("не удалось прочитать настройки %s (%s: %s) — беру настройки по умолчанию", path,
+                    type(ex).__name__, ex)
+        if isinstance(ex, ValueError) and os.path.normcase(path) == os.path.normcase(CONFIG_PATH):
+            try:
+                os.replace(path, path + ".bad")
+            except OSError:
+                pass
+        return None
+
+
 def load_config():
     cfg = dict(DEFAULT_CONFIG, content_roots=default_content_roots())
     src = _config_source()
-    if src:
-        with open(src, encoding="utf-8-sig") as f:  # -sig: Блокнот и PowerShell пишут BOM
-            cfg.update(json.load(f))
+    saved = _read_config(src) if src else None
+    if saved is not None:
+        cfg.update(saved)
         if cfg.get("name_drives") is None and cfg.get("name_roots"):  # конфиг старого формата
             cfg["name_drives"] = [r.rstrip("\\/") for r in cfg["name_roots"]]
-    else:
+    elif not (src and os.path.exists(CONFIG_PATH)):  # файла нет (или он испорчен и переименован) — пишем свой
         os.makedirs(DATA_DIR, exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     if {d.lower() for d in cfg["exclude_dirs"]} == OLD_DEFAULT_EXCLUDES:
         cfg["exclude_dirs"] = list(DEFAULT_CONFIG["exclude_dirs"])
     # Пропавшие папки (отключённый диск, удалённая папка) пропускаем, но в файле оставляем — вдруг вернутся
-    roots = [r for r in cfg["content_roots"] if os.path.isdir(r)]
+    roots = [r for r in cfg["content_roots"] if _dir_exists(r)]
     for r in cfg["content_roots"]:
         if r not in roots:
             log.warning("папки для поиска нет — пропускаю: %s", r)
@@ -260,11 +356,8 @@ EDITABLE = {  # ключ -> тип; только их можно менять ч
 
 def save_config(changes):
     """Записывает изменения в config.json папки данных, не трогая остальные ключи файла (атомарно)."""
-    data = {}
     src = _config_source()  # старый файл из папки программы при первой записи переезжает целиком
-    if src:
-        with open(src, encoding="utf-8-sig") as f:
-            data = json.load(f)
+    data = (_read_config(src) if src else None) or {}
     data.update(changes)
     data.pop("name_roots", None)  # выводится из name_drives
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -292,9 +385,13 @@ def prefix_range(path):
 
 def setup_logging():
     os.makedirs(DATA_DIR, exist_ok=True)
+    # Журнал пишет одна строка на пачку файлов — за месяцы работы он разросся бы без предела: держим 8 МБ + прошлый 8 МБ
+    from logging.handlers import RotatingFileHandler
+
+    handler = RotatingFileHandler(os.path.join(DATA_DIR, "semsearch.log"), maxBytes=8 << 20, backupCount=1,
+                                  encoding="utf-8", delay=True)
     logging.basicConfig(
-        filename=os.path.join(DATA_DIR, "semsearch.log"), level=logging.INFO, encoding="utf-8",
-        format="%(asctime)s %(levelname)s %(threadName)s: %(message)s",
+        handlers=[handler], level=logging.INFO, format="%(asctime)s %(levelname)s %(threadName)s: %(message)s",
     )
     for noisy in ("pypdf", "httpx", "urllib3", "huggingface_hub", "transformers", "sentence_transformers"):
         logging.getLogger(noisy).setLevel(logging.ERROR)
@@ -364,6 +461,57 @@ def migrate_legacy(legacy_root, data_dir):
         except Exception as ex:
             notes.append((logging.WARNING, f"перенос {names[0]} в {data_dir}: {type(ex).__name__}: {ex}"))
     return notes
+
+
+def _shared_hf_cache():
+    """Общий кэш Hugging Face, каким его видит huggingface_hub без наших переменных: HF_HOME\\hub,
+    по умолчанию %USERPROFILE%\\.cache\\huggingface\\hub."""
+    home = os.environ.get("HF_HOME", "").strip() or os.path.join(
+        os.environ.get("XDG_CACHE_HOME", "").strip() or os.path.join(os.path.expanduser("~"), ".cache"), "huggingface")
+    return os.path.join(os.path.expandvars(os.path.expanduser(home)), "hub")
+
+
+def migrate_model():
+    """Разовый перенос модели, скачанной прежними версиями в общий кэш Hugging Face, в MODELS_DIR — иначе после
+    обновления она (1,5 ГБ) скачалась бы заново. Только если кэш выбран нами (OWN_HF_CACHE) и в MODELS_DIR модели
+    ещё нет; до первой загрузки модели. На другой том — копией через <имя>.part, и только целая копия занимает
+    место модели. Не удалось (файлы заняты, не хватило места) — в этот раз модель берётся со старого места,
+    перенос повторится при следующем запуске. Никогда не бросает.
+    -> [(уровень logging, сообщение)]: журнал в этот момент ещё не открыт."""
+    if not OWN_HF_CACHE:
+        return []
+    name = "models--" + MODEL_ID.replace("/", "--")
+    old_hub = _shared_hf_cache()
+    src, dst = os.path.join(old_hub, name), os.path.join(MODELS_DIR, name)
+    part = dst + ".part"
+    try:
+        if (not os.path.isdir(src) or os.path.lexists(dst)
+                or os.path.normcase(os.path.abspath(src)) == os.path.normcase(os.path.abspath(dst))):
+            return []
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        try:
+            try:
+                os.replace(src, dst)  # тот же том: мгновенно и целиком
+            except OSError as ex:
+                if ex.errno != errno.EXDEV:
+                    raise
+                if os.path.lexists(part):
+                    _remove(part)
+                shutil.copytree(src, part)
+                os.replace(part, dst)
+                shutil.rmtree(src, ignore_errors=True)  # не удалилось — останется лишняя копия, модель уже на месте
+        except OSError as ex:
+            try:
+                if os.path.lexists(part):
+                    _remove(part)
+            except OSError:
+                pass
+            os.environ["HF_HUB_CACHE"] = old_hub
+            return [(logging.WARNING, f"не удалось перенести модель из {src} в {MODELS_DIR} ({ex}) — "
+                                      f"пока беру её со старого места, перенос повторится при следующем запуске")]
+        return [(logging.INFO, f"модель перенесена из {src} в {MODELS_DIR}")]
+    except Exception as ex:
+        return [(logging.WARNING, f"перенос модели в {MODELS_DIR}: {type(ex).__name__}: {ex}")]
 
 
 # ---------------------------------------------------------------- база
@@ -481,15 +629,41 @@ def _arch_ok(cap, archs):
     return False
 
 
+def _nvidia_driver():
+    """Версия драйвера NVIDIA, если видеокарта NVIDIA в системе есть (по NVML), иначе None."""
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        try:
+            if pynvml.nvmlDeviceGetCount() < 1:
+                return None
+            v = pynvml.nvmlSystemGetDriverVersion()
+            return v.decode() if isinstance(v, bytes) else str(v)
+        finally:
+            pynvml.nvmlShutdown()
+    except Exception:
+        return None
+
+
 def _usable_gpu(torch, why=None):
     """-> (название, capability) видеокарты, на которой можно считать, иначе None (причина — в журнале,
-    код причины — в список why: "none" — CUDA нет, "unsupported" — карта не поддерживается сборкой torch).
+    код причины — в список why: "none" — видеокарты NVIDIA нет, "unsupported" — карта не поддерживается сборкой torch,
+    "failed" — карта есть, но CUDA не заработала: драйвер старее, чем нужен этой сборке torch, или сбой).
     is_available() мало: torch для CUDA 12.8 собран под sm_75+, и на GTX 10xx (sm_61) ядра не запускаются."""
     why = why if why is not None else []
     try:
-        if not torch.cuda.is_available():
-            log.info("CUDA недоступна (torch %s) — модель считает на процессоре", torch.__version__)
-            why.append("none")
+        if not torch.cuda.is_available() or torch.cuda.device_count() < 1:  # (is_available бывает True и без устройств)
+            # сборка torch для процессора или CUDA_VISIBLE_DEVICES задан вручную — это выбор, а не поломка
+            driver = _nvidia_driver() if torch.version.cuda and "CUDA_VISIBLE_DEVICES" not in os.environ else None
+            if driver:
+                log.warning("видеокарта NVIDIA есть (драйвер %s), но CUDA %s из torch %s не запустилась — скорее "
+                            "всего, драйвер слишком старый: обновите его; модель считает на процессоре",
+                            driver, torch.version.cuda, torch.__version__)
+                why.append("failed")
+            else:
+                log.info("CUDA недоступна (torch %s) — модель считает на процессоре", torch.__version__)
+                why.append("none")
             return None
         name, cap = torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)
         archs = torch.cuda.get_arch_list()
@@ -515,6 +689,7 @@ def _load_model(device, dtype, on_download=None):
     try:
         return SentenceTransformer(MODEL_ID, local_files_only=True, **kw)
     except OSError:
+        drop_stale_downloads()  # до on_download: счётчик скачанного на экране запуска отсчитывается от того, что есть
         if on_download:
             on_download()
         return SentenceTransformer(MODEL_ID, **kw)
@@ -556,6 +731,36 @@ def model_cache_bytes():
                 continue
             partial = partial or name.endswith(".incomplete")
     return total, partial
+
+
+_STALE_PART = re.compile(r"^[0-9a-f]+\.[0-9a-f]{8}\.incomplete$")
+
+
+def drop_stale_downloads():
+    """Удаляет остатки оборванных загрузок модели. huggingface_hub качает каждый файл во временный
+    blobs\\<etag>.<8 hex>.incomplete и после обрыва начинает файл заново, не используя остаток; при kill (отмена в
+    установщике, выход из программы во время загрузки) остаток не удаляется и висит в кэше до 1,5 ГБ, да ещё
+    попадает в model_cache_bytes. Файл живой загрузки открыт, и Windows его не отдаст. Никогда не бросает.
+    -> сколько байт освобождено."""
+    freed = 0
+    try:
+        from huggingface_hub import constants
+
+        blobs = os.path.join(constants.HF_HUB_CACHE, "models--" + MODEL_ID.replace("/", "--"), "blobs")
+        for name in os.listdir(blobs):
+            if _STALE_PART.match(name):
+                path = os.path.join(blobs, name)
+                try:
+                    size = os.path.getsize(path)
+                    os.remove(path)
+                    freed += size
+                except OSError:
+                    continue
+        if freed:
+            log.info("удалены остатки оборванной загрузки модели: %.0f МБ", freed / 1e6)
+    except Exception:
+        pass
+    return freed
 
 
 def model_download_total():
@@ -624,6 +829,9 @@ class Embedder:
         # Почему модель на процессоре (для экрана запуска): None — видеокарты нет или всё на ней;
         # "unsupported" — карта не поддерживается сборкой torch; "busy" — не хватило видеопамяти; "failed" — другое
         self.gpu_note = None
+        # Наибольшая порция текстов (токены) и доля порции картинок и звука: уменьшаются по остатку видеопамяти
+        # после загрузки модели и при её нехватке в работе
+        self.tok_cap, self.item_scale = TEXT_TOKENS, 1.0
         why = []
         gpu = _usable_gpu(torch, why)
         if not gpu and why and why[0] != "none":
@@ -635,8 +843,15 @@ class Embedder:
             try:
                 self.model = _load_model("cuda", dtype, on_download)
                 self.model.encode(["проверка"], show_progress_bar=False)  # ядра под эту карту действительно есть
+                free = self._vram_free()
+                if free < VRAM_MIN_FREE:  # карта мала (2–4 ГБ) или занята: после весов не остаётся места для расчёта
+                    raise RuntimeError(f"CUDA out of memory: после модели свободно {free >> 20} МБ видеопамяти")
+                fits = (free - VRAM_RESERVE) // (VRAM_PER_TOKEN * dtype.itemsize)
+                self.tok_cap = int(max(256, min(TEXT_TOKENS, fits)))
+                self.item_scale = min(1.0, self.tok_cap / 6144)
                 self.device = "cuda"
-                log.info("модель на видеокарте %s (sm_%d%d), %s", name, *cap, str(dtype).replace("torch.", ""))
+                log.info("модель на видеокарте %s (sm_%d%d), %s; свободно %d МБ, порция текстов до %d токенов",
+                         name, *cap, str(dtype).replace("torch.", ""), free >> 20, self.tok_cap)
             except Exception as ex:
                 if isinstance(ex, OSError) and not model_cached():
                     raise  # модель не скачалась: на процессоре будет то же самое
@@ -654,8 +869,19 @@ class Embedder:
                     pass
             # Не больше половины логических ядер: фоновая индексация не должна занимать процессор целиком
             torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
+            try:
+                import psutil
+
+                ram = psutil.virtual_memory().total
+                if ram < 6 << 30:  # float32-веса модели — около 3 ГБ (при загрузке до 4,5 ГБ)
+                    log.warning("оперативной памяти %.1f ГБ — модель на процессоре занимает около 3 ГБ, возможны "
+                                "тормоза и подкачка", ram / 2**30)
+            except Exception:
+                pass
             self.model = _load_model("cpu", torch.float32, on_download)
-            log.info("модель на процессоре, потоков: %d", torch.get_num_threads())
+            self._calibrate_cpu()
+            log.info("модель на процессоре, потоков: %d, порция текстов до %d токенов", torch.get_num_threads(),
+                     self.tok_cap)
         else:
             throttle.attach(self.model, torch)  # дробит фоновые порции на короткие всплески по слоям
         log.info("RMSNorm одним ядром: %d слоёв", _fuse_rmsnorm(self.model, torch))
@@ -664,6 +890,56 @@ class Embedder:
         self.cg = cudagraphs
         self.graphs = cudagraphs.install(self.model, throttle) if self.device == "cuda" else None
         self.lock = threading.Lock()
+
+    def _calibrate_cpu(self):
+        """Пробный прогон на процессоре -> tok_cap и item_scale (см. SUBBATCH_S). Сбой пробы ничего не меняет."""
+        try:
+            texts = ["title: проба | text: " + "слово и ещё одно слово " * 24] * 4
+            n = int(self.model.preprocess(texts)["attention_mask"].sum())
+            with self.torch.inference_mode():
+                for _ in range(2):  # первый прогон разогревает потоки и ядра, меряем второй
+                    t0 = time.perf_counter()
+                    self.model.encode(texts, batch_size=4, show_progress_bar=False)
+                    dt = time.perf_counter() - t0
+            self.tok_cap = int(max(256, min(TEXT_TOKENS, n / dt * SUBBATCH_S)))
+            self.item_scale = min(1.0, self.tok_cap / 6144)
+            log.info("процессор считает ~%d токенов в секунду", n / dt)
+        except Exception as ex:
+            log.warning("пробный прогон на процессоре не удался (%s: %s)", type(ex).__name__, ex)
+
+    def _vram_free(self):
+        """Сколько видеопамяти доступно этому процессу: свободное в драйвере + то, что torch уже держит про запас."""
+        t = self.torch.cuda
+        return t.mem_get_info()[0] + max(0, t.memory_reserved() - t.memory_allocated())
+
+    def _is_oom(self, ex):
+        return isinstance(ex, getattr(self.torch.cuda, "OutOfMemoryError", ())) or "out of memory" in str(ex).lower()
+
+    def _forward_safe(self, payload):
+        """_forward, а при нехватке видеопамяти (карта мала, или другая программа заняла её после запуска) —
+        очистить кэш, уменьшить порции на будущее и посчитать эту по половинам. Всегда под lock."""
+        try:
+            return self._forward(payload)
+        except Exception as ex:
+            if self.device != "cuda" or not self._is_oom(ex):
+                raise
+            torch = self.torch
+            n = len(payload) if isinstance(payload, list) else next(v.shape[0] for v in payload.values()
+                                                                    if torch.is_tensor(v) and v.dim() > 0)
+            self.tok_cap, self.item_scale = max(256, self.tok_cap // 2), max(0.125, self.item_scale / 2)
+            if self.graphs:
+                self.graphs.reset()
+            gc.collect()
+            torch.cuda.empty_cache()
+            log.warning("не хватило видеопамяти на порцию из %d (%s) — порции уменьшены: до %d токенов", n,
+                        str(ex)[:120], self.tok_cap)
+            if n < 2:
+                raise
+            h = n // 2
+            part = (lambda a, b: payload[a:b]) if isinstance(payload, list) else (
+                lambda a, b: {k: v[a:b] if torch.is_tensor(v) and v.dim() > 0 and v.shape[0] == n else v
+                              for k, v in payload.items()})
+            return np.concatenate([self._forward_safe(part(0, h)), self._forward_safe(part(h, n))])
 
     def _enc(self, items, bs, background=False, prompt_name=None):
         """background=True — работа индексатора: размер порции и паузы между порциями задаёт throttle,
@@ -676,7 +952,7 @@ class Embedder:
                    else self._item_batches(items, bs, background))
         for rows, payload in batches:  # lock на каждую порцию — поиск не ждёт всю пачку индексатора
             with self.lock, self.torch.inference_mode(), (th.background() if background else th.foreground()):
-                parts.append(self._forward(payload))
+                parts.append(self._forward_safe(payload))
             done += rows
         e = np.empty((len(items), DIM), np.float32)
         e[done] = np.concatenate(parts)[:, :DIM]
@@ -696,6 +972,7 @@ class Embedder:
         i = 0
         while i < len(order):
             budget = self.throttle.tokens(TEXT_TOKENS) if background else TEXT_TOKENS  # + пауза после прошлой
+            budget = min(budget, self.tok_cap)  # не больше, чем помещается в видеопамять
             n = next((b for b in reversed(cg.BATCHES)
                       if b * cg.bucket_len(lens[order[min(i + b, len(order)) - 1]]) <= budget), 1)
             rows = order[i:i + n]
@@ -712,6 +989,7 @@ class Embedder:
         i = 0
         while i < len(items):
             n = self.throttle.batch_size(bs) if background else bs  # тут же выдерживается пауза после прошлой порции
+            n = max(1, int(n * self.item_scale))
             part = [Image.open(io.BytesIO(x)).convert("RGB") if isinstance(x, bytes) else x for x in items[i:i + n]]
             yield list(range(i, min(i + n, len(items)))), part
             i += n
@@ -860,8 +1138,10 @@ class _MONITORINFO(ctypes.Structure):
                 ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
 
 
-_user32 = ctypes.windll.user32
+_user32 = ctypes.WinDLL("user32")  # свой экземпляр: объявленные ниже типы не влияют на остальные библиотеки процесса
 _user32.GetForegroundWindow.restype = wintypes.HWND
+_user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.GetWindowLongW.restype = ctypes.c_long
 _user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
 _user32.MonitorFromWindow.restype = wintypes.HANDLE
 _user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
@@ -882,14 +1162,18 @@ def fullscreen_app_active():
     _user32.GetClassNameW(hwnd, cls, 256)
     if cls.value in ("Progman", "WorkerW", "Shell_TrayWnd"):
         return False
+    # Обычное окно, развёрнутое на весь монитор (второй монитор без панели задач, скрываемая панель задач), — не игра
+    # и не фильм: у него есть заголовок. У borderless-окон игр и у браузера по F11 заголовка нет.
+    if _user32.GetWindowLongW(hwnd, -16) & 0x00C00000 == 0x00C00000:  # GWL_STYLE, WS_CAPTION
+        return False
     r = wintypes.RECT()
     _user32.GetWindowRect(hwnd, ctypes.byref(r))
     mi = _MONITORINFO()
     mi.cbSize = ctypes.sizeof(mi)
     if not _user32.GetMonitorInfoW(_user32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi)):
         return False
-    m = mi.rcMonitor
-    return r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
+    m, tol = mi.rcMonitor, 2  # допуск: при масштабе экрана 125–175 % координаты чужих окон округляются
+    return r.left <= m.left + tol and r.top <= m.top + tol and r.right >= m.right - tol and r.bottom >= m.bottom - tol
 
 
 class _POWER_STATUS(ctypes.Structure):
@@ -911,7 +1195,10 @@ def fixed_drives():
         root = f"{chr(65 + i)}:\\"
         if not mask >> i & 1 or k32.GetDriveTypeW(root) != 3:  # 3 = DRIVE_FIXED
             continue
-        label, fs = ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
+        target = ctypes.create_unicode_buffer(1024)
+        if k32.QueryDosDeviceW(root[:2], target, 1024) and target.value.startswith("\\??\\"):
+            continue  # подстановка SUBST (папка другого диска под своей буквой): движок её тоже пропускает
+        label, fs =ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
         if not k32.GetVolumeInformationW(root, label, 261, None, None, None, fs, 261):
             continue  # том не размечен или заблокирован (BitLocker) — искать на нём нечего
         out.append({"drive": root[:2], "label": label.value, "fs": fs.value})

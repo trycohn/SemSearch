@@ -6,6 +6,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import core
+import winfs
 
 log = logging.getLogger("watcher")
 
@@ -42,10 +43,23 @@ def start(indexer, cfg):
             top.append(r)
     observer = Observer()
     handler = _Handler(indexer)
-    for r in top:
-        observer.schedule(handler, r, recursive=True)
     observer.daemon = True
-    observer.start()
-    indexer.state["watching"] = True
-    log.info("слежу за изменениями: %s", ", ".join(top))
+    observer.start()  # сначала поток обработки, потом корни: так недоступный корень не роняет остальные
+    watched = []
+    for r in top:
+        try:
+            # Съёмные носители (флешка, внешний диск по USB) не отслеживаем: пока открыт дескриптор слежения,
+            # Windows не даёт «Безопасно извлечь» устройство. Их изменения подхватит периодический обход.
+            if winfs.is_removable(r):
+                log.info("не слежу за съёмным носителем %s (чтобы его можно было извлечь)", r)
+                continue
+        except Exception:
+            pass
+        try:
+            observer.schedule(handler, r, recursive=True)
+            watched.append(r)
+        except OSError as ex:  # нет доступа к корню диска (права, диск пропал) — остальные корни живут
+            log.warning("не могу следить за %s: %s", r, ex)
+    indexer.state["watching"] = bool(watched)
+    log.info("слежу за изменениями: %s", ", ".join(watched))
     return observer

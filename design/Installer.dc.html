@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>SemSearch — установщик</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.iw a{color:var(--accent)}.iw a:hover{color:var(--text)}
+.iw button{font:inherit;color:inherit;cursor:default;transition:background-color .12s,border-color .15s,transform .1s cubic-bezier(.2,0,0,1),filter .12s}
+.iw button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.iw .btn2:hover,.iw .ghost:hover,.iw .cap:hover,.iw .opt:hover:not(:disabled){background:var(--hover)!important}
+.iw .btn2:active,.iw .prim:active,.iw .sw:active{transform:scale(.97)}
+.iw .prim:hover{filter:brightness(1.08)}
+.iw .cap.x:hover{background:#c42b1c!important;color:#ffffff}
+.iw .sw .knob{transition:transform .2s cubic-bezier(.2,0,0,1),background-color .2s,width .15s}
+.iw .sw:active .knob{width:15px!important}
+.iw .dot{transition:border-width .15s cubic-bezier(.2,0,0,1),border-color .15s,background-color .15s}
+.iw .dropup{transform-origin:bottom center;animation:iwdropup .16s cubic-bezier(.2,0,0,1) both}
+@keyframes iwdropup{from{opacity:0;transform:translateY(4px) scale(.97)}to{opacity:1;transform:none}}
+.iw .in1{animation:iwin1 .32s cubic-bezier(.2,0,0,1) both}
+.iw .in2{animation:iwin2 .32s cubic-bezier(.2,0,0,1) both}
+@keyframes iwin1{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes iwin2{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.iw .rs{animation:iwrs .25s cubic-bezier(.2,0,0,1) both}
+@keyframes iwrs{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.iw .logo{animation:iwlogo .45s cubic-bezier(.2,0,0,1) both}
+@keyframes iwlogo{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
+.iw .orbit{transform-box:view-box;transform-origin:108.04px 106.54px;animation:iworbit 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes iworbit{to{transform:rotate(360deg)}}
+.iw .settle{transform-box:view-box;transform-origin:108.04px 106.54px;animation:iwsettle .5s cubic-bezier(.2,0,0,1) both}
+@keyframes iwsettle{from{transform:rotate(-50deg)}to{transform:none}}
+.iw .spin{animation:iwspin .9s linear infinite}
+@keyframes iwspin{to{transform:rotate(360deg)}}
+.iw .chk{stroke-dasharray:24;animation:iwchk .35s cubic-bezier(.2,0,0,1) both}
+@keyframes iwchk{from{stroke-dashoffset:24}to{stroke-dashoffset:0}}
+.iw .pop{animation:iwpop .22s cubic-bezier(.2,0,0,1) both}
+@keyframes iwpop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.iw .shake{animation:iwshake .4s cubic-bezier(.2,0,0,1) both}
+@keyframes iwshake{0%,100%{transform:none}25%{transform:translateX(-4px)}60%{transform:translateX(3px)}}
+@media (prefers-reduced-motion:reduce){.iw .orbit,.iw .settle,.iw .spin,.iw .rs,.iw .in1,.iw .in2,.iw .logo,.iw .shake{animation:none}}
+</style>
+</helmet>
+<div class="iw" lang="{{htmlLang}}" style="{{vars}}; position: relative; width: 720px; height: 700px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="flex: none; display: flex; align-items: center; height: 32px; padding-left: 14px">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="color: var(--accent)"><path d="M1 6.5a5.5 5.5 0 1 1 11 0a5.5 5.5 0 1 1 -11 0ZM3 6.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z"></path><path d="M11 13a2 2 0 1 1 4 0a2 2 0 1 1 -4 0Z"></path></svg>
+<span style="margin-left: 10px; font-size: 12px">{{barTitle}}</span>
+<div style="margin-left: auto; align-self: flex-start; display: flex">
+<button class="cap" aria-label="{{t.min}}" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+<button class="cap x" aria-label="{{t.close}}" style="width: 46px; height: 32px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+</div>
+</div>
+
+<sc-for list="{{view}}" as="v" hint-placeholder-count="1">
+<div class="{{v.cls}}" style="flex: 1; min-height: 0; display: flex; flex-direction: column">
+
+<sc-if value="{{isOptions}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1; min-height: 0; overflow-y: auto; padding: 20px 40px 16px; display: flex; flex-direction: column; gap: 14px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600; line-height: 1.4">{{t.optTitle}}</h1>
+
+<section aria-labelledby="o-where" style="display: flex; flex-direction: column; gap: 6px">
+<h2 id="o-where" style="margin: 0; font-size: 14px; font-weight: 600">{{t.where}}</h2>
+<div style="border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px; box-sizing: border-box">
+<div style="flex: 1; min-width: 0"><div>{{t.progFolder}}</div><div style="font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{o.prog}}</div></div>
+<button class="btn2" onClick="{{o.changeProg}}" style="flex: none; height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">{{t.change}}</button>
+</div>
+<div style="display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border-top: 1px solid var(--line)">
+<div style="flex: 1; min-width: 0"><div>{{t.dataFolder}} <span style="font-size: 12px; color: var(--muted)">· {{t.dataNote}}</span></div><div style="font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{o.data}}</div></div>
+<button class="btn2" onClick="{{o.changeData}}" style="flex: none; height: 32px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface)">{{t.change}}</button>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="o-model" style="display: flex; flex-direction: column; gap: 6px">
+<h2 id="o-model" style="margin: 0; font-size: 14px; font-weight: 600">{{t.computeOn}}</h2>
+<div role="radiogroup" aria-labelledby="o-model" style="border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<button class="opt" role="radio" aria-checked="{{o.gpu}}" onClick="{{o.pickGpu}}" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border: 0; background: transparent; text-align: left">
+<span class="dot" style="flex: none; width: 20px; height: 20px; box-sizing: border-box; border-radius: 10px; {{o.gpuDot}}"></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>{{t.gpu}}</span><span style="font-size: 12px; color: var(--muted)">{{t.gpuNote}}</span></span>
+</button>
+<button class="opt" role="radio" aria-checked="{{o.cpu}}" onClick="{{o.pickCpu}}" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left">
+<span class="dot" style="flex: none; width: 20px; height: 20px; box-sizing: border-box; border-radius: 10px; {{o.cpuDot}}"></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>{{t.cpu}}</span><span style="font-size: 12px; color: var(--muted)">{{t.cpuNote}}</span></span>
+</button>
+</div>
+</section>
+
+<section aria-labelledby="o-start" style="display: flex; flex-direction: column; gap: 6px">
+<h2 id="o-start" style="margin: 0; font-size: 14px; font-weight: 600">{{t.startSec}}</h2>
+<div style="border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 8px 16px; box-sizing: border-box">
+<div style="min-width: 0"><div id="o-auto">{{t.auto}}</div><div style="font-size: 12px; color: var(--muted)">{{t.autoNote}}</div></div>
+<button class="sw" role="switch" aria-checked="{{o.auto}}" aria-labelledby="o-auto" onClick="{{o.tAuto}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid; border-radius: 10px; transition: background-color .2s, border-color .2s; {{o.autoSw.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{o.autoSw.knob}}"></span></button>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border-top: 1px solid var(--line)">
+<div style="min-width: 0"><div id="o-mft">{{t.mft}}</div><div style="font-size: 12px; color: var(--muted)">{{t.mftNote}}</div></div>
+<button class="sw" role="switch" aria-checked="{{o.mft}}" aria-labelledby="o-mft" onClick="{{o.tMft}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid; border-radius: 10px; transition: background-color .2s, border-color .2s; {{o.mftSw.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{o.mftSw.knob}}"></span></button>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border-top: 1px solid var(--line)">
+<div style="min-width: 0"><div id="o-desk">{{t.desk}}</div><div style="font-size: 12px; color: var(--muted)">{{t.deskNote}}</div></div>
+<button class="sw" role="switch" aria-checked="{{o.desk}}" aria-labelledby="o-desk" onClick="{{o.tDesk}}" style="flex: none; position: relative; width: 40px; height: 20px; padding: 0; border: 1px solid; border-radius: 10px; transition: background-color .2s, border-color .2s; {{o.deskSw.track}}"><span class="knob" style="position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 6px; {{o.deskSw.knob}}"></span></button>
+</div>
+</div>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{isHero}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px 48px 28px">
+<div style="width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center">
+
+<span class="logo" style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{h.logo}}" hint-placeholder-val="{{true}}"><svg width="56" height="56" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible; color: {{logoColor}}"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><g class="{{h.dotCls}}"><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></g></svg></sc-if>
+<sc-if value="{{h.warn}}" hint-placeholder-val="{{false}}"><svg class="shake" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--err)"><path d="M12 9v4 M12 16.5h.01 M10.3 3.6L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path></svg></sc-if>
+<sc-if value="{{h.check}}" hint-placeholder-val="{{false}}"><svg class="pop" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"></path><path class="chk" d="M8 12.2l2.8 2.8L16.2 9.5"></path></svg></sc-if>
+</span>
+
+<h1 style="margin: 16px 0 0; font-size: 22px; font-weight: 600; line-height: 1.4; text-align: center">{{h.title}}</h1>
+<p style="margin: 6px 0 0; min-height: 20px; font-size: 14px; color: var(--muted); text-align: center; text-wrap: pretty">{{h.sub}}</p>
+
+<sc-if value="{{h.bar}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{h.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{h.pct}}" style="width: 320px; max-width: 100%; height: 4px; margin-top: 20px; border-radius: 2px; background: var(--line2); overflow: hidden"><div style="height: 100%; border-radius: 2px; transition: width .4s cubic-bezier(.4,0,.2,1); width: {{h.pctW}}; background: {{h.barColor}}"></div></div>
+</sc-if>
+
+<sc-if value="{{h.hasRows}}" hint-placeholder-val="{{true}}">
+<div style="width: 100%; margin-top: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden">
+<sc-for list="{{h.rows}}" as="r" hint-placeholder-count="4">
+
+<sc-if value="{{r.isBox}}" hint-placeholder-val="{{false}}">
+<button class="opt rs" role="checkbox" aria-checked="{{r.checked}}" disabled="{{r.disabled}}" onClick="{{r.toggle}}" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px; box-sizing: border-box; border: 0; border-top: {{r.border}}; background: transparent; text-align: left; animation-delay: {{r.d}}">
+<span style="flex: none; width: 20px; height: 20px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: background-color .15s, border-color .15s; {{r.boxStyle}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13px">{{r.label}}</span><span style="font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{r.note}}</span></span>
+</button>
+</sc-if>
+
+<sc-if value="{{r.isLine}}" hint-placeholder-val="{{true}}">
+<div class="rs" style="display: flex; align-items: center; gap: 12px; min-height: {{r.h}}; padding: 8px 16px; box-sizing: border-box; border-top: {{r.border}}; animation-delay: {{r.d}}">
+<span style="flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: {{r.ic}}">
+<sc-if value="{{r.sDone}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg></sc-if>
+<sc-if value="{{r.sActive}}" hint-placeholder-val="{{false}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg></sc-if>
+<sc-if value="{{r.sFailed}}" hint-placeholder-val="{{false}}"><svg class="pop" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="color: var(--err)"><path d="M6 6l12 12M18 6L6 18"></path></svg></sc-if>
+<sc-if value="{{r.sWait}}" hint-placeholder-val="{{false}}"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line2)"></span></sc-if>
+<sc-if value="{{r.iFolder}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5h6l2 2h10V19H3z"></path></svg></sc-if>
+<sc-if value="{{r.iChip}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4"></path></svg></sc-if>
+<sc-if value="{{r.iFile}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h4"></path></svg></sc-if>
+<sc-if value="{{r.iDisk}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14h18v5H3z M3 14l2.6-8h12.8L21 14 M7 16.5h.01"></path></svg></sc-if>
+<sc-if value="{{r.iDown}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 20h14"></path></svg></sc-if>
+<sc-if value="{{r.iTray}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3z M3 15h18 M14 17h.01 M17.5 17h.01"></path></svg></sc-if>
+<sc-if value="{{r.iShield}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5c-4.1-1.6-7-5.2-7-9.5V6z"></path></svg></sc-if>
+<sc-if value="{{r.iWarn}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4 M12 16.5h.01 M10.3 3.6L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path></svg></sc-if>
+<sc-if value="{{r.iSync}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7 M20 4v4.5h-4.5"></path></svg></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<span style="font-size: 13px; {{r.ls}}">{{r.label}}</span>
+<sc-if value="{{r.hasNote}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; color: var(--muted); overflow-wrap: anywhere">{{r.note}}</span></sc-if>
+</span>
+<sc-if value="{{r.hasRight}}" hint-placeholder-val="{{false}}"><span style="flex: none; font-size: 12px; color: {{r.rc}}; white-space: nowrap; font-variant-numeric: tabular-nums">{{r.right}}</span></sc-if>
+<sc-if value="{{r.hasAct}}" hint-placeholder-val="{{false}}"><button class="btn2" onClick="{{r.act}}" style="flex: none; height: 30px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px">{{r.actLabel}}</button></sc-if>
+</div>
+</sc-if>
+
+</sc-for>
+</div>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+</div>
+</sc-for>
+
+<div style="flex: none; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 24px 0 20px; box-sizing: border-box; border-top: 1px solid var(--line); background: var(--foot)">
+<sc-if value="{{f.lang}}" hint-placeholder-val="{{true}}"><sc-for list="{{dd.lang}}" as="d" hint-placeholder-count="1"><div style="position: relative"><button class="btn2" onClick="{{d.toggle}}" aria-haspopup="listbox" aria-expanded="{{d.open}}" aria-label="{{d.aria}}" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; color: var(--muted)"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M3.5 9h17 M3.5 15h17 M12 3c-2.5 2.6-3.6 5.6-3.6 9s1.1 6.4 3.6 9 M12 3c2.5 2.6 3.6 5.6 3.6 9s-1.1 6.4-3.6 9"></path></svg><span style="white-space: nowrap">{{d.label}}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; transition: transform .2s cubic-bezier(.2,0,0,1); {{d.chev}}"><path d="M6 9l6 6 6-6"></path></svg></button><sc-if value="{{d.open}}" hint-placeholder-val="{{false}}"><div class="dropup" role="listbox" aria-label="{{d.aria}}" style="position: absolute; left: 0; bottom: 38px; z-index: 5; min-width: 100%; padding: 4px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.16)"><sc-for list="{{d.opts}}" as="o" hint-placeholder-count="3"><button class="opt" role="option" aria-selected="{{o.on}}" onClick="{{o.pick}}" style="position: relative; display: flex; align-items: center; width: 100%; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; text-align: left; white-space: nowrap; font-size: 13px; {{o.style}}"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent)"></span></sc-if>{{o.label}}</button></sc-for></div></sc-if></div></sc-for></sc-if>
+<sc-if value="{{f.lang}}" hint-placeholder-val="{{true}}"><sc-for list="{{dd.theme}}" as="d" hint-placeholder-count="1"><div style="position: relative"><button class="btn2" onClick="{{d.toggle}}" aria-haspopup="listbox" aria-expanded="{{d.open}}" aria-label="{{d.aria}}" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 4px; background: var(--surface); font-size: 13px"><sc-if value="{{th.sys}}" hint-placeholder-val="{{true}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; color: var(--muted)"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"></path><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"></path></svg></sc-if><sc-if value="{{th.light}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; color: var(--muted)"><path d="M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z M12 2.5v2 M12 19.5v2 M4.6 4.6l1.4 1.4 M18 18l1.4 1.4 M2.5 12h2 M19.5 12h2 M4.6 19.4L6 18 M18 6l1.4-1.4"></path></svg></sc-if><sc-if value="{{th.dark}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; color: var(--muted)"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if><span style="white-space: nowrap">{{d.label}}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; transition: transform .2s cubic-bezier(.2,0,0,1); {{d.chev}}"><path d="M6 9l6 6 6-6"></path></svg></button><sc-if value="{{d.open}}" hint-placeholder-val="{{false}}"><div class="dropup" role="listbox" aria-label="{{d.aria}}" style="position: absolute; left: 0; bottom: 38px; z-index: 5; min-width: 100%; padding: 4px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.16)"><sc-for list="{{d.opts}}" as="o" hint-placeholder-count="3"><button class="opt" role="option" aria-selected="{{o.on}}" onClick="{{o.pick}}" style="position: relative; display: flex; align-items: center; width: 100%; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; text-align: left; white-space: nowrap; font-size: 13px; {{o.style}}"><sc-if value="{{o.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent)"></span></sc-if>{{o.label}}</button></sc-for></div></sc-if></div></sc-for></sc-if>
+<sc-if value="{{f.launch}}" hint-placeholder-val="{{false}}"><button class="ghost" role="checkbox" aria-checked="{{launchOn}}" onClick="{{toggleLaunch}}" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px 0 6px; border: 0; border-radius: 4px; background: transparent; font-size: 13px"><span style="flex: none; width: 20px; height: 20px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: background-color .15s, border-color .15s; {{launchBox}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span><span>{{t.launch}}</span></button></sc-if>
+<sc-if value="{{f.note}}" hint-placeholder-val="{{false}}"><span style="padding-left: 4px; font-size: 12px; color: {{f.noteColor}}">{{f.noteText}}</span></sc-if>
+<sc-if value="{{f.log}}" hint-placeholder-val="{{false}}"><a href="#log" style="padding-left: 4px; font-size: 13px">{{t.log}}</a></sc-if>
+<div style="margin-left: auto; display: flex; gap: 8px">
+<sc-for list="{{btns}}" as="b" hint-placeholder-count="2"><button class="{{b.cls}}" onClick="{{b.on}}" disabled="{{b.off}}" style="height: 32px; min-width: {{b.mw}}; padding: 0 16px; border-radius: 4px; {{b.st}}">{{b.label}}</button></sc-for>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"screen":{"editor":"enum","options":["Приветствие","Параметры","Установка","Готово","Мало места","Нет сети","Без прав администратора","Обновление","Удаление"],"default":"Приветствие"},"lang":{"editor":"enum","options":["Русский","English"],"default":"Русский"},"dark":{"editor":"boolean","default":false},"accent":{"editor":"color","default":"#005fb8","options":["#005fb8","#0f7b6c","#7a4cc2","#a85200"]},"still":{"editor":null},"autoplay":{"editor":null},"onPhase":{"editor":null},"$preview":{"width":720,"height":700}}'>
+class Component extends DCLogic {
+  componentDidMount() { this.reset(); }
+  componentWillUnmount() { clearInterval(this._iv); clearTimeout(this._t); clearTimeout(this._a); }
+  componentDidUpdate(prev) {
+    if (prev.screen !== this.props.screen) this.reset();
+    else if (prev.lang !== this.props.lang) this.setState({ lang: null });
+  }
+  sid() {
+    const map = { 'Приветствие': 'welcome', 'Параметры': 'options', 'Установка': 'progress', 'Готово': 'done', 'Мало места': 'nospace', 'Нет сети': 'neterror', 'Без прав администратора': 'noadmin', 'Обновление': 'update', 'Удаление': 'uninstall' };
+    return map[this.props.screen] || 'welcome';
+  }
+  base() {
+    const id = this.sid();
+    const b = { ready: true, scr: id, mode: 'install', gpu: true, auto: true, mft: true, desk: false, launch: true, wipe: false, step: 0, sub: 0, failed: false, mftFailed: false, low: false, progD: false, dataD: false, lang: null, theme: 'system', nav: 0 };
+    if (id === 'nospace') { b.scr = 'welcome'; b.low = true; }
+    if (id === 'progress') { b.step = 2; b.sub = 6; }
+    if (id === 'neterror') { b.scr = 'progress'; b.step = 2; b.sub = 6; b.failed = true; }
+    if (id === 'noadmin') { b.scr = 'done'; b.mftFailed = true; }
+    if (id === 'update') b.mode = 'update';
+    if (id === 'uninstall') b.mode = 'uninstall';
+    return b;
+  }
+  still() { const s = this.props.still; return !!s && s !== 'false' && s !== '0'; }
+  auto() { const s = this.props.autoplay; return !!s && s !== 'false' && s !== '0'; }
+  phase(scr) { const f = this.props.onPhase; if (typeof f === 'function') f(scr); }
+  st() { return (this.state && this.state.ready) ? this.state : this.base(); }
+  reset() {
+    clearInterval(this._iv); clearTimeout(this._t); clearTimeout(this._a);
+    const b = this.base();
+    this.setState(Object.assign(b, { press: false }));
+    this.phase(b.scr);
+    if (b.scr === 'progress' && !b.failed && !this.still()) this.run();
+    if (this.auto() && b.scr === 'welcome') {
+      this._a = setTimeout(() => {
+        this.setState({ press: true });
+        this._a = setTimeout(() => { this.setState({ press: false }); this.start('install'); }, 180);
+      }, 2400);
+    }
+  }
+  go(scr, extra) {
+    const st = this.st();
+    this.setState(Object.assign({ scr, nav: (st.nav || 0) + 1 }, extra || {}));
+    this.phase(scr);
+  }
+  start(mode) {
+    clearInterval(this._iv); clearTimeout(this._t); clearTimeout(this._a);
+    this.go('progress', { mode, step: 0, sub: 0, failed: false, mftFailed: false });
+    this.run();
+  }
+  run() {
+    clearInterval(this._iv);
+    this._iv = setInterval(() => this.tick(), this.auto() ? 260 : 380);
+  }
+  tick() {
+    const st = this.st();
+    if (st.scr !== 'progress' || st.failed) { clearInterval(this._iv); return; }
+    const plan = this.plan(st, this.T(this.isEn(st)));
+    if (st.step >= plan.length) {
+      clearInterval(this._iv);
+      this._t = setTimeout(() => {
+        this.go(st.mode === 'uninstall' ? 'removed' : 'done');
+        if (this.auto()) this._a = setTimeout(() => this.reset(), 3400);
+      }, 600);
+      return;
+    }
+    const sub = st.sub + 1;
+    if (sub >= plan[st.step].k) this.setState({ step: st.step + 1, sub: 0 });
+    else this.setState({ sub });
+  }
+  isEn(st) { return (st.lang || (this.props.lang === 'English' ? 'en' : 'ru')) === 'en'; }  // st.lang null — как в Windows
+  plan(st, t) {
+    if (st.mode === 'update') return [
+      { l: t.sClose, k: 2 }, { l: t.sReplace, k: 4 }, { l: t.sLibsUp, k: 4 }, { l: t.sEngUp, k: 3, wait: t.sWaitWin }
+    ];
+    if (st.mode === 'uninstall') {
+      const p = [{ l: t.sClose, k: 2 }, { l: t.sEngDel, k: 2 }, { l: t.sProgDel, k: 3 }];
+      if (st.wipe) p.push({ l: t.sDataDel, k: 2 });
+      return p;
+    }
+    const total = st.gpu ? 3.0 : 0.2, ticks = st.gpu ? 14 : 4;
+    const p = [
+      { l: t.sCheck, k: 2, done: t.sCheckOk },
+      { l: t.sCopy, k: 3 },
+      { l: st.gpu ? t.sTorchGpu : t.sTorchCpu, k: ticks, sub: n => t.of(n * total / ticks, total) },
+      { l: t.sLibs, k: 4 },
+      { l: t.sModel, k: 8, sub: n => t.of(n * 1.5 / 8, 1.5) }
+    ];
+    if (st.mft) p.push({ l: t.sMft, k: 3, wait: t.sWaitWin });
+    p.push({ l: st.auto ? t.sLinksAuto : t.sLinks, k: 1 });
+    return p;
+  }
+  T(en) {
+    const n = x => en ? x.toFixed(1) : x.toFixed(1).replace('.', ',');
+    if (en) return {
+      bar: { install: 'SemSearch Setup', update: 'SemSearch Update', uninstall: 'Uninstall SemSearch' },
+      min: 'Minimize', close: 'Close', langAria: 'Setup language', themeAria: 'Theme', themeNames: { system: 'Same as Windows', light: 'Light', dark: 'Dark' }, sysLang: 'Same as Windows',
+      welcomeSub: 'Search your computer by meaning and by name. Your files never leave this PC.',
+      progFolder: 'Program folder', dataFolder: 'Data folder', dataNote: 'settings, index and model',
+      onGpu: 'The model runs on the graphics card', onCpu: 'The model runs on the processor', gpuName: 'NVIDIA GeForce RTX 4070 SUPER', cpuShort: 'Slower indexing, smaller download',
+      mftOn: 'Fast search by name', mftOnNote: 'Windows will ask for administrator permission once', mftOff: 'Search by name walks the disk', mftOffNote: 'No administrator rights; the first index takes longer',
+      space: 'Takes about 7 GB', free: (f, d) => f + ' free on drive ' + d, freeShort: (f, d) => f + ' free on ' + d,
+      lowLabel: d => 'Not enough space on drive ' + d, lowNote: f => 'Needs about 7 GB, ' + f + ' free', lowFoot: (f, d) => 'Not enough space on ' + d + ' — needs about 7 GB, ' + f + ' free', otherFolder: 'Another folder',
+      settings: 'Options', install: 'Install',
+      optTitle: 'Setup options', where: 'Where to install', change: 'Change', computeOn: 'Run the model on',
+      gpu: 'Graphics card', gpuNote: 'NVIDIA GeForce RTX 4070 SUPER · fast · about 4.5 GB to download', cpu: 'Processor', cpuNote: 'Slower indexing · about 1.7 GB to download', startSec: 'Startup',
+      auto: 'Start with Windows', autoNote: 'Runs in the tray; the shortcut opens the window',
+      mft: 'Fast search by name', mftNote: 'Name index in seconds. Windows will ask for administrator rights once.',
+      desk: 'Desktop shortcut', deskNote: 'The Start menu shortcut is always created',
+      back: 'Back', progTitle: 'Installing SemSearch', canMin: 'You can minimize this window — setup keeps going', cancel: 'Cancel', readyNow: 'Done',
+      netTitle: 'Couldn’t download PyTorch', netSub: s => 'The connection dropped at ' + s + '. The downloaded part is kept — setup will resume from there.', retry: 'Retry', log: 'Open the log', noNet: 'no connection',
+      doneTitle: 'SemSearch is installed', doneSub: 'Open the search window from any app — Ctrl+Alt+S',
+      firstRun: 'The model is downloaded', firstRunNote: 'EmbeddingGemma 2 is in place — the first start downloads nothing',
+      byName: 'Search by name works right away', byNameNote: 'Search by meaning grows as indexing runs in the background',
+      tray: 'SemSearch lives in the tray', trayAuto: 'Starts with Windows', trayNoAuto: 'Start it from the Start menu',
+      noAdm: 'Fast search by name isn’t set up', noAdmNote: 'Windows didn’t grant permission. Names are still found, but the first index takes longer.', connect: 'Set up',
+      launch: 'Start SemSearch', finish: 'Done',
+      updTitle: 'Update SemSearch', updSub: 'Version 0.4 is installed, 0.5 is ready.', keep: 'Settings, index and model stay', keepNote: 'Nothing to download or index again', closes: 'SemSearch closes during the update', closesNote: 'It opens again by itself when everything is ready', eng: 'The name search engine gets updated', engNote: 'Windows will ask for administrator permission', notNow: 'Not now', update: 'Update', updating: 'Updating SemSearch', updNote: 'SemSearch will open again by itself', updated: 'SemSearch is updated', updatedSub: 'Version 0.5. Settings and index are in place.',
+      unTitle: 'Uninstall SemSearch?', unSub: 'The program, its shortcuts and the name search engine will be removed.', unProg: 'Program and name search engine', unData: 'Also remove settings, index and model', unDataNote: 'Keep them if you’ll install again — no need to download the model', remove: 'Uninstall', removing: 'Uninstalling SemSearch', removed: 'SemSearch is uninstalled', removedKeep: 'Settings, index and model are still in the data folder.', removedAll: 'The program and all its data are removed.', openFolder: 'Open folder', closeBtn: 'Close',
+      of: (a, b) => n(a) + ' of ' + n(b) + ' GB', gb: x => n(x) + ' GB', gbInt: x => x + ' GB',
+      sCheck: 'Checking this PC', sCheckOk: 'all good', sCopy: 'Copying program files', sTorchGpu: 'Downloading PyTorch with CUDA', sTorchCpu: 'Downloading PyTorch for the processor', sLibs: 'Installing libraries', sModel: 'Downloading the EmbeddingGemma 2 model', sMft: 'Setting up fast search by name', sWaitWin: 'waiting for Windows', sLinks: 'Creating shortcuts', sLinksAuto: 'Creating shortcuts and autostart', sClose: 'Closing SemSearch', sReplace: 'Replacing program files', sLibsUp: 'Updating libraries', sEngUp: 'Updating the name search engine', sEngDel: 'Removing the name search engine', sProgDel: 'Removing the program and shortcuts', sDataDel: 'Removing settings, index and model'
+    };
+    return {
+      bar: { install: 'Установка SemSearch', update: 'Обновление SemSearch', uninstall: 'Удаление SemSearch' },
+      min: 'Свернуть', close: 'Закрыть', langAria: 'Язык установки', themeAria: 'Тема', themeNames: { system: 'Как в Windows', light: 'Светлая', dark: 'Тёмная' }, sysLang: 'Как в Windows',
+      welcomeSub: 'Поиск по компьютеру по смыслу и по имени. Ваши файлы не покидают компьютер.',
+      progFolder: 'Папка программы', dataFolder: 'Папка данных', dataNote: 'настройки, индекс и модель',
+      onGpu: 'Модель считает на видеокарте', onCpu: 'Модель считает на процессоре', gpuName: 'NVIDIA GeForce RTX 4070 SUPER', cpuShort: 'Индексация медленнее, скачивать меньше',
+      mftOn: 'Быстрый поиск по имени', mftOnNote: 'Windows один раз спросит разрешение администратора', mftOff: 'Поиск по имени — обходом диска', mftOffNote: 'Без прав администратора: первый индекс строится дольше',
+      space: 'Займёт около 7 ГБ', free: (f, d) => 'Свободно ' + f + ' на диске ' + d, freeShort: (f, d) => 'свободно ' + f + ' на ' + d,
+      lowLabel: d => 'Не хватает места на диске ' + d, lowNote: f => 'Нужно около 7 ГБ, свободно ' + f, lowFoot: (f, d) => 'Не хватает места на ' + d + ' — нужно около 7 ГБ, свободно ' + f, otherFolder: 'Другая папка',
+      settings: 'Параметры', install: 'Установить',
+      optTitle: 'Параметры установки', where: 'Куда установить', change: 'Изменить', computeOn: 'На чём считать модель',
+      gpu: 'На видеокарте', gpuNote: 'NVIDIA GeForce RTX 4070 SUPER · быстро · скачать около 4,5 ГБ', cpu: 'На процессоре', cpuNote: 'Индексация медленнее · скачать около 1,7 ГБ', startSec: 'Запуск',
+      auto: 'Запускать вместе с Windows', autoNote: 'Работает в трее, окно открывается по горячей клавише',
+      mft: 'Быстрый поиск по имени', mftNote: 'Индекс имён за секунды. Windows один раз спросит права администратора.',
+      desk: 'Ярлык на рабочем столе', deskNote: 'В меню «Пуск» ярлык появится в любом случае',
+      back: 'Назад', progTitle: 'Устанавливаю SemSearch', canMin: 'Окно можно свернуть — установка продолжится', cancel: 'Отмена', readyNow: 'Готово',
+      netTitle: 'Не удалось скачать PyTorch', netSub: s => 'Связь прервалась на ' + s + '. Скачанное сохранено — продолжу с того же места.', retry: 'Повторить', log: 'Открыть журнал', noNet: 'нет связи',
+      doneTitle: 'SemSearch установлен', doneSub: 'Окно поиска открывается из любой программы — Ctrl+Alt+S',
+      firstRun: 'Модель уже скачана', firstRunNote: 'EmbeddingGemma 2 на месте — первый запуск ничего не качает',
+      byName: 'Поиск по имени работает сразу', byNameNote: 'По смыслу — по мере индексации, она идёт в фоне',
+      tray: 'SemSearch живёт в трее', trayAuto: 'Запускается вместе с Windows', trayNoAuto: 'Запускайте из меню «Пуск»',
+      noAdm: 'Быстрый поиск по имени не подключён', noAdmNote: 'Windows не дала разрешения. Имена найдутся и так, но первый индекс строится дольше.', connect: 'Подключить',
+      launch: 'Запустить SemSearch', finish: 'Готово',
+      updTitle: 'Обновить SemSearch', updSub: 'Установлена версия 0.4, готова 0.5.', keep: 'Настройки, индекс и модель сохранятся', keepNote: 'Ничего не придётся скачивать и индексировать заново', closes: 'SemSearch закроется на время обновления', closesNote: 'Когда всё будет готово, откроется сам', eng: 'Движок поиска по имени обновится', engNote: 'Windows спросит разрешение администратора', notNow: 'Не сейчас', update: 'Обновить', updating: 'Обновляю SemSearch', updNote: 'SemSearch откроется сам, когда всё будет готово', updated: 'SemSearch обновлён', updatedSub: 'Версия 0.5. Настройки и индекс на месте.',
+      unTitle: 'Удалить SemSearch?', unSub: 'Программа, ярлыки и движок поиска по имени будут удалены.', unProg: 'Программа и движок поиска по имени', unData: 'Удалить также настройки, индекс и модель', unDataNote: 'Оставьте, если будете ставить снова: модель не придётся скачивать', remove: 'Удалить', removing: 'Удаляю SemSearch', removed: 'SemSearch удалён', removedKeep: 'Настройки, индекс и модель остались в папке данных.', removedAll: 'Программа и все её данные удалены.', openFolder: 'Открыть папку', closeBtn: 'Закрыть',
+      of: (a, b) => n(a) + ' из ' + n(b) + ' ГБ', gb: x => n(x) + ' ГБ', gbInt: x => x + ' ГБ',
+      sCheck: 'Проверяю компьютер', sCheckOk: 'всё подходит', sCopy: 'Копирую файлы программы', sTorchGpu: 'Скачиваю PyTorch с CUDA', sTorchCpu: 'Скачиваю PyTorch для процессора', sLibs: 'Ставлю библиотеки', sModel: 'Скачиваю модель EmbeddingGemma 2', sMft: 'Подключаю быстрый поиск по имени', sWaitWin: 'ждёт разрешения Windows', sLinks: 'Создаю ярлыки', sLinksAuto: 'Создаю ярлыки и автозапуск', sClose: 'Закрываю SemSearch', sReplace: 'Заменяю файлы программы', sLibsUp: 'Обновляю библиотеки', sEngUp: 'Обновляю движок поиска по имени', sEngDel: 'Удаляю движок поиска по имени', sProgDel: 'Удаляю программу и ярлыки', sDataDel: 'Удаляю настройки, индекс и модель'
+    };
+  }
+  renderVals() {
+    const st = this.st();
+    const en = this.isEn(st);
+    const t = this.T(en);
+    const dark = st.theme === 'dark' || (st.theme !== 'light' && !!this.props.dark);
+    const accent = this.props.accent ?? '#005fb8';
+    const light = (hex, k) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const v = parseInt(hex.slice(1), 16);
+      const f = c => Math.round(c + (255 - c) * k).toString(16).padStart(2, '0');
+      return '#' + f(v >> 16 & 255) + f(v >> 8 & 255) + f(v & 255);
+    };
+    const acc = dark ? light(accent, 0.45) : accent;
+    const vars = (dark
+      ? '--bg: #202020; --surface: #2b2b2b; --hover: #323232; --foot: #1b1b1b; --line: #383838; --line2: #555555; --text: #f2f2f2; --muted: #bdbdbd; --faint: #a8a8a8; --knob: #cfcfcf; --err: #ff8a80; --warn: #fce100; --danger: #ff8a80; --onDanger: #111111; --onAccent: #111111'
+      : '--bg: #f3f3f3; --surface: #ffffff; --hover: #f5f5f5; --foot: #ebebeb; --line: #e5e5e5; --line2: #cfcfcf; --text: #1a1a1a; --muted: #5c5c5c; --faint: #666666; --knob: #5c5c5c; --err: #b3261e; --warn: #9d5d00; --danger: #b3261e; --onDanger: #ffffff; --onAccent: #ffffff') + '; --accent: ' + acc;
+
+    const PROG = st.progD ? 'D:\\Programs\\SemSearch' : 'C:\\Users\\Anna\\AppData\\Local\\Programs\\SemSearch';
+    const DATA = st.dataD ? 'D:\\SemSearch Data' : 'C:\\Users\\Anna\\AppData\\Local\\SemSearch';
+    const drive = st.progD ? 'D:' : 'C:';
+    const low = st.low && !st.progD;
+    const freeStr = st.progD ? t.gbInt(812) : (st.low ? t.gb(3.1) : t.gbInt(214));
+
+    const line = o => Object.assign({ isLine: true, isBox: false, h: '52px', ic: 'var(--muted)', ls: '', rc: 'var(--muted)', label: '', hasNote: false, note: '', hasRight: false, right: '', hasAct: false, actLabel: '', act: null, sDone: false, sActive: false, sFailed: false, sWait: false, iFolder: false, iChip: false, iFile: false, iDisk: false, iDown: false, iTray: false, iShield: false, iWarn: false, iSync: false }, o);
+    const info = (icon, label, note, extra) => line(Object.assign({ label, note: note || '', hasNote: !!note, ['i' + icon]: true }, extra || {}));
+    const box = (label, note, checked, disabled, toggle) => ({
+      isLine: false, isBox: true, label, note, checked, disabled, toggle,
+      boxStyle: disabled ? 'border: 1px solid var(--line2); background: var(--line2); color: var(--surface)'
+        : checked ? 'border: 1px solid var(--accent); background: var(--accent); color: var(--onAccent)'
+        : 'border: 1px solid var(--knob); background: transparent; color: transparent'
+    });
+    const SEC = 'border: 1px solid var(--line2); background: var(--surface); color: var(--text)';
+    const PRI = 'border: 1px solid var(--accent); background: var(--accent); color: var(--onAccent); font-weight: 600';
+    const DAN = 'border: 1px solid var(--danger); background: var(--danger); color: var(--onDanger); font-weight: 600';
+    const OFF = 'border: 1px solid var(--line); background: var(--line); color: var(--faint); font-weight: 600';
+    const B = (label, kind, on, off) => ({
+      label, on: off ? null : on, off: !!off,
+      cls: off ? '' : (kind === 'sec' ? 'btn2' : 'prim'),
+      mw: kind === 'sec' ? '96px' : '120px',
+      st: off ? OFF : kind === 'sec' ? SEC : kind === 'dan' ? DAN : PRI
+    });
+    const cancelRun = () => { clearInterval(this._iv); clearTimeout(this._t); };
+
+    const h = { logo: true, warn: false, check: false, dotCls: '', title: '', sub: '', bar: false, pct: 0, pctW: '0%', barColor: 'var(--accent)', rows: [] };
+    const f = { lang: false, launch: false, note: false, noteText: '', noteColor: 'var(--muted)', log: false };
+    let btns = [];
+    const scr = st.scr;
+
+    if (scr === 'welcome') {
+      h.title = 'SemSearch';
+      h.sub = t.welcomeSub;
+      h.rows = [
+        info('Folder', t.progFolder, PROG),
+        info('Chip', st.gpu ? t.onGpu : t.onCpu, st.gpu ? t.gpuName : t.cpuShort),
+        info('File', st.mft ? t.mftOn : t.mftOff, st.mft ? t.mftOnNote : t.mftOffNote),
+        low
+          ? info('Disk', t.lowLabel(drive), t.lowNote(freeStr), { ic: 'var(--err)', ls: 'color: var(--err); font-weight: 600', hasAct: true, actLabel: t.otherFolder, act: () => this.go('options') })
+          : info('Disk', t.space, t.free(freeStr, drive))
+      ];
+      f.lang = true;
+      btns = [B(t.settings, 'sec', () => this.go('options')), B(t.install, 'pri', () => this.start('install'), low)];
+      if (st.press) btns[1].st += '; transform: scale(.97); filter: brightness(1.08)';
+    } else if (scr === 'options') {
+      f.note = true;
+      f.noteText = low ? t.lowFoot(freeStr, drive) : t.space + ' · ' + t.freeShort(freeStr, drive);
+      f.noteColor = low ? 'var(--err)' : 'var(--muted)';
+      btns = [B(t.back, 'sec', () => this.go('welcome')), B(t.install, 'pri', () => this.start('install'), low)];
+    } else if (scr === 'progress') {
+      const plan = this.plan(st, t);
+      const total = plan.reduce((a, p) => a + p.k, 0);
+      const doneK = plan.slice(0, st.step).reduce((a, p) => a + p.k, 0) + (st.step < plan.length ? st.sub : 0);
+      const pct = Math.min(100, Math.round(doneK / total * 100));
+      const ready = st.step >= plan.length;
+      const cur = plan[Math.min(st.step, plan.length - 1)];
+      h.logo = !st.failed;
+      h.warn = st.failed;
+      h.dotCls = ready ? 'settle' : 'orbit';
+      h.title = st.failed ? t.netTitle : st.mode === 'update' ? t.updating : st.mode === 'uninstall' ? t.removing : t.progTitle;
+      h.sub = st.failed ? t.netSub(cur.sub ? cur.sub(st.sub) : '') : ready ? t.readyNow : cur.l + '…';
+      h.bar = true;
+      h.pct = pct;
+      h.pctW = pct + '%';
+      h.barColor = st.failed ? 'var(--err)' : 'var(--accent)';
+      h.rows = plan.map((p, i) => {
+        const done = i < st.step, failed = st.failed && i === st.step, active = !st.failed && i === st.step;
+        let right = '';
+        if (failed) right = t.noNet;
+        else if (active) right = p.sub ? p.sub(st.sub) : (p.wait || '');
+        else if (done) right = p.done || '';
+        return line({
+          h: '40px', label: p.l, sDone: done, sActive: active, sFailed: failed, sWait: !done && !active && !failed,
+          hasRight: !!right, right, rc: failed ? 'var(--err)' : 'var(--muted)',
+          ls: failed ? 'color: var(--err); font-weight: 600' : active ? 'font-weight: 600' : done ? 'color: var(--muted)' : 'color: var(--faint)'
+        });
+      });
+      if (st.failed) {
+        f.log = true;
+        btns = [
+          B(t.cancel, 'sec', () => { cancelRun(); this.go('welcome', { step: 0, sub: 0, failed: false }); }),
+          B(t.retry, 'pri', () => { this.setState({ failed: false }); this.run(); })
+        ];
+      } else if (st.mode === 'install') {
+        f.note = true;
+        f.noteText = t.canMin;
+        btns = [B(t.cancel, 'sec', () => { cancelRun(); this.go('welcome', { step: 0, sub: 0 }); })];
+      } else if (st.mode === 'update') {
+        f.note = true;
+        f.noteText = t.updNote;
+      }
+    } else if (scr === 'done') {
+      h.dotCls = 'settle';
+      if (st.mode === 'update') {
+        h.title = t.updated;
+        h.sub = t.updatedSub;
+      } else {
+        h.title = t.doneTitle;
+        h.sub = t.doneSub;
+        h.rows = [
+          info('Chip', t.firstRun, t.firstRunNote),
+          (st.mft && st.mftFailed)
+            ? info('Warn', t.noAdm, t.noAdmNote, { ic: 'var(--warn)', hasAct: true, actLabel: t.connect, act: () => this.setState({ mftFailed: false }) })
+            : info('File', t.byName, t.byNameNote),
+          info('Tray', t.tray, st.auto ? t.trayAuto : t.trayNoAuto)
+        ];
+      }
+      f.launch = true;
+      btns = [B(t.finish, 'pri', () => this.reset())];
+    } else if (scr === 'update') {
+      h.title = t.updTitle;
+      h.sub = t.updSub;
+      h.rows = [info('Disk', t.keep, t.keepNote), info('Sync', t.closes, t.closesNote), info('Shield', t.eng, t.engNote)];
+      btns = [B(t.notNow, 'sec', () => this.reset()), B(t.update, 'pri', () => this.start('update'))];
+    } else if (scr === 'uninstall') {
+      h.title = t.unTitle;
+      h.sub = t.unSub;
+      h.rows = [
+        box(t.unProg, PROG, true, true, null),
+        box(t.unData, t.unDataNote, st.wipe, false, () => this.setState({ wipe: !st.wipe }))
+      ];
+      btns = [B(t.cancel, 'sec', () => this.reset()), B(t.remove, 'dan', () => this.start('uninstall'))];
+    } else if (scr === 'removed') {
+      h.logo = false;
+      h.check = true;
+      h.title = t.removed;
+      h.sub = st.wipe ? t.removedAll : t.removedKeep;
+      h.rows = st.wipe ? [] : [info('Folder', t.dataFolder, DATA, { hasAct: true, actLabel: t.openFolder, act: () => {} })];
+      btns = [B(t.closeBtn, 'pri', () => this.reset())];
+    }
+    h.rows = h.rows.map((r, i) => Object.assign(r, { border: i ? '1px solid var(--line)' : '0', d: (160 + i * 60) + 'ms' }));
+    h.hasRows = h.rows.length > 0;
+
+    const sw = on => ({
+      track: on ? 'border-color: var(--accent); background: var(--accent)' : 'border-color: var(--knob); background: transparent',
+      knob: on ? 'transform: translateX(20px); background: var(--onAccent)' : 'transform: none; background: var(--knob)'
+    });
+    const radio = on => on ? 'border: 5px solid var(--accent); background: var(--onAccent)' : 'border: 1px solid var(--knob); background: transparent';
+    const o = {
+      prog: PROG, data: DATA,
+      changeProg: () => this.setState({ progD: !st.progD }),
+      changeData: () => this.setState({ dataD: !st.dataD }),
+      gpu: st.gpu, cpu: !st.gpu, gpuDot: radio(st.gpu), cpuDot: radio(!st.gpu),
+      pickGpu: () => this.setState({ gpu: true }), pickCpu: () => this.setState({ gpu: false }),
+      auto: st.auto, mft: st.mft, desk: st.desk,
+      autoSw: sw(st.auto), mftSw: sw(st.mft), deskSw: sw(st.desk),
+      tAuto: () => this.setState({ auto: !st.auto }),
+      tMft: () => this.setState({ mft: !st.mft }),
+      tDesk: () => this.setState({ desk: !st.desk })
+    };
+
+    return {
+      t, htmlLang: en ? 'en' : 'ru', vars,
+      logoColor: dark ? '#ffffff' : '#005fb8',
+      barTitle: t.bar[st.mode] || t.bar.install,
+      view: [{ cls: st.nav % 2 ? 'in2' : 'in1' }],
+      isOptions: scr === 'options', isHero: scr !== 'options',
+      h, o, f, btns,
+      langName: en ? 'English' : 'Русский',
+      th: { sys: (st.theme || 'system') === 'system', light: st.theme === 'light', dark: st.theme === 'dark' },
+      dd: (() => {
+        const mk = (key, aria, cur, opts, set) => {
+          const open = st.open === key;
+          return [{
+            open, aria, label: opts.find(o => o[0] === cur)[1],
+            chev: open ? 'transform: rotate(180deg)' : 'transform: none',
+            toggle: () => this.setState({ open: open ? null : key }),
+            opts: opts.map(([v, label]) => ({ label, on: v === cur, style: v === cur ? 'font-weight: 600' : '', pick: () => this.setState(Object.assign({ open: null }, set(v))) }))
+          }];
+        };
+        return {
+          lang: mk('lang', t.langAria, st.lang || 'system', [['ru', 'Русский'], ['en', 'English'], ['system', t.sysLang]], v => ({ lang: v === 'system' ? null : v })),
+          theme: mk('theme', t.themeAria, st.theme || 'system', [['light', t.themeNames.light], ['dark', t.themeNames.dark], ['system', t.themeNames.system]], v => ({ theme: v }))
+        };
+      })(),
+      launchOn: st.launch,
+      launchBox: st.launch ? 'border: 1px solid var(--accent); background: var(--accent); color: var(--onAccent)' : 'border: 1px solid var(--knob); background: transparent; color: transparent',
+      toggleLaunch: () => this.setState({ launch: !st.launch })
+    };
+  }
+}
+</script>
+</body>
+</html>

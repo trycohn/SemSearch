@@ -24,13 +24,13 @@ const NOTIFY_FILTER: u32 = FILE_NOTIFY_CHANGE_FILE_NAME
     | FILE_NOTIFY_CHANGE_LAST_WRITE;
 pub const ATTR_UNKNOWN: u32 = u32::MAX;
 
-pub fn is_cloud_tag(tag: u32) -> bool {
-    (tag & 0xFFFF_0FFF) == 0x9000_001A || tag == 0x8000_0021
-}
-
-/// Спускаться ли в каталог: не точка повторной обработки (junction/symlink), кроме облачных заглушек.
+/// Спускаться ли в каталог: не точка повторной обработки (junction/symlink), кроме облачных папок (OneDrive).
+/// Папки-заглушки (данных на диске нет) перечисляются с FIND_FIRST_EX_ON_DISK_ENTRIES_ONLY — облако их содержимое
+/// не подтягивает; если система этот флаг не знает (NO_ON_DISK_FLAG), в заглушки не заходим.
 pub fn descend(attrs: u32, tag: u32) -> bool {
-    attrs & A_DIRECTORY != 0 && (attrs & A_REPARSE == 0 || is_cloud_tag(tag))
+    attrs & A_DIRECTORY != 0
+        && (attrs & A_REPARSE == 0 || is_cloud_tag(tag))
+        && !(attrs & A_CLOUD != 0 && NO_ON_DISK_FLAG.load(Relaxed))
 }
 
 /// Имена, исключаемые на любом уровне.
@@ -135,6 +135,14 @@ impl WorkQ {
             self.cv.notify_all();
         }
     }
+    /// Остановка: выбросить все ожидающие задания разом (иначе миллионы заданий разбирались бы по одному,
+    /// и том, который извлекают или отключают, освобождался бы десятки секунд).
+    fn cancel(&self) {
+        let mut g = self.st.lock().unwrap();
+        let k = g.0.len();
+        g.0.clear();
+        g.1 -= k;
+    }
 }
 
 pub struct BuildStats {
@@ -142,8 +150,22 @@ pub struct BuildStats {
     pub errors: u64,
 }
 
+/// Число потоков обхода: SEMSEARCH_WALK_THREADS (до 64), иначе по типу носителя — на HDD параллельные
+/// запросы каталогов дают беспорядочные перемещения головок и работают медленнее одного-двух потоков.
+fn walk_threads(media: Media) -> usize {
+    if let Some(n) = std::env::var("SEMSEARCH_WALK_THREADS").ok().and_then(|s| s.parse::<usize>().ok()) {
+        return n.clamp(1, 64);
+    }
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    match media {
+        Media::Hdd => 2,
+        Media::Unknown => cpus.clamp(1, 8),
+        Media::Ssd => cpus.clamp(1, 16),
+    }
+}
+
 /// Полный параллельный обход диска.
-pub fn build(drive: &str, stop: &AtomicBool) -> (Volume, BuildStats) {
+pub fn build(drive: &str, stop: &AtomicBool, media: Media) -> (Volume, BuildStats) {
     let vol = Mutex::new(Volume::new(drive, false));
     vol.lock().unwrap().reserve(1 << 20, 32 << 20);
     let windows_idx = AtomicU32::new(NONE);
@@ -152,12 +174,8 @@ pub fn build(drive: &str, stop: &AtomicBool) -> (Volume, BuildStats) {
     q.push(&mut vec![Job { idx: 0, path: root }]);
     let errors = AtomicU64::new(0);
     let listed = AtomicU64::new(0);
-    let nthreads = std::env::var("SEMSEARCH_WALK_THREADS")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4))
-        .clamp(1, 64)
-        .min(if std::env::var("SEMSEARCH_WALK_THREADS").is_ok() { 64 } else { 16 });
+    let nthreads = walk_threads(media);
+    info!("volume {drive}: walking with {nthreads} thread(s), storage: {}", media.name());
     std::thread::scope(|s| {
         for _ in 0..nthreads {
             s.spawn(|| {
@@ -165,7 +183,9 @@ pub fn build(drive: &str, stop: &AtomicBool) -> (Volume, BuildStats) {
                 let mut prepared: Vec<(String, Vec<u8>, u16, bool, usize)> = Vec::new();
                 let mut sub: Vec<Job> = Vec::new();
                 while let Some(job) = q.pop() {
-                    if !stop.load(Relaxed) {
+                    if stop.load(Relaxed) {
+                        q.cancel();
+                    } else {
                         items.clear();
                         if list_dir(&job.path, &mut items).is_err() {
                             errors.fetch_add(1, Relaxed);
@@ -674,7 +694,7 @@ pub fn full_build(eng: &Engine, slot: &VolSlot, rescan: bool) {
     eng.bg_begin();
     let t0 = Instant::now();
     info!("volume {}: walk build starting; {}", slot.drive, mem_str());
-    let (v, st) = build(&slot.drive, &slot.stop);
+    let (v, st) = build(&slot.drive, &slot.stop, slot.media());
     eng.bg_end();
     info!("volume {}: walk build done; {}", slot.drive, mem_str());
     let ms = t0.elapsed().as_millis() as u64;
@@ -709,7 +729,11 @@ pub fn full_build(eng: &Engine, slot: &VolSlot, rescan: bool) {
 pub fn run(eng: &Arc<Engine>, slot: &Arc<VolSlot>) {
     let (tx, rx): (Sender<WatchMsg>, Receiver<WatchMsg>) = channel();
     let s2 = slot.clone();
-    let _ = std::thread::Builder::new().name(format!("rdcw-{}", &slot.drive[..1])).spawn(move || reader_loop(s2, tx));
+    let live = slot.live_guard();
+    let _ = std::thread::Builder::new().name(format!("rdcw-{}", &slot.drive[..1])).spawn(move || {
+        let _live = live;
+        reader_loop(s2, tx)
+    });
     slot.set_info(|i| i.mode = "walk".into());
     full_build(eng, slot, false);
     let mut st = ApplyState { pending_old: None };
@@ -730,11 +754,15 @@ pub fn run(eng: &Arc<Engine>, slot: &Arc<VolSlot>) {
             msgs.push(m);
         }
         if let Some(pos) = msgs.iter().rposition(|m| matches!(m, WatchMsg::Overflow)) {
-            // не чаще раза в 30 с: копим изменения, потом один полный обход
+            // не чаще раза в 30 с и не чаще, чем раз в четыре длительности обхода (на медленном диске или
+            // огромном томе постоянный пересбор занял бы диск целиком): копим изменения, потом один полный обход
             if let Some(t) = last_rescan {
+                let last_build = Duration::from_millis(slot.info().build_ms);
+                let gap = Duration::from_secs(30).max(last_build * 4).min(Duration::from_secs(1800));
                 let el = t.elapsed();
-                if el < Duration::from_secs(30) {
-                    std::thread::sleep(Duration::from_secs(30) - el);
+                if el < gap {
+                    // ждём, но не мешаем остановке тома (отключение диска, извлечение)
+                    unsafe { WaitForSingleObject(slot.stop_ev.0, (gap - el).as_millis().min(u32::MAX as u128 - 1) as u32) };
                 }
             }
             if slot.stopped() {

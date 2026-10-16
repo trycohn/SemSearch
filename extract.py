@@ -10,6 +10,8 @@ import re
 import numpy as np
 from PIL import Image, ImageOps, ImageStat
 
+import winfs
+
 Image.MAX_IMAGE_PIXELS = 200_000_000
 ANSI = locale.getencoding()  # кодовая страница ANSI системы (cp1251, cp1252…): так сохраняют старые редакторы
 SCAN_MIN_TEXT = 20  # меньше символов текста на странице PDF — это скан (или текст кривыми): в модель идёт картинкой
@@ -48,6 +50,11 @@ def _read_plain(path, cfg):
         raise Skip("слишком большой")
     with open(path, "rb") as f:
         raw = f.read()
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):  # UTF-16 с BOM: «Юникод» в Блокноте, вывод PowerShell 5, CSV из Excel
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
     if b"\x00" in raw[:4096]:
         raise Skip("бинарный")
     try:
@@ -143,7 +150,7 @@ def extract_text(path, cfg):
 
 
 def load_image(path, max_side=768):
-    im = Image.open(path)
+    im = Image.open(winfs.long_path(path))
     if im.format == "JPEG":
         im.draft("RGB", (max_side, max_side))  # декодирует сразу в уменьшенном размере — в разы быстрее
     im = ImageOps.exif_transpose(im)
@@ -198,7 +205,7 @@ def video_frame(path, t, max_side=640):
     """Один кадр в момент t (сек) как PIL.Image."""
     import av
 
-    with av.open(path) as c:
+    with av.open(winfs.long_path(path)) as c:
         s = c.streams.video[0]
         s.thread_type = "AUTO"
         return _frame_at(c, s, t, max_side)
@@ -247,7 +254,7 @@ def media_duration(path):
     import av
 
     try:
-        with av.open(path) as c:
+        with av.open(winfs.long_path(path)) as c:
             if c.duration:
                 return c.duration / 1e6
             s = (c.streams.video or c.streams.audio)[0]
@@ -294,10 +301,19 @@ EXTRACTORS = {
 }
 
 
+def _local_only(path):
+    """Облачная заглушка (OneDrive «только онлайн») не открывается: Windows скачала бы файл целиком. Обход такие
+    пропускает, но файл мог стать заглушкой уже после него («Освободить место»)."""
+    if winfs.is_cloud_placeholder(os.stat(path)):
+        raise OSError("файл только в облаке, на диске его нет")  # перевод — i18n._REASONS_EN
+
+
 def file_hash(path, kind):
     """Хеш содержимого для поиска точных копий. Аудио/видео и очень большие файлы — по размеру,
     началу и концу (читать гигабайты ради копий незачем)."""
     h = hashlib.sha1()
+    path = winfs.long_path(path)
+    _local_only(path)
     size = os.path.getsize(path)
     with open(path, "rb") as f:
         if kind in ("audio", "video") or size > 64 * 2**20:
@@ -324,6 +340,11 @@ def run_job(kind, path, cfg, prio=0):
     """-> (items, err, flag). flag: None; "skip" — пропустить правилом (status 3, причина в err);
     "defer" — отложить в последнюю очередь (prio 1). Верхнего уровня, чтобы запускаться в отдельных процессах."""
     mode = cfg.get("foreign_code", "skip")
+    path = winfs.long_path(path)  # пути длиннее 259 знаков иначе «не найдены» (PDF, документы, фото)
+    try:
+        _local_only(path)
+    except OSError as ex:
+        return None, f"{type(ex).__name__}: {ex}"[:200], None
     if kind == "code" and mode != "normal":
         try:
             with open(path, "rb") as f:

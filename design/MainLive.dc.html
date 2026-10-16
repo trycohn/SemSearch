@@ -25,6 +25,12 @@ a{color:#005fb8}a:hover{color:#003e7a}
 @keyframes splash{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 .splashout{animation:splashout .2s var(--ei) both}
 @keyframes splashout{to{opacity:0;transform:scale(1.04)}}
+.bm{color:#005fb8}.dark .bm{color:#ffffff}
+.orbit{transform-box:view-box;transform-origin:108.04px 106.54px;animation:orbit 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.settle{transform-box:view-box;transform-origin:108.04px 106.54px;animation:settle .5s cubic-bezier(.2,0,0,1) both}
+@keyframes settle{from{transform:rotate(-50deg)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.orbit,.settle{animation:none}}
 .spin{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .winin{animation:winin .32s var(--eo) both}
@@ -58,6 +64,11 @@ a{color:#005fb8}a:hover{color:#003e7a}
 .fly{animation:fly .9s var(--eo) both}
 @keyframes fly{from{opacity:0;transform:translate(-260px,220px) rotate(-10deg)}to{opacity:1;transform:rotate(-3deg)}}
 .mark{animation:pop .25s var(--eo) both}
+.upd{text-decoration:none;transition:background-color .12s}.upd:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)!important}.upd:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.updin{animation:updin .35s var(--eo) both,updring 1.4s var(--eo) .45s 2}
+@keyframes updin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes updring{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}to{box-shadow:0 0 0 8px transparent}}
+@media (prefers-reduced-motion:reduce){.updin{animation:none}}
 @media (max-width:760px){.pane{display:none!important}.stagebox{height:auto!important;min-height:760px}}
 </style>
 </helmet>
@@ -68,6 +79,7 @@ a{color:#005fb8}a:hover{color:#003e7a}
 <button class="demo" onClick="{{replay}}" style="height: 28px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface)">Запуск заново</button>
 <button class="demo" onClick="{{dropDemo}}" style="height: 28px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface)">Перетащить картинку</button>
 <button class="demo" onClick="{{noneDemo}}" style="height: 28px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface)">Ничего не найдено</button>
+<button class="demo" onClick="{{updDemo}}" style="height: 28px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface)">Вышло обновление</button>
 <button class="demo" onClick="{{hideWin}}" style="height: 28px; padding: 0 10px; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface)">Спрятать в трей (Esc)</button>
 <span style="margin-left: 6px">а дальше просто кликайте и печатайте в окне</span>
 </div>
@@ -76,8 +88,8 @@ a{color:#005fb8}a:hover{color:#003e7a}
 
 <sc-if value="{{showSplash}}" hint-placeholder-val="{{false}}">
 <div class="{{splashCls}}" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px">
-<span style="width: 72px; height: 72px; border-radius: 16px; background: var(--accent); color: var(--onAccent); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,.18)"><svg width="44" height="44" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></svg></span>
-<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line2)"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="var(--accent)"></path></svg>Загружаю модель на видеокарту…</span>
+<span class="bm" style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center"><svg width="72" height="72" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" style="overflow: visible"><path d="M28.79 106.54a79.25 79.25 0 1 1 158.5 0a79.25 79.25 0 1 1 -158.5 0ZM59.29 106.54a48.75 48.75 0 1 0 97.5 0a48.75 48.75 0 1 0 -97.5 0Z"></path><g class="orbit"><path d="M172.71 198.46a27.25 27.25 0 1 1 54.5 0a27.25 27.25 0 1 1 -54.5 0Z"></path></g></svg></span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)">Загружаю модель на видеокарту…</span>
 </div>
 </sc-if>
 
@@ -330,6 +342,7 @@ a{color:#005fb8}a:hover{color:#003e7a}
 <sc-if value="{{ixDone}}" hint-placeholder-val="{{false}}"><span class="fadein" style="position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; background: var(--bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><path class="chk" d="M5 12l5 5L20 7"></path></svg>Индекс актуален</span></sc-if>
 </div>
 <span style="flex: 1 1 200px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">В индексе: 3 412 документов · 41 870 файлов кода · 18 204 фото · 1 377 аудио · {{ix}} видео · 2,1 млн имён на C:</span>
+<sc-if value="{{upd}}" hint-placeholder-val="{{false}}"><a class="upd updin" href="Inst-Update.dc.html" title="Вышла версия 0.5, она уже скачана. Нажмите, чтобы обновить" style="flex: none; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 9px; box-sizing: border-box; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 16.5v-9 M8 11.5l4-4 4 4"></path></svg><span>Обновить до 0.5</span></a></sc-if>
 <span style="display: flex; gap: 2px">
 <button class="ghost" onClick="{{togglePause}}" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent"><span style="position: relative; width: 14px; height: 14px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="position: absolute; inset: 0; transition: opacity .2s, transform .25s cubic-bezier(.2,0,0,1); {{icPause}}"><path d="M9 5v14 M15 5v14"></path></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="position: absolute; inset: 0; transition: opacity .2s, transform .25s cubic-bezier(.2,0,0,1); {{icPlay}}"><path d="M8 5l11 7-11 7z"></path></svg></span><span>{{pauseLabel}}</span></button>
 <button class="ghost" aria-label="Настройки" style="width: 32px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10 M18 7h2 M16 5v4 M4 17h4 M12 17h8 M10 15v4"></path></svg></button>
@@ -353,10 +366,12 @@ class Component extends DCLogic {
       if (ix < 612) this.setState({ ix: Math.min(612, ix + 9) });
     }, 900);
   }
-  componentWillUnmount() { this.clearAll(); clearInterval(this._iv); }
+  componentWillUnmount() { this.clearAll(); clearInterval(this._iv); clearTimeout(this._updT); }
   boot() {
     this.clearAll();
-    this.setState({ boot: 'splash', win: 'none', hidden: false, view: 'empty', q: '', tab: 'all', sel: null, sim: null, dropping: false, toast: null, ix: 482, paused: false });
+    this.setState({ boot: 'splash', win: 'none', hidden: false, view: 'empty', q: '', tab: 'all', sel: null, sim: null, dropping: false, toast: null, ix: 482, paused: false, upd: false });
+    clearTimeout(this._updT);
+    this._updT = setTimeout(() => this.setState({ upd: true }), 7000);
     this.T(() => this.setState({ boot: 'out' }), 1300);
     this.T(() => { this.setState({ boot: null, win: 'in' }); this.T(() => this.typeQuery('договор про крышу'), 900); }, 1500);
   }
@@ -588,6 +603,8 @@ class Component extends DCLogic {
       },
       noneDemo: () => { if (st.win !== 'in') return; this.clearAll(); this.typeQuery('отчёт по марсианской ипотеке'); },
       replay: () => this.boot(),
+      upd: !!st.upd,
+      updDemo: () => { clearTimeout(this._updT); this.setState({ upd: false }); this._updT = setTimeout(() => this.setState({ upd: true }), 60); },
       hideWin: () => { if (st.win !== 'in') return; this.setState({ win: 'out' }); this.T(() => this.setState({ win: 'none', hidden: true }), 140); },
       showWin: () => this.setState({ hidden: false, win: 'in' }),
       toast: st.toast || '',
