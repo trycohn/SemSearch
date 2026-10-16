@@ -5,10 +5,10 @@
   </picture>
 </p>
 
-<h3 align="center">Search your computer by meaning and by name</h3>
+<h3 align="center">Search your files in your own words</h3>
 
 <p align="center">
-  Type what you are looking for in your own words, and SemSearch finds the document, photo, video frame or piece of code,
+  Type what you are looking for, and SemSearch finds the document, photo, video frame or piece of code,
   even when those words are not in the file name. Everything runs on your computer.
 </p>
 
