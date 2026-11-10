@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SemSearch film</title>
+<!-- The launch film. Every frame is seek(t): styles are computed from the time alone, so any frame can be
+     rendered on its own and in any order. make_film.py opens film.html?lang=ru|en in headless Chromium. -->
+<style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#f2f5f9}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#1a1a1a;
+  -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;background:#f2f5f9}
+#bg,#hud,#dim{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+.a{position:absolute;left:0;top:0}
+.nw{white-space:nowrap}
+.pool{position:absolute;border-radius:50%}
+
+/* the one shape */
+#S{position:absolute;overflow:hidden;transform-origin:50% 50%}
+.cap{position:absolute;left:0;width:1920px;text-align:center;font-weight:600;letter-spacing:-0.01em;white-space:nowrap}
+.cap span{display:inline-block}
+.chip{position:absolute;display:flex;align-items:center;gap:16px;height:78px;padding:0 30px 0 22px;border-radius:18px;
+  background:#fff;font-size:31px;white-space:nowrap;
+  box-shadow:0 0 0 1px rgba(0,0,0,.06),0 2px 6px rgba(16,42,80,.06),0 14px 36px rgba(16,42,80,.12)}
+.chip img{width:40px;height:40px}
+.key{position:absolute;height:86px;border-radius:16px;background:#fff;border:2px solid #cfcfcf;border-bottom-width:7px;
+  display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:600;white-space:nowrap}
+.ftext{position:absolute;left:92px;top:0;height:96px;line-height:96px;font-size:36px;white-space:nowrap}
+.ph{color:#6b6b6b;font-size:32px}
+.caret{display:inline-block;width:3px;height:44px;background:#005fb8;vertical-align:-9px;margin-left:2px;border-radius:1px}
+.mk{border-radius:5px;background-repeat:no-repeat;background-image:linear-gradient(#ffe28a,#ffe28a);padding:0 3px;margin:0 -3px}
+.row{position:absolute;left:0;width:1120px;height:166px}
+.row .ic{position:absolute;left:32px;top:22px;width:44px;height:44px}
+.row .ti{position:absolute;left:96px;top:14px;font-size:30px;font-weight:600;white-space:nowrap}
+.row .pa{position:absolute;left:96px;top:56px;font-size:22px;color:#5c5c5c;white-space:nowrap}
+.row .da{position:absolute;right:32px;top:20px;font-size:22px;color:#5c5c5c;white-space:nowrap}
+.row .sn{position:absolute;left:96px;top:94px;width:960px;font-size:24px;line-height:34px;color:#333}
+.tag{display:inline-block;font-size:18px;line-height:26px;padding:0 10px;border-radius:7px;background:#e5eef8;color:#005fb8;
+  font-weight:600;margin-right:12px;vertical-align:2px}
+.sel{position:absolute;left:12px;width:1096px;border-radius:12px;background:#eaf1f9}
+.selbar{position:absolute;left:12px;width:4px;border-radius:2px;background:#005fb8}
+.meta{position:absolute;left:640px;top:128px;width:448px}
+.meta .nm{font-size:33px;font-weight:600;line-height:40px;word-break:break-all}
+.meta .ln{font-size:24px;color:#5c5c5c;margin-top:10px;line-height:32px}
+.btn{position:absolute;left:640px;width:448px;height:58px;border-radius:10px;background:#005fb8;color:#fff;font-size:24px;
+  font-weight:600;display:flex;align-items:center;justify-content:space-between;padding:0 22px}
+.btn small{font-size:19px;font-weight:400;opacity:.85}
+.media{position:absolute;left:32px;top:128px;border-radius:12px;overflow:hidden;background:#dde3ea}
+.media img{display:block;width:100%;height:100%}
+.code{position:absolute;left:32px;top:128px;width:576px;height:408px;border-radius:12px;background:#fafafa;
+  box-shadow:inset 0 0 0 1px #e1e1e1;overflow:hidden;font-family:'Cascadia Mono',Consolas,monospace;font-size:19.5px}
+.code .ln{position:absolute;left:0;width:576px;height:44px;line-height:44px;padding-left:22px;white-space:pre}
+.code .hl{position:absolute;left:8px;width:560px;height:44px;border-radius:8px;background:#e3edf8}
+.kw{color:#005fb8}.nu{color:#a35a00}.fn{color:#6a3fbf}
+.track{position:absolute;height:8px;border-radius:4px;background:#d9dee5}
+.fill{position:absolute;height:8px;border-radius:4px;background:#005fb8}
+.knob{position:absolute;width:26px;height:26px;border-radius:13px;background:#005fb8;box-shadow:0 0 0 4px #fff}
+.tile{position:absolute;width:200px;height:140px;border-radius:14px;background:#fff;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(0,0,0,.06),0 6px 18px rgba(16,42,80,.08)}
+.tile img.th{width:200px;height:140px;display:block}
+.tile img.ic{position:absolute;left:18px;top:18px;width:40px;height:40px}
+.bar{position:absolute;height:10px;border-radius:5px;background:#e3e6ea}
+.odo{position:absolute;left:0;width:1920px;top:330px;height:210px;display:flex;justify-content:center;
+  font-size:190px;font-weight:600;color:#005fb8;line-height:210px;letter-spacing:-0.02em}
+.slot{position:relative;height:210px;clip-path:inset(0 -80px)}
+.strip{position:relative;display:flex;flex-direction:column}
+.strip span{height:210px;display:block;text-align:center}
+.sep{display:inline-block}
+.pill{position:absolute;height:84px;border-radius:42px;display:flex;align-items:center;justify-content:center;
+  font-size:36px;font-weight:600;white-space:nowrap;padding:0 40px}
+.fact{position:absolute;left:0;top:0;height:156px;line-height:156px;font-size:76px;font-weight:600;white-space:nowrap;
+  text-align:center}
+.letter{position:absolute;left:0;top:0;overflow:visible}
+
+/* 9:16 (film.html?fmt=v): the stage turns upright, text wraps, the panel stacks media over its details */
+html.v,html.v body,.v #stage,.v #bg,.v #hud,.v #dim{width:1080px;height:1920px}
+.v .cap{width:1080px;white-space:normal;padding:0 70px;line-height:1.12;text-wrap:balance}
+.v .chip{height:92px;font-size:36px;gap:18px;padding:0 32px 0 24px;border-radius:20px}
+.v .chip img{width:46px;height:46px}
+.v .ftext{left:96px;height:120px;line-height:120px;font-size:44px}
+.v .ph{font-size:34px;width:850px;overflow:hidden;text-overflow:ellipsis}
+.v .caret{height:52px;vertical-align:-11px}
+.v .row{width:980px;height:230px}
+.v .row .ic{width:48px;height:48px}
+.v .row .ti{font-size:34px;top:16px}
+.v .row .pa{font-size:25px;top:62px}
+.v .row .da{font-size:25px}
+.v .row .sn{top:104px;width:852px;font-size:27px;line-height:38px}
+.v .tag{font-size:21px;line-height:30px}
+.v .sel{width:956px}
+.v .meta{left:32px;width:916px}
+.v .meta .nm{font-size:38px;line-height:46px}
+.v .meta .ln{font-size:27px;line-height:36px;margin-top:6px}
+.v .btn{display:none}
+.v .code{font-size:23px}
+.v .code .ln{width:916px;height:50px;line-height:50px;padding-left:28px}
+.v .code .hl{width:900px;height:50px}
+.v .odo{width:1080px;top:740px;height:190px;font-size:170px;line-height:190px}
+.v .slot{height:190px}
+.v .strip span{height:190px}
+.v .pill{font-size:40px;height:92px;border-radius:46px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="world"></div>
+  <div id="dim"></div>
+  <div id="hud"></div>
+</div>
+<script src="film.js"></script>
+</body>
+</html>
