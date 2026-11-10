@@ -10,7 +10,8 @@ def main():
     cols = int(sys.argv[3]) if len(sys.argv) > 3 else 4
     tw = int(sys.argv[4]) if len(sys.argv) > 4 else 640
     files = sorted(f for f in os.listdir(src) if f.endswith('.png'))
-    th = tw * 9 // 16
+    with Image.open(os.path.join(src, files[0])) as first:
+        th = tw * first.height // first.width
     rows = (len(files) + cols - 1) // cols
     sheet = Image.new('RGB', (cols * (tw + 8) + 8, rows * (th + 30) + 8), '#888')
     d = ImageDraw.Draw(sheet)

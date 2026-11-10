@@ -4,6 +4,7 @@
 //        subframes from..to-1 (sub per frame, centred on the frame time) as s<index>.png; stops writing ahead
 //        while more than 1200 PNGs wait in outdir, so make_film.py can blend and delete them as they come.
 //   node render.mjs cues   <lang> <out.json>                    the film's sound cues and duration
+// <lang> is ru or en; ru:v / en:v render the upright 1080x1920 cut for stories and reels.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,11 +27,12 @@ function findBrowser() {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 class Page {
-  static async open(lang) {
+  static async open(token) {
+    const [lang, fmt = 'h'] = token.split(':'), W = fmt === 'v' ? 1080 : 1920, H = fmt === 'v' ? 1920 : 1080;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ssfilm-'));
     const proc = spawn(findBrowser(), ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dir}`,
       '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', '--mute-audio', '--allow-file-access-from-files',
-      '--force-device-scale-factor=1', '--window-size=1920,1080', '--disable-background-timer-throttling',
+      '--force-device-scale-factor=1', `--window-size=${W},${H}`, '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding', 'about:blank'], {stdio: 'ignore'});
     let port = null;
     for (let i = 0; i < 200 && !port; i++) {
@@ -46,8 +48,8 @@ class Page {
     const p = new Page(proc, dir, list.find(t => t.type === 'page').webSocketDebuggerUrl);
     await p.connect();
     await p.send('Page.enable');
-    await p.send('Emulation.setDeviceMetricsOverride', {width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false});
-    const url = pathToFileURL(path.join(HERE, 'film.html')).href + `?lang=${lang}`;
+    await p.send('Emulation.setDeviceMetricsOverride', {width: W, height: H, deviceScaleFactor: 1, mobile: false});
+    const url = pathToFileURL(path.join(HERE, 'film.html')).href + `?lang=${lang}&fmt=${fmt}`;
     await p.send('Page.navigate', {url});
     for (let i = 0; i < 400; i++) {
       const r = await p.eval('window.READY === true');

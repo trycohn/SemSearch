@@ -1,12 +1,14 @@
 """Builds the SemSearch launch film: render -> motion blur -> H.264 60 fps -> soundtrack -> checks.
 
-    python tools/film/make_film.py [--lang ru,en] [--sub 4] [--workers 3] [--crf 16] [--audio-only]
+    python tools/film/make_film.py [--lang ru,en] [--fmt h|v] [--sub 4] [--workers 3] [--crf 16] [--audio-only]
+
+--fmt v makes the upright 1080x1920 cut for stories and reels (files get a -vertical suffix).
 
 --audio-only keeps the picture of the existing out/semsearch-<lang>.mp4 and only rebuilds and remuxes the sound.
 
 Needs Node 20+, Edge or Chrome, and the project's .venv (numpy, scipy, Pillow, PyAV with libx264).
 For each language it writes to tools/film/out/:
-  semsearch-<lang>.mp4        1920x1080, 60 fps, H.264 + AAC
+  semsearch-<lang>.mp4        1920x1080, 60 fps, H.264 + AAC (semsearch-<lang>-vertical.mp4: 1080x1920)
   storyboard-<lang>.png       one frame per second, taken from the MP4
   poster-<lang>.png           the end card
 and prints the loudness and the biggest frame-to-frame jumps (cuts there should only be intended hits).
@@ -50,14 +52,15 @@ def wait_for(path, proc):
         time.sleep(0.02)
 
 
-def encode_video(lang, nframes, sub, workers, crf, dst):
-    tmp = os.path.join(OUT, 'tmp-' + lang)
+def encode_video(lang, nframes, sub, workers, crf, dst, fmt='h'):
+    tmp = os.path.join(OUT, 'tmp-%s-%s' % (lang, fmt))
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
-    proc = node('frames', lang, tmp, '0', str(nframes * sub), str(workers), str(sub))
+    proc = node('frames', '%s:%s' % (lang, fmt), tmp, '0', str(nframes * sub), str(workers), str(sub))
     out = av.open(dst, 'w')
     st = out.add_stream('libx264', rate=FPS)
-    st.width, st.height, st.pix_fmt = 1920, 1080, 'yuv420p'
+    st.width, st.height = (1080, 1920) if fmt == 'v' else (1920, 1080)
+    st.pix_fmt = 'yuv420p'
     st.options = {'crf': str(crf), 'preset': 'medium', 'x264-params': 'colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv'}
     st.codec_context.color_range = 1          # MPEG (limited)
     st.codec_context.colorspace = 1           # BT.709
@@ -120,7 +123,7 @@ def mux(video, wav, dst):
     ain.close()
 
 
-def check(mp4, lang):
+def check(mp4, name):
     """Storyboard (1 per second), the poster, and a frame-difference scan of the finished MP4."""
     c = av.open(mp4)
     prev, diffs, shots = None, [], []
@@ -132,14 +135,14 @@ def check(mp4, lang):
         if i % FPS == 30:
             shots.append(fr.to_image())
         if i == int(28.5 * FPS):
-            fr.to_image().save(os.path.join(OUT, 'poster-%s.png' % lang))
+            fr.to_image().save(os.path.join(OUT, 'poster-%s.png' % name))
     c.close()
-    cols, tw, th = 6, 480, 270
+    cols, tw, th = (10, 216, 384) if shots and shots[0].height > shots[0].width else (6, 480, 270)
     rows = (len(shots) + cols - 1) // cols
     sheet = Image.new('RGB', (cols * tw, rows * th), 'white')
     for k, im in enumerate(shots):
         sheet.paste(im.resize((tw, th), Image.LANCZOS), ((k % cols) * tw, (k // cols) * th))
-    sheet.save(os.path.join(OUT, 'storyboard-%s.png' % lang))
+    sheet.save(os.path.join(OUT, 'storyboard-%s.png' % name))
     top = sorted(diffs, reverse=True)[:8]
     print('  biggest frame jumps: ' + ', '.join('%.2fs %.1f' % (i / FPS, d) for d, i in top))
     return len(diffs) + 1
@@ -148,6 +151,7 @@ def check(mp4, lang):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--lang', default='ru,en')
+    ap.add_argument('--fmt', default='h', choices=['h', 'v'])
     ap.add_argument('--sub', type=int, default=4)
     ap.add_argument('--workers', type=int, default=3)
     ap.add_argument('--crf', type=int, default=16)
@@ -161,16 +165,17 @@ def main():
         meta = json.load(open(cues, encoding='utf-8'))
         wav = os.path.join(OUT, 'mix-%s.wav' % lang)
         subprocess.check_call([sys.executable, os.path.join(HERE, 'music.py'), cues, wav])
-        silent = os.path.join(OUT, 'video-%s.mp4' % lang)
-        final = os.path.join(OUT, 'semsearch-%s.mp4' % lang)
+        name = lang + ('-vertical' if a.fmt == 'v' else '')
+        silent = os.path.join(OUT, 'video-%s.mp4' % name)
+        final = os.path.join(OUT, 'semsearch-%s.mp4' % name)
         t0 = time.time()
         if a.audio_only:
             os.replace(final, silent)               # mux() takes only the video stream from it
         else:
-            encode_video(lang, int(round(meta['dur'] * FPS)), a.sub, a.workers, a.crf, silent)
+            encode_video(lang, int(round(meta['dur'] * FPS)), a.sub, a.workers, a.crf, silent, a.fmt)
         mux(silent, wav, final)
         os.remove(silent)
-        n = check(final, lang)
+        n = check(final, name)
         print('%s: %s  %d frames  %.1f MB  %.0fs' % (lang, final, n, os.path.getsize(final) / 1e6, time.time() - t0))
 
 

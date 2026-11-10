@@ -71,6 +71,43 @@ const STR = {
 };
 const L = STR[LANG];
 
+/* ---------------------------------------------------------------- format: 16:9, or 9:16 for stories and reels */
+
+// ?fmt=v lays every scene out again for 1080x1920: same timing and sound, the panel stacks media over its details,
+// and text stays clear of the bands the Stories / Reels UI covers (about 250 px at the top, 420 px at the bottom).
+const VERT = Q.get('fmt') === 'v';
+if (VERT) document.documentElement.classList.add('v');
+const SW = VERT ? 1080 : 1920, SH = VERT ? 1920 : 1080;
+const G = VERT ? {
+  PW: 980, FH: 120, rad: 28, icon: 52, RH: 230, MW: 916, MT: 152, PH: 687, VH: 515, CH: 432, LNH: 50,
+  hook: [100, 250], capB: [84, 270], capC: [76, 250], capD: [80, 270],
+  chips: [[-200, -320], [150, -205], [-220, -90], [250, 80], [-250, 170], [110, 290], [-250, 400], [190, 470]],
+  keysY: 175, enter: [340, 100], wall: [6, 13], odoLH: 190, odoLabelTop: 950, speedY: [1060, 1170],
+  factFont: 74, factH: 156, factPad: 150, LS: 0.78,
+  pools: [[1300, 1300, -500, -300], [1200, 1200, 300, 1100]],
+} : {
+  PW: 1120, FH: 96, rad: 24, icon: 44, RH: 166, MW: 576, MT: 128, PH: 400, VH: 324, CH: 408, LNH: 44,
+  hook: [84, 118], capB: [72, 118], capC: [66, 48], capD: [66, 48],
+  chips: [[-560, -95], [450, -190], [-430, 140], [500, 85], [-110, 265], [380, 260], [-300, -215], [120, -105]],
+  keysY: 196, enter: [410, 84], wall: [13, 10], odoLH: 210, odoLabelTop: 560, speedY: [650, 650],
+  factFont: 76, factH: 156, factPad: 190, LS: 0.9,
+  pools: [[1500, 900, -260, -380], [1300, 820, 1180, 560]],
+};
+// panel heights and where the details start in each panel
+const PNL = VERT ? {
+  C: G.FH + 16 + 3 * G.RH + 14,
+  photo: G.MT + G.PH + 224, video: G.MT + G.VH + 288, code: G.MT + G.CH + 224,
+  meta: {photo: G.MT + G.PH + 28, video: G.MT + G.VH + 92, code: G.MT + G.CH + 28}, trackY: G.MT + G.VH + 34,
+} : {C: 640, photo: 600, video: 600, code: 600, meta: {photo: 128, video: 128, code: 128}, trackY: 488};
+// camera framings: [y, zoom] or zoom
+const CF = VERT ? {
+  a0: 1.04, bar: 1.0, type: 1.06, open: [358, 1.0], push: [260, 1.08], shut: 1.06, d: [470, 1.0], wall: 0.45,
+  back: 1.0, dot: 1.5, end: [1.0, 1.04],
+} : {
+  a0: 1.08, bar: 1.12, type: 1.42, open: [262, 1.3], push: [150, 1.58], shut: 1.42, d: [246, 1.3], wall: 0.34,
+  back: 1.15, dot: 1.7, end: [1.12, 1.17],
+};
+
 /* ---------------------------------------------------------------- springs and helpers */
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -126,8 +163,8 @@ const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const bg = document.getElementById('bg'), world = document.getElementById('world');
 const hud = document.getElementById('hud'), dim = document.getElementById('dim');
 const pools = [
-  [el('div', 'pool', bg), 1500, 900, 'rgba(214,230,248,1)', -260, -380],
-  [el('div', 'pool', bg), 1300, 820, 'rgba(223,233,246,1)', 1180, 560],
+  [el('div', 'pool', bg), G.pools[0][0], G.pools[0][1], 'rgba(214,230,248,1)', G.pools[0][2], G.pools[0][3]],
+  [el('div', 'pool', bg), G.pools[1][0], G.pools[1][1], 'rgba(223,233,246,1)', G.pools[1][2], G.pools[1][3]],
 ];
 for (const [p, w, h, c] of pools) {
   p.style.width = w + 'px'; p.style.height = h + 'px';
@@ -135,14 +172,14 @@ for (const [p, w, h, c] of pools) {
 }
 dim.style.background = '#f2f5f9';
 
-const M = {dur: DUR, fps: 60, cues: [], lang: LANG};
+const M = {dur: DUR, fps: 60, cues: [], lang: LANG, w: SW, h: SH};
 const cue = (t, k, v = 0) => M.cues.push({t: +t.toFixed(4), k, v});
 
 /* ---------------------------------------------------------------- camera */
 
 const CAM = {x: new Track(0), y: new Track(0), lz: new Track(Math.log(1.0))};
 function camTo(t, x, y, z, sp = SP.cam) { CAM.x.to(t, x, sp); CAM.y.to(t, y, sp); CAM.lz.to(t, Math.log(z), sp); }
-CAM.lz.to(0, Math.log(1.08), {w: 1.1, z: 1});
+CAM.lz.to(0, Math.log(CF.a0), {w: 1.1, z: 1});
 
 /* ---------------------------------------------------------------- the one shape */
 
@@ -170,17 +207,17 @@ cue(0.02, 'blip');
 const birth = t => stepR(t - 0.0, {w: 18, z: 0.7});
 
 // dot -> search field
-shapeTo(T.bar, -560, -48, 560, 48, 24, {w: 15, z: 0.82});
+shapeTo(T.bar, -G.PW / 2, -G.FH / 2, G.PW / 2, G.FH / 2, G.rad, {w: 15, z: 0.82});
 S.col.to(T.bar + 0.05, WHITE, SP.col);
 S.sh.to(T.bar + 0.05, 1, SP.col);
 S.bd.to(T.bar + 0.05, 1, SP.col);
 cue(T.bar, 'morph');
 // field -> result list
-S.B.to(T.enter1, 592, SP.open);
-S.B.to(T.shut1, 48, SP.shut);
+S.B.to(T.enter1, -G.FH / 2 + PNL.C, SP.open);
+S.B.to(T.shut1, G.FH / 2, SP.shut);
 cue(T.shut1, 'collapse');
 // photo / video / code panels
-for (const e of [T.e2, T.e3, T.e4]) { if (e === T.e2) S.B.to(e, 552, SP.open); S.punch.push([e, 0.012]); }
+for (const [e, k] of [[T.e2, 'photo'], [T.e3, 'video'], [T.e4, 'code']]) { S.B.to(e, -G.FH / 2 + PNL[k], SP.open); S.punch.push([e, 0.012]); }
 // the panel becomes one tile in a wall of files
 shapeTo(T.pull, -100, -70, 100, 70, 14, {w: 12, z: 0.9});
 cue(T.pull, 'pull');
@@ -191,10 +228,14 @@ const FACTCOL = [[BLUE, WHITE], [INK, WHITE], [WHITE, INK], [BLUE, WHITE]];
 /* ---------------------------------------------------------------- scene A: names nobody remembers */
 
 const capA = el('div', 'cap', hud);
-capA.style.top = '118px'; capA.style.fontSize = '84px';
-const hookWords = L.hook.split(' ').map((w, i, a) => el('span', '', capA, esc(w) + (i < a.length - 1 ? '&nbsp;' : '')));
+capA.style.top = G.hook[1] + 'px'; capA.style.fontSize = G.hook[0] + 'px';
+const hookWords = L.hook.split(' ').map((w, i, a) => {
+  const sp = el('span', '', capA, esc(w));
+  if (i < a.length - 1) capA.appendChild(document.createTextNode(' '));
+  return sp;
+});
 
-const CHIPPOS = [[-560, -95], [450, -190], [-430, 140], [500, 85], [-110, 265], [380, 260], [-300, -215], [120, -105]];
+const CHIPPOS = G.chips;
 const TILT = [-3, 2.5, 2, -2.5, -1.5, 3, 1.8, -2];
 const chips = L.chips.map(([ic, name], i) => {
   const c = el('div', 'chip', world, `<img src="${ICON(ic)}"><span>${esc(name)}</span>`);
@@ -213,17 +254,17 @@ T.keys.forEach(t => cue(t, 'key'));
 const enterKey = el('div', 'key', world, 'Enter'); enterKey.style.width = '150px';
 
 const capB = el('div', 'cap', hud, esc(L.describe));
-capB.style.top = '118px'; capB.style.fontSize = '72px';
+capB.style.top = G.capB[1] + 'px'; capB.style.fontSize = G.capB[0] + 'px';
 
 // field row inside the shape
-const fIcon = el('div', 'a', Sel, `<svg width="44" height="44" viewBox="0 0 256 256"><g fill="${BLUE}">
+const fIcon = el('div', 'a', Sel, `<svg width="${G.icon}" height="${G.icon}" viewBox="0 0 256 256"><g fill="${BLUE}">
   <path d="M28.04 106.54a80 80 0 1 1 160 0a80 80 0 1 1 -160 0ZM60.04 106.54a48 48 0 1 0 96 0a48 48 0 1 0 -96 0Z"/>
   <path d="M171.96 198.46a28 28 0 1 1 56 0a28 28 0 1 1 -56 0Z"/></g></svg>`);
-fIcon.style.left = '30px'; fIcon.style.top = '26px';
+fIcon.style.left = '30px'; fIcon.style.top = (G.FH - G.icon) / 2 + 'px';
 const fPh = el('div', 'ftext ph', Sel, esc(L.ph));
 const fText = el('div', 'ftext', Sel);
-const uline = el('div', 'a', Sel); uline.style.cssText += 'top:93px;height:3px;background:' + BLUE;
-const divider = el('div', 'a', Sel); divider.style.cssText += 'top:96px;height:1px;width:1120px;background:#e5e5e5';
+const uline = el('div', 'a', Sel); uline.style.cssText += `top:${G.FH - 3}px;height:3px;background:${BLUE}`;
+const divider = el('div', 'a', Sel); divider.style.cssText += `top:${G.FH}px;height:1px;width:${G.PW}px;background:#e5e5e5`;
 
 // keystroke times: the first query accelerates from 16ths to 32nds over a snare build, the rest run on 32nds
 function slots(n, t0, span, grid) {
@@ -250,18 +291,19 @@ for (const q of QUERIES) q.ts.forEach((t, k) => cue(t, 'type', k));
 const selBg = el('div', 'sel', Sel), selBar = el('div', 'selbar', Sel);
 const rows = L.rows.map((r, i) => {
   const e = el('div', 'row', Sel);
-  e.style.top = (112 + i * 166) + 'px';
+  e.style.top = (G.FH + 16 + i * G.RH) + 'px';
   e.innerHTML = `<img class="ic" src="${ICON(r.ic)}"><div class="ti">${esc(r.ti)}</div><div class="pa">${esc(r.pa)}</div>
     <div class="da">${esc(r.da)}</div><div class="sn"><span class="tag">${esc(r.tag)}</span>${esc(r.sn[0])}` +
     (r.sn[1] ? `<span class="mk">${esc(r.sn[1])}</span>${esc(r.sn[2])}` : '') + '</div>';
   return e;
 });
 const snipMark = rows[0].querySelector('.mk');
-selBg.style.top = '106px'; selBg.style.height = '170px'; selBar.style.top = '155px'; selBar.style.height = '72px';
+selBg.style.top = G.FH + 10 + 'px'; selBg.style.height = G.RH + 4 + 'px';
+selBar.style.top = G.FH + 10 + (G.RH + 4) / 2 - 36 + 'px'; selBar.style.height = '72px';
 [0, 1, 2].forEach(i => cue(T.enter1 + 0.1 + i * 0.08, 'row', i));
 cue(T.push + 0.15, 'mark');
 const capC = el('div', 'cap', hud, esc(L.meaning));
-capC.style.top = '48px'; capC.style.fontSize = '66px';
+capC.style.top = G.capC[1] + 'px'; capC.style.fontSize = G.capC[0] + 'px';
 cue(T.meaning, 'cap');
 
 /* ---------------------------------------------------------------- scene D: photos, video frames, code */
@@ -321,26 +363,30 @@ function btn(parent) {
   const b = el('div', 'btn', parent, `<span>${esc(L.open)}</span><small>Enter</small>`);
   b.style.top = '478px'; return b;
 }
+function meta(parent, m, k) { const e = el('div', 'meta', parent, metaHTML(m)); e.style.top = PNL.meta[k] + 'px'; return e; }
+function media(parent, html, w, h) {
+  const e = el('div', 'media', parent, html);
+  e.style.top = G.MT + 'px'; e.style.width = w + 'px'; e.style.height = h + 'px'; return e;
+}
 // photo
 const gPhoto = el('div', 'a', Sel);
-const phMedia = el('div', 'media', gPhoto, `<img src="${CATS[0]}">`);
-phMedia.style.width = '576px'; phMedia.style.height = '400px';
-el('div', 'meta', gPhoto, metaHTML(L.photo)); btn(gPhoto);
+const phMedia = media(gPhoto, `<img src="${CATS[0]}">`, G.MW, G.PH);
+meta(gPhoto, L.photo, 'photo'); btn(gPhoto);
 // video
 const gVideo = el('div', 'a', Sel);
-const vMedia = el('div', 'media', gVideo, `<img src="${FW}">`);
-vMedia.style.width = '576px'; vMedia.style.height = '324px'; vMedia.style.background = '#1c2443';
+const vMedia = media(gVideo, `<img src="${FW}">`, G.MW, G.VH); vMedia.style.background = '#1c2443';
 const vImg = vMedia.querySelector('img');
 const vTag = el('div', 'a', vMedia, esc(L.frame));
-vTag.style.cssText += 'left:16px;top:270px;padding:4px 12px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font-size:20px;font-weight:600';
+vTag.style.cssText += `left:16px;top:${G.VH - 54}px;padding:4px 12px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font-size:${VERT ? 26 : 20}px;font-weight:600`;
 const vTrack = el('div', 'track', gVideo), vFill = el('div', 'fill', gVideo), vKnob = el('div', 'knob', gVideo);
 const vMark = el('div', 'a', gVideo);
-vTrack.style.left = '32px'; vTrack.style.top = '488px'; vTrack.style.width = '576px';
-vFill.style.left = '32px'; vFill.style.top = '488px';
-vMark.style.cssText += `top:478px;width:4px;height:28px;border-radius:2px;background:${BLUE}`;
-const vTime = el('div', 'a', gVideo); vTime.style.cssText += 'left:32px;top:510px;font-size:20px;color:#5c5c5c;white-space:nowrap';
+vTrack.style.left = '32px'; vTrack.style.top = PNL.trackY + 'px'; vTrack.style.width = G.MW + 'px';
+vFill.style.left = '32px'; vFill.style.top = PNL.trackY + 'px';
+vMark.style.cssText += `top:${PNL.trackY - 10}px;width:4px;height:28px;border-radius:2px;background:${BLUE}`;
+const vTime = el('div', 'a', gVideo);
+vTime.style.cssText += `left:32px;top:${PNL.trackY + 22}px;font-size:${VERT ? 24 : 20}px;color:#5c5c5c;white-space:nowrap`;
 const VMATCH = 102 / 252;
-el('div', 'meta', gVideo, metaHTML(L.video)); btn(gVideo);
+meta(gVideo, L.video, 'video'); btn(gVideo);
 cue(T.e3 + 0.12, 'scrub');
 // code
 const gCode = el('div', 'a', Sel);
@@ -355,12 +401,13 @@ const CODE = [
   ['    <span class="kw">raise</span> FetchError(url)', 0],
 ];
 const codeBox = el('div', 'code', gCode);
-const codeHL = el('div', 'hl', codeBox); codeHL.style.top = (16 + 44) + 'px'; codeHL.style.height = (44 * 4) + 'px';
-CODE.forEach(([h], i) => { const ln = el('div', 'ln', codeBox, h); ln.style.top = (16 + i * 44) + 'px'; });
-el('div', 'meta', gCode, metaHTML(L.code)); btn(gCode);
+codeBox.style.top = G.MT + 'px'; codeBox.style.width = G.MW + 'px'; codeBox.style.height = G.CH + 'px';
+const codeHL = el('div', 'hl', codeBox); codeHL.style.top = (16 + G.LNH) + 'px'; codeHL.style.height = (G.LNH * 4) + 'px';
+CODE.forEach(([h], i) => { const ln = el('div', 'ln', codeBox, h); ln.style.top = (16 + i * G.LNH) + 'px'; });
+meta(gCode, L.code, 'code'); btn(gCode);
 
 const capD = [L.capPhoto, L.capVideo, L.capCode].map(s => {
-  const c = el('div', 'cap', hud, esc(s)); c.style.top = '48px'; c.style.fontSize = '66px'; return c;
+  const c = el('div', 'cap', hud, esc(s)); c.style.top = G.capD[1] + 'px'; c.style.fontSize = G.capD[0] + 'px'; return c;
 });
 
 /* ---------------------------------------------------------------- scene E: a wall of files, real numbers */
@@ -369,7 +416,7 @@ const wall = document.createElement('div'); wall.className = 'a'; world.insertBe
 const TILES = [];
 const rnd = (i, j, s) => { const x = Math.sin(i * 127.1 + j * 311.7 + s * 74.7) * 43758.5453; return x - Math.floor(x); };
 const DOCIC = ['word', 'pdf', 'text', 'table', 'slides', 'word', 'pdf'];
-for (let j = -10; j <= 10; j++) for (let i = -13; i <= 13; i++) {
+for (let j = -G.wall[1]; j <= G.wall[1]; j++) for (let i = -G.wall[0]; i <= G.wall[0]; i++) {
   if (i === 0 && j === 0) continue;
   const x = i * 224, y = j * 164, r = rnd(i, j, 1);
   const tl = el('div', 'tile', wall);
@@ -406,7 +453,7 @@ for (let p = DIG - 1; p >= 0; p--) {
   if (p % 3 === 0 && p > 0) el('div', 'sep', odo, L.odoSep === ',' ? ',' : '&#8239;&#8239;');
 }
 const odoLabel = el('div', 'cap', hud, esc(L.odoLabel));
-odoLabel.style.top = '560px'; odoLabel.style.fontSize = '42px'; odoLabel.style.fontWeight = '400'; odoLabel.style.color = '#3a3a3a';
+odoLabel.style.top = G.odoLabelTop + 'px'; odoLabel.style.fontSize = '42px'; odoLabel.style.fontWeight = '400'; odoLabel.style.color = '#3a3a3a';
 const speedPills = L.speed.map(([a, b]) => el('div', 'pill', hud,
   `<span style="color:#5c5c5c;font-weight:400">${esc(a)}</span><span style="color:#c4c4c4;margin:0 14px">·</span><span style="color:${BLUE}">${esc(b)}</span>`));
 for (const p of speedPills) { p.style.background = WHITE; p.style.boxShadow = '0 0 0 1px rgba(0,0,0,.06),0 10px 30px rgba(16,42,80,.12)'; }
@@ -415,12 +462,16 @@ cue(T.back, 'zoomin');
 
 /* ---------------------------------------------------------------- scene F: facts */
 
-const facts = L.facts.map(s => el('div', 'fact', Sel, esc(s)));
+const facts = L.facts.map(s => {
+  const f = el('div', 'fact', Sel, esc(s));
+  f.style.fontSize = G.factFont + 'px'; f.style.height = f.style.lineHeight = G.factH + 'px';
+  return f;
+});
 T.facts.forEach((t, i) => cue(t, 'fact', i));
 
 /* ---------------------------------------------------------------- scene G: the logo */
 
-const LS = 0.9;                                   // lockup scale: horizontal-blue.svg drawn at 0.9
+const LS = G.LS;                                  // lockup scale: horizontal-blue.svg drawn at 0.9 (0.78 upright)
 const DOT = 24.675 * LS;                          // dot radius
 const X0 = -151.505 * LS, Y0 = -151.51 * LS;      // lockup origin, so that the dot sits at world (0, 0)
 const ring = el('div', 'a', world, `<svg width="${141 * LS}" height="${141 * LS}" viewBox="0 0 141 141"><path fill="${BLUE}" d="M0 70.5a70.5 70.5 0 1 1 141 0a70.5 70.5 0 1 1 -141 0ZM28.2 70.5a42.3 42.3 0 1 0 84.6 0a42.3 42.3 0 1 0 -84.6 0Z"/></svg>`);
@@ -446,7 +497,7 @@ const letters = WM.map(ps => {
   return e;
 });
 const slogan = el('div', 'a nw', world, esc(L.slogan));
-slogan.style.fontSize = '50px'; slogan.style.color = '#3a3a3a';
+slogan.style.fontSize = Math.round(50 * LS / 0.9) + 'px'; slogan.style.color = '#3a3a3a';
 const LOCKX = X0 + VBW * LS / 2, LOCKB = Y0 + VBH * LS;
 cue(T.dot, 'suck2');
 cue(T.logo, 'logo');
@@ -463,9 +514,9 @@ function layout() {
   const fw = facts.map(f => f.offsetWidth);
   let prevW = 200;
   T.facts.forEach((t, i) => {
-    const w = fw[i] + 190, issue = i === 0 ? T.back + 0.08 : t - 0.12;
+    const w = fw[i] + G.factPad, issue = i === 0 ? T.back + 0.08 : t - 0.12;
     const spL = i === 0 ? SP.ui : (w > prevW ? SP.trail : SP.lead), spR = i === 0 ? SP.ui : (w > prevW ? SP.lead : SP.trail);
-    shapeTo(issue, -w / 2, -78, w / 2, 78, 78, spL, spR);
+    shapeTo(issue, -w / 2, -G.factH / 2, w / 2, G.factH / 2, G.factH / 2, spL, spR);
     S.col.to(t - 0.04, FACTCOL[i][0], SP.snap);
     S.bd.to(t - 0.04, FACTCOL[i][0] === WHITE ? 1 : 0, SP.snap);
     if (i === 0) S.sh.to(issue, 1, SP.col);
@@ -479,24 +530,25 @@ function layout() {
   S.bd.to(T.dot, 0, SP.col);
   S.sh.to(T.dot, 0, SP.col);
   S.punch.push([T.logo, 0.14]);
-  // speed pills side by side
+  // speed pills side by side, or one under the other when upright
   const pw = speedPills.map(p => p.offsetWidth), gap = 28, tot = pw[0] + pw[1] + gap;
-  speedPills[0]._x = 960 - tot / 2; speedPills[1]._x = 960 - tot / 2 + pw[0] + gap;
+  if (VERT) speedPills.forEach((p, i) => { p._x = (SW - pw[i]) / 2; p._y = G.speedY[i]; });
+  else { speedPills[0]._x = 960 - tot / 2; speedPills[1]._x = 960 - tot / 2 + pw[0] + gap; speedPills.forEach(p => { p._y = 650; }); }
   // slogan centred under the wordmark
   slogan._w = slogan.offsetWidth;
   // the first query's mark, measured in the field
   // cameras
-  camTo(T.bar - 0.05, 0, 0, 1.12, {w: 6, z: 1});
-  CAM.lz.to(T.type1 - 0.1, Math.log(1.42), {w: 2.6, z: 1});
-  camTo(T.enter1 - 0.05, 0, 262, 1.3, {w: 9, z: 1});
-  camTo(T.push, 0, 150, 1.58, {w: 6.5, z: 1});
-  camTo(T.shut1, 0, 0, 1.42, {w: 8, z: 1});
-  camTo(T.e2 - 0.05, 0, 246, 1.3, {w: 9, z: 1});
-  camTo(T.pull + 0.03, 0, 0, 0.34, {w: 3.4, z: 1});
-  camTo(T.back - 0.02, 0, 0, 1.15, {w: 6.5, z: 1});
-  camTo(T.dot, 0, 0, 1.7, {w: 8, z: 1});
-  camTo(T.glide, LOCKX, (Y0 + LOCKB + 150) / 2 - 10, 1.12, {w: 4.6, z: 1});
-  CAM.lz.to(T.slogan + 0.3, Math.log(1.17), {w: 0.9, z: 1});     // the end card keeps breathing
+  camTo(T.bar - 0.05, 0, 0, CF.bar, {w: 6, z: 1});
+  CAM.lz.to(T.type1 - 0.1, Math.log(CF.type), {w: 2.6, z: 1});
+  camTo(T.enter1 - 0.05, 0, CF.open[0], CF.open[1], {w: 9, z: 1});
+  camTo(T.push, 0, CF.push[0], CF.push[1], {w: 6.5, z: 1});
+  camTo(T.shut1, 0, 0, CF.shut, {w: 8, z: 1});
+  camTo(T.e2 - 0.05, 0, CF.d[0], CF.d[1], {w: 9, z: 1});
+  camTo(T.pull + 0.03, 0, 0, CF.wall, {w: 3.4, z: 1});
+  camTo(T.back - 0.02, 0, 0, CF.back, {w: 6.5, z: 1});
+  camTo(T.dot, 0, 0, CF.dot, {w: 8, z: 1});
+  camTo(T.glide, LOCKX, (Y0 + LOCKB + 150) / 2 - 10, CF.end[0], {w: 4.6, z: 1});
+  CAM.lz.to(T.slogan + 0.3, Math.log(CF.end[1]), {w: 0.9, z: 1});     // the end card keeps breathing
   // odometer ticks follow the ten-thousands digit
   let last = -1, lt = -1;
   for (let t = T.odo; t <= T.odo + 1.4; t += 1 / 240) {
@@ -527,7 +579,7 @@ function seek(t) {
   for (const h of T.facts) z *= 1 + kick(t, h, 0.018, 0.12);
   z *= 1 + kick(t, T.logo, 0.03, 0.18);
   const cx = CAM.x.at(t), cy = CAM.y.at(t);
-  world.style.transform = `translate(960px,540px) scale(${z.toFixed(5)}) translate(${(-cx).toFixed(2)}px,${(-cy).toFixed(2)}px)`;
+  world.style.transform = `translate(${SW / 2}px,${SH / 2}px) scale(${z.toFixed(5)}) translate(${(-cx).toFixed(2)}px,${(-cy).toFixed(2)}px)`;
 
   /* background pools drift */
   pools.forEach(([p, w, h, c, x, y], i) => {
@@ -571,14 +623,14 @@ function seek(t) {
     const press = t >= tp0 ? Math.max(0, 1 - stepR(t - tp0 - 0.07, {w: 30, z: 0.9})) : 0;
     k.style.borderBottomWidth = (7 - 5 * press).toFixed(2) + 'px';
     k.style.background = press > 0.5 ? '#f3f3f3' : WHITE;
-    put(k, v, KEYX[i] - kw / 2, 196 - 43 + 5 * press);
+    put(k, v, KEYX[i] - kw / 2, G.keysY - 43 + 5 * press);
   });
   {
     const v = vis(t, T.enter1 - 0.5, T.enter1 + 0.18, 0.12, SP.pop);
     const press = t >= T.enter1 ? Math.max(0, 1 - stepR(t - T.enter1 - 0.07, {w: 30, z: 0.9})) : 0;
     enterKey.style.borderBottomWidth = (7 - 5 * press).toFixed(2) + 'px';
     enterKey.style.background = press > 0.5 ? '#f3f3f3' : WHITE;
-    put(enterKey, v, 410, 84 + 5 * press);
+    put(enterKey, v, G.enter[0], G.enter[1] + 5 * press);
   }
   put(capB, vis(t, T.bar + 0.15, T.enter1 - 0.12, 0.14));
 
@@ -590,7 +642,7 @@ function seek(t) {
   uline.style.opacity = vu.o.toFixed(3);
   uline.style.left = (w / 2 * (1 - vu.e)).toFixed(1) + 'px';
   uline.style.width = (w * clamp(vu.e)).toFixed(1) + 'px';
-  divider.style.opacity = (clamp((h - 110) / 60) * (t < fieldOut ? 1 : 0)).toFixed(3);
+  divider.style.opacity = (clamp((h - G.FH - 14) / 60) * (t < fieldOut ? 1 : 0)).toFixed(3);
   divider.style.width = w.toFixed(1) + 'px';
   const ty = typed(t);
   if (ty) {
@@ -635,10 +687,10 @@ function seek(t) {
     put(gVideo, v);
     // playhead: the two ends of the fill ride different springs, so the knob runs ahead and the fill catches up
     const lead = stepR(t - T.e3 - 0.12, {w: 20, z: 0.8}), trail = stepR(t - T.e3 - 0.12, {w: 12, z: 0.9});
-    const kx = 576 * VMATCH * lead, fx = 576 * VMATCH * trail;
-    vKnob.style.transform = `translate(${(32 + kx - 13).toFixed(2)}px,${(488 + 4 - 13).toFixed(2)}px)`;
+    const kx = G.MW * VMATCH * lead, fx = G.MW * VMATCH * trail;
+    vKnob.style.transform = `translate(${(32 + kx - 13).toFixed(2)}px,${(PNL.trackY + 4 - 13).toFixed(2)}px)`;
     vFill.style.width = Math.max(0, fx).toFixed(2) + 'px';
-    vMark.style.left = (32 + 576 * VMATCH - 2).toFixed(1) + 'px';
+    vMark.style.left = (32 + G.MW * VMATCH - 2).toFixed(1) + 'px';
     vMark.style.opacity = clamp((t - T.e3 - 0.05) / 0.12).toFixed(3);
     const secs = Math.round(252 * VMATCH * lead);
     vTime.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} / 4:12`;
@@ -679,14 +731,14 @@ function seek(t) {
   for (const s of strips) {
     const P10 = Math.pow(10, s.p);
     const d = Math.floor(val / P10) % 10 + Math.max(0, (val % P10) - (P10 - 1));
-    s.strip.style.transform = `translateY(${(-d * 210).toFixed(2)}px)`;
+    s.strip.style.transform = `translateY(${(-d * G.odoLH).toFixed(2)}px)`;
     s.slot.style.opacity = s.p === 0 ? 1 : clamp((lg - s.p) * 6).toFixed(3);
   }
   put(odoLabel, vis(t, T.odo + 0.12, T.back - 0.05, 0.12));
   speedPills.forEach((p, i) => {
     const t0 = T.speed[i], v = vis(t, t0 - 0.04, T.back - 0.05, 0.12, SP.pop);
     const s = 1.3 - 0.3 * stepR(t - t0 + 0.04, SP.pop);
-    put(p, v, p._x, 650, ` scale(${s.toFixed(4)})`);
+    put(p, v, p._x, p._y, ` scale(${s.toFixed(4)})`);
   });
 
   /* scene F */
@@ -705,7 +757,7 @@ function seek(t) {
   ring.style.filter = rv.b > 0.05 ? `blur(${rv.b.toFixed(2)}px)` : 'none';
   ring.style.transform = `scale(${rs.toFixed(4)})`;
   letters.forEach((e, i) => put(e, vis(t, T.word + i * 0.06, null, 0, {w: 20, z: 1}), 0, 0, ` translateX(${(-(1 - stepR(t - T.word - i * 0.06, {w: 16, z: 1})) * 24).toFixed(2)}px)`));
-  put(slogan, vis(t, T.slogan, null), LOCKX - slogan._w / 2, LOCKB + 46);
+  put(slogan, vis(t, T.slogan, null), LOCKX - slogan._w / 2, LOCKB + Math.round(46 * LS / 0.9));
 }
 
 /* ---------------------------------------------------------------- boot */
